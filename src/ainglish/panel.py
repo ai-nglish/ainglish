@@ -531,31 +531,54 @@ def dry_reader(items):
 
 
 def submit_measurement(measurement, slug):
-    """Agent-first submission: COLONY_API_KEY -> access token -> RFC 8693 exchange -> POST."""
+    """Submission, least-privilege first. Two credentials work, and the register only ever sees
+    the NARROW one either way:
+
+      AINGLISH_ID_TOKEN   (preferred) an id_token you already exchanged, audienced to
+                          ainglish.org's client_id — mint it with your own SSO tooling and hand
+                          this process nothing else. Audience-scoping makes it useless anywhere
+                          but ainglish.org, and it expires in ~15 minutes. Least privilege.
+      COLONY_API_KEY      (convenience) your Colony agent key; this process performs the RFC 8693
+                          exchange itself. The raw key is sent ONLY to thecolony.ai's own token
+                          endpoint — the issuer it already belongs to — and NEVER to ainglish.org,
+                          which receives just the audienced id_token, same as above.
+    """
     import urllib.parse
     import urllib.request
     colony = os.environ.get("COLONY_BASE", "https://thecolony.ai")
     ainglish = os.environ.get("AINGLISH_BASE", "https://ainglish.org")
     client_id = os.environ.get("AINGLISH_CLIENT_ID", "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j")
-    key = os.environ.get("COLONY_API_KEY") or ""
-    if not key:
-        raise SystemExit("--submit needs COLONY_API_KEY (your Colony agent key). The payload above is "
-                         "still valid — POST it yourself per /developers.")
+
     def http(url, data=None, headers=None):
         req = urllib.request.Request(url, data=data, headers={"User-Agent": "ainglish-panel/1.0", **(headers or {})},
                                      method="POST")
         with urllib.request.urlopen(req, timeout=45) as r:
             return r.read()
-    jwt = json.loads(http(f"{colony}/api/v1/auth/token", json.dumps({"api_key": key}).encode(),
-                          {"Content-Type": "application/json"}))["access_token"]
-    form = urllib.parse.urlencode({
-        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-        "subject_token": jwt, "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-        "audience": client_id, "scope": "openid profile"}).encode()
-    tok = json.loads(http(f"{colony}/oauth/token", form,
-                          {"Content-Type": "application/x-www-form-urlencoded"}))["id_token"]
-    resp = http(f"{ainglish}/api/v1/proposals/{slug}/measurements", json.dumps(measurement).encode(),
-                {"Content-Type": "application/json", "Authorization": f"Bearer {tok}"})
+
+    tok = os.environ.get("AINGLISH_ID_TOKEN") or ""
+    if not tok:
+        key = os.environ.get("COLONY_API_KEY") or ""
+        if not key:
+            raise SystemExit("--submit needs AINGLISH_ID_TOKEN (preferred: an id_token you exchanged "
+                             "yourself, audience ainglish.org — least privilege) or COLONY_API_KEY "
+                             "(this process exchanges it for you; the key goes only to thecolony.ai). "
+                             "The payload above is still valid — POST it yourself per /developers.")
+        jwt = json.loads(http(f"{colony}/api/v1/auth/token", json.dumps({"api_key": key}).encode(),
+                              {"Content-Type": "application/json"}))["access_token"]
+        form = urllib.parse.urlencode({
+            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+            "subject_token": jwt, "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+            "audience": client_id, "scope": "openid profile"}).encode()
+        tok = json.loads(http(f"{colony}/oauth/token", form,
+                              {"Content-Type": "application/x-www-form-urlencoded"}))["id_token"]
+    try:
+        resp = http(f"{ainglish}/api/v1/proposals/{slug}/measurements", json.dumps(measurement).encode(),
+                    {"Content-Type": "application/json", "Authorization": f"Bearer {tok}"})
+    except Exception as e:
+        if "401" in str(e) and os.environ.get("AINGLISH_ID_TOKEN"):
+            raise SystemExit("401 with AINGLISH_ID_TOKEN — id_tokens live ~15 minutes; mint a fresh "
+                             "one and re-run --submit (the panel result above is unaffected).")
+        raise
     print("SUBMITTED:", resp.decode()[:400])
 
 
