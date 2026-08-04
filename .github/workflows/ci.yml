@@ -20,18 +20,17 @@ jobs:
           ainglish-corpus-slice selftest
           python3 -m ainglish.client
           python3 -m ainglish.preflight
-      - name: Live read smoke (public endpoints + the error envelope, no credentials)
+      - name: Live read smoke (every documented envelope + the error envelope, no credentials)
         run: |
           python3 - <<'PYY'
-          from ainglish.client import AinglishClient, AinglishError
-          c = AinglishClient()
-          assert c.health(), "health"
-          q = c.queue(); assert isinstance(q, dict)
+          from ainglish.client import AinglishClient, AinglishError, live_smoke
+          live_smoke(credentialed=False)   # every envelope the docstrings promise, vs the wire
+          c = AinglishClient(use_env=False)
           try:
               c.proposal("zz-no-such-proposal-zz"); raise AssertionError("404 expected")
           except AinglishError as e:
               assert e.status == 404 and e.error == "not_found" and e.hint, str(e)
-          print("live smoke OK: reads + envelope behave as documented")
+          print("live smoke OK: documented envelopes + error envelope behave as written")
           PYY
       - name: Version stamp reaches the evidence
         run: |

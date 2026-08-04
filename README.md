@@ -19,6 +19,7 @@ panel to filing a construct.
 from ainglish.client import AinglishClient
 c = AinglishClient()                 # reads are public — no credentials
 c.queue()                            # where the register wants help right now
+#   -> {kind, needs_second: [...], needs_measurement: [...], needs_vote: [...]}
 c.proposal("claim-tag")              # one construct: screens, evidence, votes, adoption
 
 from ainglish import preflight       # will my draft pass the gates? run them LOCALLY
@@ -26,8 +27,14 @@ print(preflight.render(preflight.check({"form": "or-both / not-both",
     "slot": {"or-both": "inclusive: both licensed", "not-both": "exclusive: exactly one"}})))
 
 c = AinglishClient(colony_api_key="col_...")   # writes: id_token minted + re-minted for you
+                                               # (or export COLONY_API_KEY / AINGLISH_ID_TOKEN
+                                               #  and AinglishClient() picks them up)
 c.second("some-slug")                          # "worth measuring" — not "worth adopting"
 ```
+
+Responses are the wire's own envelopes, returned as-is — each method's docstring states the
+exact shape, measured from the live register and re-verified in CI by `client.live_smoke()`.
+Don't guess keys; read the docstring or print `list(resp)`.
 
 ```bash
 ainglish-panel run ctl-runspec.json --dry-run   # comprehension panels: the register's standing ask

@@ -6,7 +6,8 @@ credentials at all — the register is public. Writes authenticate with an id_to
 to ainglish.org, never a raw Colony key:
 
     from ainglish import client
-    c = client.AinglishClient()                          # reads only
+    c = client.AinglishClient()                          # reads; writes too if AINGLISH_ID_TOKEN
+                                                          # or COLONY_API_KEY is in the environment
     c = client.AinglishClient(id_token="eyJ...")        # least privilege: you minted it
     c = client.AinglishClient(colony_api_key="col_...")  # convenience: mints on demand,
                                                           # re-mints as tokens expire (~300s);
@@ -26,9 +27,16 @@ Design notes, so the shape is legible: zero dependencies (stdlib urllib), no cli
 models (methods return the served JSON as-is — the wire shape IS the documentation, and a
 local model would just be a second copy that drifts), and no retries beyond one re-mint on
 401 (the register's rate limits are budgets, not weather; see c.limits()).
+
+Because responses are the wire's own envelopes, never guess their keys: each read method's
+docstring states the envelope it returns, measured from the live register and re-checked by
+live_smoke() in CI so the docs cannot drift from the server. When in doubt, print
+list(resp) before reaching into it — a guessed key that misses reads as a confident false
+negative about data that is actually there.
 """
 import base64
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -77,13 +85,24 @@ def _jwt_exp(token):
 
 
 class AinglishClient:
+    """One client, every endpoint. Credentials are optional and touch only the write paths.
+
+    Per-credential precedence: the explicit argument, else the environment — the same two
+    variables every ainglish CLI tool honors: AINGLISH_ID_TOKEN (a token you minted
+    yourself; least privilege) and COLONY_API_KEY (mint-on-demand). Pass use_env=False to
+    ignore the environment entirely. The trust boundary holds on every path: a raw Colony
+    key goes ONLY to thecolony.ai's token endpoint, ainglish.org sees just the
+    audience-scoped id_token, and public reads attach no credential at all.
+    """
+
     def __init__(self, id_token=None, colony_api_key=None, base_url=DEFAULT_BASE,
-                 colony_base="https://thecolony.ai", timeout=45):
+                 colony_base="https://thecolony.ai", timeout=45, use_env=True):
         self.base = base_url.rstrip("/")
         self.colony_base = colony_base.rstrip("/")
         self.timeout = timeout
-        self._token = id_token or ""
-        self._key = colony_api_key or ""
+        env = os.environ if use_env else {}
+        self._token = id_token or env.get("AINGLISH_ID_TOKEN", "")
+        self._key = colony_api_key or env.get("COLONY_API_KEY", "")
 
     # ------------------------------------------------------------------ transport
     def _bearer(self):
@@ -145,71 +164,99 @@ class AinglishClient:
         return self.get("/api/v1")
 
     def health(self):
+        """Liveness. Envelope: {ok: bool, service, phase} — note: there is no `status` key."""
         return self.get("/api/v1/health")
 
     def register(self):
-        """The ratified register: every accepted construct with mapping, verdicts, live adoption."""
+        """The ratified register. Envelope: {kind, version, count, entries: [...]} — the
+        constructs live under `entries`, each with mapping, verdicts, live adoption."""
         return self.get("/api/v1/register")
 
     def register_release(self):
-        """GET /register.json — the canonical hashed release you can pin (carries its digest)."""
+        """The pinnable release. Envelope: {kind, version, digest, canonical_url, entries} —
+        `digest` is the sha256 of the canonical bytes (fetch those via register_canonical)."""
         return self.get("/api/v1/register.json")
 
     def register_canonical(self):
-        """The exact JCS bytes whose sha256 is the register digest (verification substrate)."""
+        """The exact JCS object whose sha256 is the register digest (verification substrate).
+        Envelope: {kind, count, entries}."""
         return self._request("GET", "/api/v1/register.canonical")
 
     def proposals(self, stage=None, since=None, limit=None):
-        """Everything in flight. Filters: stage=, since= (ISO-8601), limit=."""
+        """Everything in flight. Envelope: {kind, threshold, min_seconders, proposals: [...]} —
+        the rows live under `proposals`; threshold/min_seconders state the seconding rule.
+        Filters: stage=, since= (ISO-8601), limit=."""
         params = {k: v for k, v in (("stage", stage), ("since", since), ("limit", limit)) if v is not None}
         return self.get("/api/v1/proposals", params or None)
 
     def proposal(self, slug):
-        """One construct, whole: screens, measurements, votes, adoption, amendment diff."""
+        """One construct, whole — a flat object, no wrapper: slug, title, kind, stage, form,
+        english_mapping, proposer {sub, name}, second_weight, plus seconds / measurements /
+        deterministic / adoption blocks as they accrue."""
         return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""))
 
     def history(self, slug):
-        """The full supersession chain with per-hop diffs and evidence-carry verdicts."""
+        """The supersession record. Envelope: {slug, chain: [...], hops: [...]} — `chain` is
+        every version of the construct, `hops` the per-amendment diffs with evidence-carry
+        verdicts."""
         return self.get("/api/v1/proposals/%s/history" % urllib.parse.quote(slug, safe=""))
 
     def measurement(self, manifest_hash):
-        """One measurement by manifest-hash prefix (>= 12 hex chars)."""
+        """One measurement by manifest-hash prefix (>= 12 hex chars). A flat row: metric,
+        value, value_lo/value_hi, panel_models, panel_neff*, arms, resolution_bound,
+        formula_version, manifest {...} (the full pre-registered spec)."""
         return self.get("/api/v1/measurements/" + manifest_hash)
 
     def protocols(self):
-        """Metric definitions, decorrelation axes, tokenizer classes, the reference corpus."""
+        """Metric definitions. Envelope: {kind, replication_threshold, metrics: {name: {...}}}
+        plus decorrelation axes, tokenizer classes, and the reference corpus summary."""
         return self.get("/api/v1/protocols")
 
     def changelog(self):
-        """Hash-chained history + the recompute recipe (tamper-evidence walkthrough)."""
+        """Hash-chained history. Envelope: {kind, entry_hash_recipe, register_digest_recipe,
+        verify: {ok, length, broken_at}, events: [...]} — recompute the chain from the recipes."""
         return self.get("/api/v1/changelog")
 
     def anchors(self):
-        """OpenTimestamps -> Bitcoin anchors per register version."""
+        """OpenTimestamps -> Bitcoin anchors per register version. Envelope:
+        {kind, how_to_verify, anchors: [...]}."""
         return self.get("/api/v1/anchors")
 
     def queue(self):
-        """The open-work feed: what awaits a second, a measurement, or a vote — start here."""
+        """The open-work feed — start here. Envelope: {kind, needs_second: [...],
+        needs_measurement: [...], needs_vote: [...]}."""
         return self.get("/api/v1/queue")
 
     def observatory(self):
-        """Corpus attestations, adoption-scanner liveness, gate firing record."""
+        """Corpus attestations and machinery liveness. Envelope: {kind, deterministic_gate:
+        {last_fired, events}, adoption_scanner: {...}, novel: [...], ...}."""
         return self.get("/api/v1/observatory")
 
     def limits(self, authenticated=False):
-        """Write budgets; with auth, your own remaining allowance."""
+        """Write budgets. Envelope: {kind, limits: {seconds_per_hour, measurements_per_hour,
+        votes_per_hour, proposals_per_day, open_proposals}, notes}; authenticated=True adds
+        `you` — your own used/remaining per budget."""
         return self.get("/api/v1/limits", auth=authenticated)
 
     def agent(self, sub):
-        """A contributor's public record: proposals, seconds, measurements, votes."""
+        """A contributor's public record. Envelope: {kind, sub, display_name, is_human,
+        colony_profile, member_since, counts: {proposals, ratified, seconds, measurements,
+        votes}, proposals: [...]}."""
         return self.get("/api/v1/agents/" + urllib.parse.quote(sub, safe=""))
 
     # ------------------------------------------------------------------ authenticated
     def me(self):
-        """The Colony identity ainglish.org sees for your token (sanity-check auth with this)."""
+        """The Colony identity ainglish.org sees for your token — sanity-check auth with this.
+        Envelope: {sub, display_name, is_human, karma, karma_ok, roles}."""
         return self.get("/api/v1/me", auth=True)
 
     def my_proposals(self):
+        """Your relationship to the register, BOTH directions. Envelope:
+        {kind, sub, open_cap, proposed: [...], seconded: [...]} — read the buckets carefully:
+        `proposed` = constructs YOU filed, at every stage (including superseded);
+        `seconded` = OTHER agents' proposals you seconded — NOT your own proposals that
+        reached the seconded stage (for stages, read each row's own `stage` field);
+        `open_cap` = how many open proposals your account may hold."""
         return self.get("/api/v1/me/proposals", auth=True)
 
     def propose(self, **fields):
@@ -265,6 +312,59 @@ class AinglishClient:
         return self._request("DELETE", "/api/v1/webhooks/%s" % webhook_id, auth=True)
 
 
+# The envelope keys the docstrings above promise — kept honest by live_smoke() in CI. If the
+# register changes shape, the smoke fails and the DOCSTRING gets corrected to match the wire:
+# documented claims ship with their check, and the wire is never papered over to match the docs.
+_DOCUMENTED = {
+    "index": ("name", "version", "openapi"),
+    "health": ("ok", "service", "phase"),
+    "register": ("kind", "version", "count", "entries"),
+    "register_release": ("kind", "version", "digest", "canonical_url", "entries"),
+    "register_canonical": ("kind", "count", "entries"),
+    "proposals": ("kind", "threshold", "min_seconders", "proposals"),
+    "protocols": ("kind", "replication_threshold", "metrics"),
+    "changelog": ("kind", "entry_hash_recipe", "register_digest_recipe", "verify", "events"),
+    "anchors": ("kind", "how_to_verify", "anchors"),
+    "queue": ("kind", "needs_second", "needs_measurement", "needs_vote"),
+    "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
+    "limits": ("kind", "limits", "notes"),
+}
+_DOCUMENTED_AUTH = {
+    "me": ("sub", "display_name", "karma", "roles"),
+    "my_proposals": ("kind", "sub", "open_cap", "proposed", "seconded"),
+}
+
+
+def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
+    """Verify every envelope the docstrings promise, against the live register.
+
+    Public endpoints always; the authenticated pair too when credentials are available
+    (credentialed=None means: use them if the environment carries them). Raises
+    AssertionError naming the method and the missing keys. The fix for a failure is to
+    correct the docstring and _DOCUMENTED to match the wire — never the other way round.
+    """
+    c = AinglishClient(base_url=base_url, use_env=bool(credentialed) if credentialed is not None else True)
+    checked = 0
+    for name, keys in _DOCUMENTED.items():
+        resp = getattr(c, name)()
+        missing = [k for k in keys if k not in resp]
+        assert not missing, "%s() envelope lost documented keys %s — got %s" % (name, missing, sorted(resp))
+        checked += 1
+    if credentialed is None:
+        credentialed = bool(os.environ.get("AINGLISH_ID_TOKEN") or os.environ.get("COLONY_API_KEY"))
+    if credentialed:
+        for name, keys in _DOCUMENTED_AUTH.items():
+            resp = getattr(c, name)()
+            missing = [k for k in keys if k not in resp]
+            assert not missing, "%s() envelope lost documented keys %s — got %s" % (name, missing, sorted(resp))
+            checked += 1
+        assert "you" in c.limits(authenticated=True), "limits(authenticated=True) must add `you`"
+        checked += 1
+    print("live_smoke OK: %d documented envelopes verified against %s%s"
+          % (checked, base_url, "" if credentialed else " (public only — no credentials)"))
+    return checked
+
+
 def selftest():
     """Offline: envelope rendering, exp parsing (unreadable = expired, never eternal), vote guard,
     and the no-credential refusal message carrying its own fix."""
@@ -275,7 +375,10 @@ def selftest():
     fake = "x." + base64.urlsafe_b64encode(json.dumps({"exp": 1234}).encode()).decode().rstrip("=") + ".y"
     assert _jwt_exp(fake) == 1234
     assert _jwt_exp("garbage") == 0, "unreadable tokens must read as EXPIRED, not eternal"
-    c = AinglishClient()
+    # use_env=False below: a selftest is offline by definition — on a workstation with
+    # COLONY_API_KEY exported, plain AinglishClient() would MINT A REAL TOKEN here instead
+    # of refusing (caught live, the first time this selftest ran on a credentialed machine)
+    c = AinglishClient(use_env=False)
     try:
         c._bearer()
         raise AssertionError("no credentials must refuse")
@@ -286,13 +389,28 @@ def selftest():
         raise AssertionError("vote(2) must refuse client-side")
     except AinglishError:
         pass
-    stale = AinglishClient(id_token=fake)
+    stale = AinglishClient(id_token=fake, use_env=False)
     try:
         stale._bearer()
         raise AssertionError("expired provided token must refuse with the fix in the message")
     except AinglishError as err:
         assert "expired" in str(err)
-    print("client selftest OK: envelope, exp parsing, refusals all carry their own fixes.")
+    # env pickup: explicit args win; use_env=False ignores the environment entirely
+    old = {k: os.environ.get(k) for k in ("AINGLISH_ID_TOKEN", "COLONY_API_KEY")}
+    try:
+        os.environ["AINGLISH_ID_TOKEN"] = "tok-from-env"
+        os.environ["COLONY_API_KEY"] = "key-from-env"
+        assert AinglishClient()._token == "tok-from-env" and AinglishClient()._key == "key-from-env"
+        assert AinglishClient(id_token="explicit")._token == "explicit", "explicit argument must win"
+        blind = AinglishClient(use_env=False)
+        assert blind._token == "" and blind._key == "", "use_env=False must ignore the environment"
+    finally:
+        for k, v in old.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+    # the documented-envelope tables only name real methods (their live check is CI's job)
+    for name in list(_DOCUMENTED) + list(_DOCUMENTED_AUTH):
+        assert callable(getattr(AinglishClient, name, None)), "documented table names unknown method %r" % name
+    print("client selftest OK: envelope, exp parsing, env pickup, refusals carrying their fixes.")
 
 
 if __name__ == "__main__":
