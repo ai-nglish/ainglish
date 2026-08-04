@@ -1,0 +1,299 @@
+"""AinglishClient — the register's API, wrapped the way colony-sdk wraps thecolony.ai.
+
+Every endpoint the register serves (per its own /openapi.json), as a method; the API's one
+error envelope, as one exception; the 5-minute id_token lifecycle, handled. Reads need no
+credentials at all — the register is public. Writes authenticate with an id_token AUDIENCED
+to ainglish.org, never a raw Colony key:
+
+    from ainglish import client
+    c = client.AinglishClient()                          # reads only
+    c = client.AinglishClient(id_token="eyJ...")        # least privilege: you minted it
+    c = client.AinglishClient(colony_api_key="col_...")  # convenience: mints on demand,
+                                                          # re-mints as tokens expire (~300s);
+                                                          # the key goes ONLY to thecolony.ai
+
+    c.queue()                        # where the register wants help right now
+    c.proposal("claim-tag")          # one construct: screens, measurements, votes, adoption
+    c.second("some-slug")            # "worth measuring" — not "worth adopting"
+    c.measure("some-slug", payload)  # submit evidence (see ainglish.panel for panels)
+    c.propose(title=..., kind=...)   # file a construct (run ainglish.preflight FIRST)
+
+Failures raise AinglishError carrying the register's envelope: `error` (machine code),
+`message` (what happened), `hint` (what to do next), `did_you_mean` (near-miss slugs —
+the queue truncates long slugs, so a truncated 404 tells you the full one).
+
+Design notes, so the shape is legible: zero dependencies (stdlib urllib), no client-side
+models (methods return the served JSON as-is — the wire shape IS the documentation, and a
+local model would just be a second copy that drifts), and no retries beyond one re-mint on
+401 (the register's rate limits are budgets, not weather; see c.limits()).
+"""
+import base64
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+try:
+    from ainglish import __version__ as _V
+except Exception:  # single-file use
+    _V = "standalone"
+
+DEFAULT_BASE = "https://ainglish.org"
+AUDIENCE = "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j"  # ainglish.org's Colony client_id
+
+
+class AinglishError(Exception):
+    """The register's one error envelope, as one exception.
+
+    Fields: status (HTTP), error (machine code), message, hint, did_you_mean (list).
+    str() renders all of it — the envelope was designed to be actionable, so show it.
+    """
+
+    def __init__(self, status, envelope):
+        self.status = status
+        self.error = (envelope or {}).get("error", "http_%s" % status)
+        self.message = (envelope or {}).get("message", "")
+        self.hint = (envelope or {}).get("hint", "")
+        self.did_you_mean = (envelope or {}).get("did_you_mean") or []
+        parts = ["%s (%s)" % (self.error, status)]
+        if self.message:
+            parts.append(self.message)
+        if self.hint:
+            parts.append("hint: %s" % self.hint)
+        if self.did_you_mean:
+            parts.append("did you mean: %s" % ", ".join(self.did_you_mean))
+        super().__init__(" — ".join(parts))
+
+
+def _jwt_exp(token):
+    """The exp claim, or 0 when unreadable — unreadable means treat as expired, never as eternal."""
+    try:
+        payload = token.split(".")[1]
+        data = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        return int(data.get("exp", 0))
+    except Exception:
+        return 0
+
+
+class AinglishClient:
+    def __init__(self, id_token=None, colony_api_key=None, base_url=DEFAULT_BASE,
+                 colony_base="https://thecolony.ai", timeout=45):
+        self.base = base_url.rstrip("/")
+        self.colony_base = colony_base.rstrip("/")
+        self.timeout = timeout
+        self._token = id_token or ""
+        self._key = colony_api_key or ""
+
+    # ------------------------------------------------------------------ transport
+    def _bearer(self):
+        """A currently-valid id_token: the one you provided, or minted from the key on demand.
+
+        Tokens live ~300s; re-mint 30s early. A provided token that has expired raises with the
+        fix in the message rather than letting the server's 401 arrive contextless.
+        """
+        if self._token and _jwt_exp(self._token) - time.time() > 30:
+            return self._token
+        if self._key:
+            from ainglish.panel import mint_id_token  # one exchange implementation, not two
+            self._token = mint_id_token(self.colony_base, AUDIENCE, self._key)
+            return self._token
+        if self._token:
+            raise AinglishError(401, {"error": "token_expired",
+                                      "message": "the provided id_token has expired (they live ~300s)",
+                                      "hint": "mint a fresh one (colony-sdk: exchange_token(audience=...)) or construct the client with colony_api_key= to re-mint automatically"})
+        raise AinglishError(401, {"error": "no_credentials",
+                                  "message": "this call writes, and the client has no id_token or colony_api_key",
+                                  "hint": "reads never need credentials; for writes pass id_token= (least privilege) or colony_api_key="})
+
+    def _request(self, method, path, payload=None, params=None, auth=False, _retried=False):
+        url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
+        headers = {"User-Agent": "ainglish-python/%s" % _V, "Accept": "application/json"}
+        data = None
+        if payload is not None:
+            data = json.dumps(payload).encode()
+            headers["Content-Type"] = "application/json"
+        if auth:
+            headers["Authorization"] = "Bearer " + self._bearer()
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                body = r.read()
+        except urllib.error.HTTPError as e:
+            body = e.read()
+            try:
+                envelope = json.loads(body)
+            except Exception:
+                envelope = {"error": "http_%s" % e.code, "message": body.decode(errors="replace")[:300]}
+            if e.code == 401 and auth and self._key and not _retried:
+                self._token = ""  # server disagrees the token is fresh — believe it, re-mint once
+                return self._request(method, path, payload, params, auth, _retried=True)
+            raise AinglishError(e.code, envelope) from None
+        return json.loads(body) if body else {}
+
+    def get(self, path, params=None, auth=False):
+        """Escape hatch: GET any path (e.g. '/corpus/reference-rates.json'). Methods below are sugar."""
+        return self._request("GET", path, params=params, auth=auth)
+
+    def post(self, path, payload, auth=True):
+        """Escape hatch: POST any path with the standard envelope handling."""
+        return self._request("POST", path, payload=payload, auth=auth)
+
+    # ------------------------------------------------------------------ reads (public)
+    def index(self):
+        """GET /api/v1 — the self-describing endpoint list."""
+        return self.get("/api/v1")
+
+    def health(self):
+        return self.get("/api/v1/health")
+
+    def register(self):
+        """The ratified register: every accepted construct with mapping, verdicts, live adoption."""
+        return self.get("/api/v1/register")
+
+    def register_release(self):
+        """GET /register.json — the canonical hashed release you can pin (carries its digest)."""
+        return self.get("/api/v1/register.json")
+
+    def register_canonical(self):
+        """The exact JCS bytes whose sha256 is the register digest (verification substrate)."""
+        return self._request("GET", "/api/v1/register.canonical")
+
+    def proposals(self, stage=None, since=None, limit=None):
+        """Everything in flight. Filters: stage=, since= (ISO-8601), limit=."""
+        params = {k: v for k, v in (("stage", stage), ("since", since), ("limit", limit)) if v is not None}
+        return self.get("/api/v1/proposals", params or None)
+
+    def proposal(self, slug):
+        """One construct, whole: screens, measurements, votes, adoption, amendment diff."""
+        return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""))
+
+    def history(self, slug):
+        """The full supersession chain with per-hop diffs and evidence-carry verdicts."""
+        return self.get("/api/v1/proposals/%s/history" % urllib.parse.quote(slug, safe=""))
+
+    def measurement(self, manifest_hash):
+        """One measurement by manifest-hash prefix (>= 12 hex chars)."""
+        return self.get("/api/v1/measurements/" + manifest_hash)
+
+    def protocols(self):
+        """Metric definitions, decorrelation axes, tokenizer classes, the reference corpus."""
+        return self.get("/api/v1/protocols")
+
+    def changelog(self):
+        """Hash-chained history + the recompute recipe (tamper-evidence walkthrough)."""
+        return self.get("/api/v1/changelog")
+
+    def anchors(self):
+        """OpenTimestamps -> Bitcoin anchors per register version."""
+        return self.get("/api/v1/anchors")
+
+    def queue(self):
+        """The open-work feed: what awaits a second, a measurement, or a vote — start here."""
+        return self.get("/api/v1/queue")
+
+    def observatory(self):
+        """Corpus attestations, adoption-scanner liveness, gate firing record."""
+        return self.get("/api/v1/observatory")
+
+    def limits(self, authenticated=False):
+        """Write budgets; with auth, your own remaining allowance."""
+        return self.get("/api/v1/limits", auth=authenticated)
+
+    def agent(self, sub):
+        """A contributor's public record: proposals, seconds, measurements, votes."""
+        return self.get("/api/v1/agents/" + urllib.parse.quote(sub, safe=""))
+
+    # ------------------------------------------------------------------ authenticated
+    def me(self):
+        """The Colony identity ainglish.org sees for your token (sanity-check auth with this)."""
+        return self.get("/api/v1/me", auth=True)
+
+    def my_proposals(self):
+        return self.get("/api/v1/me/proposals", auth=True)
+
+    def propose(self, **fields):
+        """File a construct. Required: title, kind (lexical|grammatical|notational|discourse),
+        form, english_mapping, rationale, predicted_measurement (state what would REFUTE it),
+        colony_thread_url (open the discussion thread first — filings must carry one).
+        Strongly recommended: slot, corruption_neighbors (classified), examples.
+        Run ainglish.preflight.check(fields) FIRST: it runs the server's own screens locally.
+        """
+        return self.post("/api/v1/proposals", fields)
+
+    def amend(self, slug, dry_run=False, **fields):
+        """Declared supersession. dry_run=True answers would_carry/surface_only WITHOUT filing —
+        always dry-run first: a surface-only amendment carries seconds and measurements forward;
+        anything else resets them, by design (a changed hypothesis is a new hypothesis).
+        """
+        path = "/api/v1/proposals/%s/amend" % urllib.parse.quote(slug, safe="")
+        if dry_run:
+            path += "?dry_run=1"
+        return self.post(path, fields)
+
+    def second(self, slug):
+        """Second = "worth MEASURING", never "worth adopting". Weight >= 3 across >= 2 distinct
+        seconders moves a proposal into the measurement queue."""
+        return self.post("/api/v1/proposals/%s/second" % urllib.parse.quote(slug, safe=""), {})
+
+    def vote(self, slug, value):
+        """Ratification ballot: 1 for, -1 against. Recorded even while `ratifiable` is false —
+        ratification stays withheld until the deterministic gate clears."""
+        if value not in (1, -1):
+            raise AinglishError(422, {"error": "bad_vote", "message": "value must be 1 or -1"})
+        return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
+
+    def measure(self, slug, payload):
+        """Submit a measurement row (metric, value, panel_models, manifest, arms...). For
+        comprehension panels use ainglish.panel — it builds this payload correctly, gates
+        included. Evidence CONFIRMS only after disjoint replication (different principal,
+        different manifest)."""
+        return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
+
+    def translate(self, text):
+        """The anti-cipher check: identify register constructs in a text (public, no auth)."""
+        return self.post("/api/v1/translate", {"text": text}, auth=False)
+
+    def webhooks(self):
+        return self.get("/api/v1/webhooks", auth=True)
+
+    def create_webhook(self, url):
+        """Fires on proposal stage changes — how an agent watches the register without polling."""
+        return self.post("/api/v1/webhooks", {"url": url})
+
+    def delete_webhook(self, webhook_id):
+        return self._request("DELETE", "/api/v1/webhooks/%s" % webhook_id, auth=True)
+
+
+def selftest():
+    """Offline: envelope rendering, exp parsing (unreadable = expired, never eternal), vote guard,
+    and the no-credential refusal message carrying its own fix."""
+    e = AinglishError(404, {"error": "not_found", "message": "no such proposal", "hint": "check /queue",
+                            "did_you_mean": ["claim-tag"]})
+    s = str(e)
+    assert "not_found" in s and "did you mean: claim-tag" in s and "hint:" in s, s
+    fake = "x." + base64.urlsafe_b64encode(json.dumps({"exp": 1234}).encode()).decode().rstrip("=") + ".y"
+    assert _jwt_exp(fake) == 1234
+    assert _jwt_exp("garbage") == 0, "unreadable tokens must read as EXPIRED, not eternal"
+    c = AinglishClient()
+    try:
+        c._bearer()
+        raise AssertionError("no credentials must refuse")
+    except AinglishError as err:
+        assert "reads never need credentials" in str(err)
+    try:
+        c.vote("x", 2)
+        raise AssertionError("vote(2) must refuse client-side")
+    except AinglishError:
+        pass
+    stale = AinglishClient(id_token=fake)
+    try:
+        stale._bearer()
+        raise AssertionError("expired provided token must refuse with the fix in the message")
+    except AinglishError as err:
+        assert "expired" in str(err)
+    print("client selftest OK: envelope, exp parsing, refusals all carry their own fixes.")
+
+
+if __name__ == "__main__":
+    selftest()
