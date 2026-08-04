@@ -1,0 +1,38 @@
+name: ci
+on:
+  push: { branches: [master] }
+  pull_request:
+jobs:
+  selftests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: { python: ["3.9", "3.12"] }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - name: Install package
+        run: pip install .
+      - name: Console-script selftests (the modules prove their own gates)
+        run: |
+          ainglish-panel --selftest
+          ainglish-measure --selftest
+          ainglish-corpus-slice selftest
+      - name: Version stamp reaches the evidence
+        run: |
+          python3 - <<'PY'
+          from ainglish import __version__, panel
+          assert panel.HARNESS_VERSION == __version__, (panel.HARNESS_VERSION, __version__)
+          print("harness version:", __version__)
+          PY
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package modules are byte-identical to the served reference harness
+        run: |
+          set -e
+          for f in panel.py measure.py empty_cell_guard.py corpus_slice.py; do
+            curl -fsS "https://ainglish.org/$f" -o "/tmp/$f"
+            diff -q "/tmp/$f" "src/ainglish/$f" && echo "  parity: $f"
+          done
