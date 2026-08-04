@@ -530,6 +530,49 @@ def dry_reader(items):
     return oracle
 
 
+def mint_id_token(colony, client_id, key):
+    """Exchange a Colony agent key for an ainglish-audienced id_token (RFC 8693, ~5 min lifetime).
+
+    colony-sdk first when installed — the platform maintains its own exchange, and it is authored
+    by the same party the key is already being sent to, so the trust boundary does not move.
+    Pure-stdlib fallback keeps the curl-ed single file and zero-dep installs first-class. ONLY
+    ImportError falls back: an installed SDK that fails is a real error, and silently switching
+    paths would bury it under a second failure envelope. The path used is printed, because a
+    submission's operator should be able to say which code minted its credential.
+    """
+    try:
+        import colony_sdk
+    except ImportError:
+        pass
+    else:
+        r = colony_sdk.ColonyClient(api_key=key, base_url=f"{colony}/api/v1").exchange_token(
+            audience=client_id, scope="openid profile")
+        tok = r.get("id_token") or ""
+        if not tok:
+            raise SystemExit("colony-sdk exchange_token returned no id_token — SDK contract drift; "
+                             "report it (or uninstall colony-sdk to use the stdlib exchange).")
+        print(f"token minted via colony-sdk {getattr(colony_sdk, '__version__', '?')}")
+        return tok
+    import urllib.parse
+    import urllib.request
+
+    def post(url, data, headers):
+        req = urllib.request.Request(url, data=data, headers={"User-Agent": "ainglish-panel/1.0", **headers},
+                                     method="POST")
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            return json.loads(resp.read())
+
+    jwt = post(f"{colony}/api/v1/auth/token", json.dumps({"api_key": key}).encode(),
+               {"Content-Type": "application/json"})["access_token"]
+    form = urllib.parse.urlencode({
+        "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+        "subject_token": jwt, "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+        "audience": client_id, "scope": "openid profile"}).encode()
+    tok = post(f"{colony}/oauth/token", form, {"Content-Type": "application/x-www-form-urlencoded"})["id_token"]
+    print("token minted via stdlib exchange")
+    return tok
+
+
 def submit_measurement(measurement, slug):
     """Submission, least-privilege first. Two credentials work, and the register only ever sees
     the NARROW one either way:
@@ -541,7 +584,10 @@ def submit_measurement(measurement, slug):
       COLONY_API_KEY      (convenience) your Colony agent key; this process performs the RFC 8693
                           exchange itself. The raw key is sent ONLY to thecolony.ai's own token
                           endpoint — the issuer it already belongs to — and NEVER to ainglish.org,
-                          which receives just the audienced id_token, same as above.
+                          which receives just the audienced id_token, same as above. When
+                          colony-sdk is installed (`pip install ainglish[colony]`), the exchange
+                          uses the platform's own SDK; otherwise pure stdlib — same trust boundary
+                          either way, since the SDK is authored by the party the key already goes to.
     """
     import urllib.parse
     import urllib.request
@@ -563,20 +609,13 @@ def submit_measurement(measurement, slug):
                              "yourself, audience ainglish.org — least privilege) or COLONY_API_KEY "
                              "(this process exchanges it for you; the key goes only to thecolony.ai). "
                              "The payload above is still valid — POST it yourself per /developers.")
-        jwt = json.loads(http(f"{colony}/api/v1/auth/token", json.dumps({"api_key": key}).encode(),
-                              {"Content-Type": "application/json"}))["access_token"]
-        form = urllib.parse.urlencode({
-            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-            "subject_token": jwt, "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-            "audience": client_id, "scope": "openid profile"}).encode()
-        tok = json.loads(http(f"{colony}/oauth/token", form,
-                              {"Content-Type": "application/x-www-form-urlencoded"}))["id_token"]
+        tok = mint_id_token(colony, client_id, key)
     try:
         resp = http(f"{ainglish}/api/v1/proposals/{slug}/measurements", json.dumps(measurement).encode(),
                     {"Content-Type": "application/json", "Authorization": f"Bearer {tok}"})
     except Exception as e:
         if "401" in str(e) and os.environ.get("AINGLISH_ID_TOKEN"):
-            raise SystemExit("401 with AINGLISH_ID_TOKEN — id_tokens live ~15 minutes; mint a fresh "
+            raise SystemExit("401 with AINGLISH_ID_TOKEN — id_tokens live ~5 minutes; mint a fresh "
                              "one and re-run --submit (the panel result above is unaffected).")
         raise
     print("SUBMITTED:", resp.decode()[:400])

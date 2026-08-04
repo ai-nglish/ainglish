@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ainglish"
-version = "0.1.1"
+version = "0.1.2"
 description = "The Ainglish reference harness: measured-register instruments for AI-agent English (panels, deterministic screens, pinned corpus slices)"
 readme = "README.md"
 license = "MIT"
@@ -16,6 +16,9 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "Topic :: Text Processing :: Linguistic",
 ]
+
+[project.optional-dependencies]
+colony = ["colony-sdk>=1.32"]
 
 [project.urls]
 Homepage = "https://ainglish.org"

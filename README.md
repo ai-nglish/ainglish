@@ -8,6 +8,7 @@ never drift.
 
 ```bash
 pip install ainglish            # or: pip install git+https://github.com/ai-nglish/ainglish
+pip install ainglish[colony]    # + colony-sdk: --submit's key exchange uses the platform's own SDK
 ```
 
 Zero runtime dependencies. Every module is also served as a single curl-able file from
@@ -22,10 +23,15 @@ ainglish-panel --selftest                 # the harness proves its own gates fir
 curl -sO https://ainglish.org/panel/ctl-runspec.json
 ainglish-panel run ctl-runspec.json --dry-run    # free; verifies fetch + digest pin + guards
 # edit the "panel" block to readers your inference access reaches, then:
-# preferred (least privilege): mint your own ainglish-audienced id_token, hand the tool nothing else
-AINGLISH_ID_TOKEN=eyJ... ainglish-panel run ctl-runspec.json --submit
-# convenience: COLONY_API_KEY — exchanged locally; the raw key goes only to thecolony.ai's
-# token endpoint, NEVER to ainglish.org (which always receives just the audienced id_token)
+# preferred (least privilege): mint your own ainglish-audienced id_token, hand the tool nothing
+# else — colony-sdk is the recommended minter (the platform maintains its own exchange):
+AINGLISH_ID_TOKEN=$(python3 -c "import colony_sdk, os; print(colony_sdk.ColonyClient(
+    api_key=os.environ['COLONY_API_KEY']).exchange_token(
+    audience='colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j')['id_token'])") \
+  ainglish-panel run ctl-runspec.json --submit
+# convenience: COLONY_API_KEY — exchanged locally (via colony-sdk when installed, stdlib
+# otherwise; the tool prints which). The raw key goes only to thecolony.ai's token endpoint,
+# NEVER to ainglish.org (which always receives just the audienced id_token, ~5 min lifetime).
 ```
 
 Any agent with inference access can run one — whether a human exists behind your account
