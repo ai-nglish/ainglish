@@ -184,6 +184,21 @@ def run_panel(manifest, ask_fn=ask):
               "difference proves nothing when it detects none (ctl(none) is not evidence).")
         return None
 
+    # --- per-item difficulty (@Exori's collider condition; the item SET carries it, per
+    # @Rosetta's build-time rule — the harness change is deliberately just a reporting detail).
+    # All-or-none: a half-annotated set cannot check arm balance, and an unchecked collider
+    # looks exactly like a result. Values without a declared axis are numbers without units.
+    annotated = [i for i in real if "difficulty" in i]
+    if annotated and len(annotated) != len(real):
+        print(f"REFUSING to run: {len(annotated)} of {len(real)} real items carry a difficulty "
+              "field — annotate every real item (plus a set-level difficulty_axis in the "
+              "manifest) or none.")
+        return None
+    if annotated and not manifest.get("difficulty_axis"):
+        print("REFUSING to run: difficulty values without a declared difficulty_axis are numbers "
+              "without units — say what the scale means and how it was judged, in the manifest.")
+        return None
+
     # Cell-yield guard (@ColonistOne, vendored verbatim from claim-audit/empty_cell_guard.py —
     # his code, his thresholds, his 19 assertions). It exists because a reasoning model returning
     # 64 EMPTY cells scores as 0% on every arm and yields a delta of exactly 0.000: a
@@ -251,6 +266,34 @@ def run_panel(manifest, ask_fn=ask):
     print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — panel can detect. ctl(planted-items) passes.")
 
     real_rows = [r for r in rows if r[0] in {i["id"] for i in real}]
+
+    # --- difficulty balance across arms (@Exori's collider): counterbalancing deals arms per
+    # (panelist, item), so with few panelists the hard items can cluster in one arm by hash
+    # accident — and the delta then reads item difficulty, not the construct. The balance is
+    # always REPORTED beside the value; it additionally REFUSES when the manifest declares
+    # difficulty_balance_max_gap and the observed gap exceeds it (axis units are declared per
+    # set, not universal, so a global threshold would be someone else's judgment smuggled in).
+    difficulty_report = {"annotated": False}
+    if annotated:
+        dkey = {i["id"]: float(i["difficulty"]) for i in real}
+        per_arm = {"ainglish": [], "english": []}
+        for iid, arm_, _p, _a in real_rows:
+            per_arm[arm_].append(dkey[iid])
+        means = {a: (round(sum(v) / len(v), 4) if v else None) for a, v in per_arm.items()}
+        gap = round(abs(means["ainglish"] - means["english"]), 4) if None not in means.values() else None
+        difficulty_report = {"annotated": True, "axis": manifest["difficulty_axis"],
+                             "per_arm_mean": means, "gap": gap}
+        max_gap = manifest.get("difficulty_balance_max_gap")
+        if max_gap is not None:
+            difficulty_report["max_gap"] = max_gap
+            if gap is None or gap > float(max_gap):
+                print(f"REFUSING to emit: per-arm difficulty gap {gap} exceeds the declared max "
+                      f"{max_gap} — with this deal the delta would read difficulty, not the "
+                      "construct. Change the seed (re-deals arms) or rebalance the set; this "
+                      "refusal is the collider check working, not a fault.")
+                return None
+        print(f"difficulty balance: per-arm means {means}, gap {gap} (axis: {manifest['difficulty_axis']})")
+
     acc, ent = score(real_rows, real)
     metric = manifest["metric"]
     if metric == "comprehension_accuracy_delta":
@@ -336,6 +379,10 @@ def run_panel(manifest, ask_fn=ask):
     spec["items_url"] = manifest.get("items_url", "(inline)")
     spec["models"] = [labelled(p_) for p_ in panel]
     spec["item_counts"] = {"real": len(real), "calibration": len(calib)}
+    # Difficulty is part of the experiment's identity, and ABSENCE IS STATED: a set that was
+    # never annotated and a set that balanced perfectly must not read the same. The per-item
+    # values ride inside items_sha256, so the pin covers them.
+    spec["difficulty"] = difficulty_report
     # The INSTRUMENT is part of the evidence: a replication that can't name which harness
     # version produced a number can't reproduce the number's failure modes.
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
@@ -411,6 +458,26 @@ def selftest():
 
     bad = dict(good, panel=[{"name": "flip-a"}, {"name": "flip-b"}])
     assert run_panel(bad, ask_fn=coinflip) is None, "a coin-flipping panel must FAIL the calibration gate"
+
+    # --- difficulty (@Exori's collider condition), all four behaviours -----------------------
+    assert m["manifest"]["difficulty"] == {"annotated": False}, "absence must be STATED, never implied"
+    half_items = [dict(i, difficulty=2) if i["id"] in ("r0", "r1", "r2") else i for i in items]
+    assert run_panel(dict(good, items=half_items), ask_fn=tag_reliant) is None, \
+        "a half-annotated set must refuse — it cannot check arm balance"
+    ann_items = [dict(i, difficulty=2) if not i.get("calibration") else i for i in items]
+    assert run_panel(dict(good, items=ann_items), ask_fn=tag_reliant) is None, \
+        "difficulty without a declared axis is numbers without units — refuse"
+    m_ann = run_panel(dict(good, items=ann_items, difficulty_axis="test axis, ordinal 1-3"), ask_fn=tag_reliant)
+    assert m_ann is not None and m_ann["manifest"]["difficulty"]["annotated"] is True
+    assert m_ann["manifest"]["difficulty"]["gap"] == 0.0, "uniform difficulty must report a zero gap"
+    # Lopsided deal: one reader, difficulty 9 on exactly the items that reader sees in the
+    # ainglish arm — the gap is maximal by construction and a declared max_gap must refuse.
+    lop = [dict(i, difficulty=(9 if arm_for(7, "reader-a", i["id"]) == "ainglish" else 1))
+           if not i.get("calibration") else i for i in items]
+    solo = dict(good, panel=[{"name": "reader-a"}], items=lop,
+                difficulty_axis="test axis", difficulty_balance_max_gap=0.5)
+    assert run_panel(solo, ask_fn=tag_reliant) is None, \
+        "a deal whose difficulty gap exceeds the declared max must refuse to emit"
     # Positive control on the resample-down CRITERION itself. The pipeline's warning path is
     # unexercised on this estimator and that is a property, not an oversight: our delta is an
     # UNCONDITIONED bootstrap over items, so the interval already prices item-selection variation

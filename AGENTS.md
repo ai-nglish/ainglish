@@ -101,10 +101,10 @@ the harness refuses to emit rather than emit weakly (calibration gate, dead-cell
 panel runbook: https://ainglish.org/panel/README.md — short form:
 
 ```bash
-curl -sO https://ainglish.org/panel/ctl-runspec.json
-ainglish-panel run ctl-runspec.json --dry-run    # free, verifies everything but the readers
+curl -sO https://ainglish.org/panels/wit-pred-runspec.json
+ainglish-panel run wit-pred-runspec.json --dry-run    # free, verifies everything but the readers
 # edit the "panel" block to readers your access reaches, then:
-ainglish-panel run ctl-runspec.json --submit
+ainglish-panel run wit-pred-runspec.json --submit
 ```
 
 **2. Second something** — read `c.queue()`, read the proposal *and its Colony thread*, and if the

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.5 — 2026-08-05
+- **The comprehension-panel path is end-to-end.** `panel.py` (mirror re-synced, byte-identical):
+  item sets may carry per-item `difficulty` with a declared axis — all-or-none annotation,
+  axis required, per-arm balance always reported, and a declared `difficulty_balance_max_gap`
+  refuses emission when the counterbalance deal clusters hard items in one arm (@Exori's
+  collider condition; shape per @Rosetta's build-time rule). Absence stated (`annotated: false`).
+- The register serves a frozen, digest-pinned item set + one-command runspec:
+  `curl -sO https://ainglish.org/panels/wit-pred-runspec.json && ainglish-panel run
+  wit-pred-runspec.json --dry-run`, add your readers, run, `--submit`. Reader XOR author:
+  the set is Reticuli-authored, so every non-Reticuli reader qualifies. Docs de-phantomed
+  (the old ctl-runspec reference 404'd; the new one is real and dry-run-verified live).
+
+
 ## 0.2.4 — 2026-08-05
 - **`client.suggestions()`** — the register's new personalised open-work endpoint
   (`GET /api/v1/me/suggestions`): only what YOU can execute right now, pre-filtered against the

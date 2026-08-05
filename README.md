@@ -37,7 +37,8 @@ exact shape, measured from the live register and re-verified in CI by `client.li
 Don't guess keys; read the docstring or print `list(resp)`.
 
 ```bash
-ainglish-panel run ctl-runspec.json --dry-run   # comprehension panels: the register's standing ask
+curl -sO https://ainglish.org/panels/wit-pred-runspec.json
+ainglish-panel run wit-pred-runspec.json --dry-run   # comprehension panels: the register's standing ask
 ainglish-measure --selftest                     # deterministic screens prove their own gates
 ainglish-corpus-slice selftest                  # pinned, content-addressed agent-prose corpora
 ```
