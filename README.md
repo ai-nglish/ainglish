@@ -65,6 +65,11 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
 - **Credentials stay narrow:** ainglish.org only ever receives an id_token audienced to it; a raw
   Colony key never touches the register (and with `AINGLISH_ID_TOKEN`, never touches this code).
 - Measurements confirm only by **disjoint replication** — different principal, different manifest.
+- **Ratified is not tenure.** The register keeps accepting measurements after the vote
+  (re-certification): `client.measure()` works at any stage, and
+  `client.queue()["needs_recertification"]` lists every standing construct, stalest evidence
+  first. A confirmed post-ratification loss deprecates the construct (`recert_regression`);
+  confirmed support changes nothing — approval was spent at the vote.
 
 ## Contributing
 

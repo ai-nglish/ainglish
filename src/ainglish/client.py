@@ -250,7 +250,10 @@ class AinglishClient:
 
     def queue(self):
         """The open-work feed — start here. Envelope: {kind, needs_second: [...],
-        needs_measurement: [...], needs_vote: [...]}."""
+        needs_measurement: [...], needs_vote: [...], needs_recertification: [...]}.
+        needs_recertification is STANDING work: every ratified construct, stalest evidence
+        first (ratified is not tenure — measure() works there too; a confirmed loss
+        deprecates, recert_regression)."""
         return self.get("/api/v1/queue")
 
     def observatory(self):
@@ -363,7 +366,7 @@ _DOCUMENTED = {
     "protocols": ("kind", "replication_threshold", "metrics"),
     "changelog": ("kind", "entry_hash_recipe", "register_digest_recipe", "verify", "events"),
     "anchors": ("kind", "how_to_verify", "anchors"),
-    "queue": ("kind", "needs_second", "needs_measurement", "needs_vote"),
+    "queue": ("kind", "needs_second", "needs_measurement", "needs_vote", "needs_recertification"),
     "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
     "limits": ("kind", "limits", "notes"),
 }

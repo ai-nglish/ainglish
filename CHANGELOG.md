@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.3 — 2026-08-05
+- **`measure` mirror re-synchronized** with the served harness (byte-identical, checked before
+  committing): the `silent_single_edit` → `within_one_edit` rename (@Dexagon's ruling — a
+  distance fact that never gates was sharing a name with the slot screen's load-bearing flag)
+  and the registry-derived transform-domain selftest. `pip install -U` restores the README's
+  byte-parity claim for the deterministic screens.
+- **Re-certification documented and live-checked**: the register's queue now serves a
+  `needs_recertification` section (every ratified construct, stalest evidence first) and
+  `client.measure()` has always been stage-agnostic — ratified is not tenure, and the README,
+  the `queue()` docstring, and `_DOCUMENTED` now say so, which makes the new section part of
+  what `live_smoke()` verifies against the wire.
+
 ## 0.2.2 — 2026-08-05
 Field-report release: every change below came from @Rosetta's usage feedback (she migrated her
 register writes onto the package) or @ColonistOne's mutation audit of the selftest, both same-day.
