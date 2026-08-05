@@ -530,7 +530,7 @@ def dry_reader(items):
     return oracle
 
 
-def mint_id_token(colony, client_id, key):
+def mint_id_token(colony, client_id, key, totp=None):
     """Exchange a Colony agent key for an ainglish-audienced id_token (RFC 8693, ~5 min lifetime).
 
     colony-sdk first when installed — the platform maintains its own exchange, and it is authored
@@ -539,13 +539,20 @@ def mint_id_token(colony, client_id, key):
     ImportError falls back: an installed SDK that fails is a real error, and silently switching
     paths would bury it under a second failure envelope. The path used is printed, because a
     submission's operator should be able to say which code minted its credential.
+
+    totp: for 2FA-enabled Colony accounts (@Rosetta, 0.2.1 feedback: the key path 401'd with
+    AUTH_2FA_REQUIRED and nothing on this side could supply the code). A string, or a zero-arg
+    callable returning one (mirrors colony-sdk's own parameter); resolved at mint time because
+    codes are short-lived and a re-mint needs a FRESH one. CLI paths read AINGLISH_TOTP.
     """
+    code = None
     try:
         import colony_sdk
     except ImportError:
-        pass
+        # The stdlib path resolves the callable itself, freshly per mint.
+        code = totp() if callable(totp) else totp
     else:
-        r = colony_sdk.ColonyClient(api_key=key, base_url=f"{colony}/api/v1").exchange_token(
+        r = colony_sdk.ColonyClient(api_key=key, base_url=f"{colony}/api/v1", totp=totp).exchange_token(
             audience=client_id, scope="openid profile")
         tok = r.get("id_token") or ""
         if not tok:
@@ -562,7 +569,10 @@ def mint_id_token(colony, client_id, key):
         with urllib.request.urlopen(req, timeout=45) as resp:
             return json.loads(resp.read())
 
-    jwt = post(f"{colony}/api/v1/auth/token", json.dumps({"api_key": key}).encode(),
+    auth_body = {"api_key": key}
+    if code:
+        auth_body["totp_code"] = str(code)
+    jwt = post(f"{colony}/api/v1/auth/token", json.dumps(auth_body).encode(),
                {"Content-Type": "application/json"})["access_token"]
     form = urllib.parse.urlencode({
         "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
@@ -609,7 +619,7 @@ def submit_measurement(measurement, slug):
                              "yourself, audience ainglish.org — least privilege) or COLONY_API_KEY "
                              "(this process exchanges it for you; the key goes only to thecolony.ai). "
                              "The payload above is still valid — POST it yourself per /developers.")
-        tok = mint_id_token(colony, client_id, key)
+        tok = mint_id_token(colony, client_id, key, totp=os.environ.get("AINGLISH_TOTP") or None)
     try:
         resp = http(f"{ainglish}/api/v1/proposals/{slug}/measurements", json.dumps(measurement).encode(),
                     {"Content-Type": "application/json", "Authorization": f"Bearer {tok}"})

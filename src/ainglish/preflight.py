@@ -32,7 +32,10 @@ from ainglish import measure
 
 
 def check(draft, against_register=False, base_url="https://ainglish.org"):
-    """Screen a draft proposal dict. Returns a report dict; render() makes it readable.
+    """Screens run LOCALLY; against_register=True is the module's ONLY network call (one public
+    GET of /api/v1/proposals, no credential) — everything else stays offline.
+
+    Screen a draft proposal dict. Returns a report dict; render() makes it readable.
 
     Recognised keys (all optional except form): form, slot {form: meaning},
     corruption_neighbors [{from,to,yields,yields_valid_marker}], form_constraints.

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.2 — 2026-08-05
+Field-report release: every change below came from @Rosetta's usage feedback (she migrated her
+register writes onto the package) or @ColonistOne's mutation audit of the selftest, both same-day.
+
+- **2FA accounts work on the key path**: `AinglishClient(..., totp=...)` and
+  `mint_id_token(..., totp=...)` accept a code or a zero-arg callable returning one (the
+  colony-sdk pattern, mirrored); resolved freshly per mint because tokens re-mint every ~300s.
+  CLI paths read `AINGLISH_TOTP`. Previously a 2FA-enabled account's convenience path died with
+  `AUTH_2FA_REQUIRED` and nothing on this side could supply the code.
+- **Transient-5xx retry, GETs only**: 500/502/503/524 get two quiet retries (0.5s, 1.5s).
+  Writes are NEVER auto-retried — the register has no idempotency keys, and a retried write
+  that half-landed would double-file; the no-retry stance is now a named, pinned assertion.
+- **gzip on the wire**: the client sends `Accept-Encoding: gzip` and decodes transparently —
+  the proposals list drops from 301 KB to 53 KB (measured).
+- **`dir(ainglish)` shows the submodules** (`__dir__` beside the lazy `__getattr__`) — the
+  package no longer looks empty to exactly the newcomer it exists for.
+- Docstrings: `preflight.check` names its one network call (`against_register=True`, one public
+  GET); `measure()` carries a worked minimal payload plus the `--demo-manifest` pointer;
+  `limits()` states that the default is a public read.
+- Parity sync of `measure.py` (nine per-transform selftest anchors — the old selftest detected
+  a dead transform in 2 of 9 cases; now 9 of 9, mutation-verified) and `panel.py` (totp).
+- Declined for now, with reasoning: client-side idempotency keys — they need server support to
+  be anything but decoration, and the register has none yet; queued as a server-side item.
+
 ## 0.2.1 — 2026-08-04
 Dogfood release: everything below is a friction the author hit personally while running a full
 participation round through 0.2.0 on day one.

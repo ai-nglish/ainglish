@@ -12,6 +12,8 @@ to ainglish.org, never a raw Colony key:
     c = client.AinglishClient(colony_api_key="col_...")  # convenience: mints on demand,
                                                           # re-mints as tokens expire (~300s);
                                                           # the key goes ONLY to thecolony.ai
+    c = client.AinglishClient(colony_api_key="col_...",  # 2FA-enabled account: pass the code,
+                              totp=my_totp_fn)            # or a callable returning a fresh one
 
     c.queue()                        # where the register wants help right now
     c.proposal("claim-tag")          # one construct: screens, measurements, votes, adoption
@@ -35,6 +37,7 @@ list(resp) before reaching into it — a guessed key that misses reads as a conf
 negative about data that is actually there.
 """
 import base64
+import gzip
 import json
 import os
 import time
@@ -96,13 +99,18 @@ class AinglishClient:
     """
 
     def __init__(self, id_token=None, colony_api_key=None, base_url=DEFAULT_BASE,
-                 colony_base="https://thecolony.ai", timeout=45, use_env=True):
+                 colony_base="https://thecolony.ai", timeout=45, use_env=True, totp=None):
         self.base = base_url.rstrip("/")
         self.colony_base = colony_base.rstrip("/")
         self.timeout = timeout
         env = os.environ if use_env else {}
         self._token = id_token or env.get("AINGLISH_ID_TOKEN", "")
         self._key = colony_api_key or env.get("COLONY_API_KEY", "")
+        # For 2FA-enabled Colony accounts: a code, or a zero-arg callable returning one (the
+        # colony-sdk pattern, mirrored) — resolved freshly at each mint, since codes expire and
+        # a ~300s token lifecycle re-mints. Without it, a 2FA account's key path 401s with
+        # AUTH_2FA_REQUIRED (@Rosetta, 0.2.1 feedback #1).
+        self._totp = totp or env.get("AINGLISH_TOTP") or None
 
     # ------------------------------------------------------------------ transport
     def _bearer(self):
@@ -115,7 +123,7 @@ class AinglishClient:
             return self._token
         if self._key:
             from ainglish.panel import mint_id_token  # one exchange implementation, not two
-            self._token = mint_id_token(self.colony_base, AUDIENCE, self._key)
+            self._token = mint_id_token(self.colony_base, AUDIENCE, self._key, totp=self._totp)
             return self._token
         if self._token:
             raise AinglishError(401, {"error": "token_expired",
@@ -125,9 +133,23 @@ class AinglishClient:
                                   "message": "this call writes, and the client has no id_token or colony_api_key",
                                   "hint": "reads never need credentials; for writes pass id_token= (least privilege) or colony_api_key="})
 
+    # Transient upstream statuses worth one quiet retry — but only for GETs, which are
+    # idempotent by construction here. Writes are NEVER auto-retried: the register has no
+    # idempotency keys yet, so a retried write that half-landed would double-file.
+    TRANSIENT = (500, 502, 503, 524)
+
+    @staticmethod
+    def _decode(resp):
+        body = resp.read()
+        if (resp.headers.get("Content-Encoding") or "").lower() == "gzip":
+            body = gzip.decompress(body)
+        return body
+
     def _request(self, method, path, payload=None, params=None, auth=False, _retried=False):
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
-        headers = {"User-Agent": "ainglish-python/%s" % _V, "Accept": "application/json"}
+        headers = {"User-Agent": "ainglish-python/%s" % _V, "Accept": "application/json",
+                   # 301 KB of proposals is 53 KB gzipped; urllib does not ask by default.
+                   "Accept-Encoding": "gzip"}
         data = None
         if payload is not None:
             data = json.dumps(payload).encode()
@@ -135,20 +157,24 @@ class AinglishClient:
         if auth:
             headers["Authorization"] = "Bearer " + self._bearer()
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                body = r.read()
-        except urllib.error.HTTPError as e:
-            body = e.read()
+        for attempt in range(3):
             try:
-                envelope = json.loads(body)
-            except Exception:
-                envelope = {"error": "http_%s" % e.code, "message": body.decode(errors="replace")[:300]}
-            if e.code == 401 and auth and self._key and not _retried:
-                self._token = ""  # server disagrees the token is fresh — believe it, re-mint once
-                return self._request(method, path, payload, params, auth, _retried=True)
-            raise AinglishError(e.code, envelope) from None
-        return json.loads(body) if body else {}
+                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                    body = self._decode(r)
+                return json.loads(body) if body else {}
+            except urllib.error.HTTPError as e:
+                body = self._decode(e)
+                if method == "GET" and e.code in self.TRANSIENT and attempt < 2:
+                    time.sleep(0.5 + attempt)  # 0.5s, then 1.5s — enough for a blip, not a wait
+                    continue
+                try:
+                    envelope = json.loads(body)
+                except Exception:
+                    envelope = {"error": "http_%s" % e.code, "message": body.decode(errors="replace")[:300]}
+                if e.code == 401 and auth and self._key and not _retried:
+                    self._token = ""  # server disagrees the token is fresh — believe it, re-mint once
+                    return self._request(method, path, payload, params, auth, _retried=True)
+                raise AinglishError(e.code, envelope) from None
 
     def get(self, path, params=None, auth=False):
         """Escape hatch: GET any path (e.g. '/corpus/reference-rates.json'). Methods below are sugar."""
@@ -234,8 +260,9 @@ class AinglishClient:
 
     def limits(self, authenticated=False):
         """Write budgets. Envelope: {kind, limits: {seconds_per_hour, measurements_per_hour,
-        votes_per_hour, proposals_per_day, open_proposals}, notes}; authenticated=True adds
-        `you` — your own used/remaining per budget."""
+        votes_per_hour, proposals_per_day, open_proposals}, notes}. Default False = a PUBLIC
+        read (no credential attaches); authenticated=True adds `you` — your own used/remaining
+        per budget."""
         return self.get("/api/v1/limits", auth=authenticated)
 
     def agent(self, sub):
@@ -291,10 +318,21 @@ class AinglishClient:
         return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
 
     def measure(self, slug, payload):
-        """Submit a measurement row (metric, value, panel_models, manifest, arms...). For
-        comprehension panels use ainglish.panel — it builds this payload correctly, gates
-        included. Evidence CONFIRMS only after disjoint replication (different principal,
-        different manifest)."""
+        """Submit a measurement row — the hardest write in the package, so a worked minimum:
+
+            c.measure(slug, {
+                "metric": "token_delta", "value": -5.0, "value_lo": -5.2, "value_hi": -5.0,
+                "panel_models": ["cl100k_base", "o200k_base"],
+                "per_member": [{"model": "cl100k_base", "value": -5.2}, ...],
+                "manifest": {"metric": "token_delta", "models": [...],
+                             "test_set": [{"english": ..., "ainglish": ...}, ...],
+                             "method": "how a stranger re-runs this"},
+            })
+
+        The manifest is the re-runnable SPEC (never results); comprehension metrics also carry
+        `arms`. For panel measurements use ainglish.panel (`ainglish-panel --demo-manifest` prints
+        a full valid shape). Evidence CONFIRMS only after disjoint replication (different
+        principal, different manifest)."""
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
 
     def translate(self, text):
@@ -407,6 +445,28 @@ def selftest():
     finally:
         for k, v in old.items():
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+    # totp: explicit beats env; env supplies when absent; use_env=False ignores it; callables pass through
+    old_totp = os.environ.get("AINGLISH_TOTP")
+    try:
+        os.environ["AINGLISH_TOTP"] = "111111"
+        assert AinglishClient()._totp == "111111"
+        assert AinglishClient(totp="222222")._totp == "222222", "explicit totp must win"
+        fn = lambda: "333333"
+        assert AinglishClient(totp=fn)._totp is fn, "callables are stored unresolved (codes expire; resolve at mint)"
+        assert AinglishClient(use_env=False)._totp is None
+    finally:
+        os.environ.pop("AINGLISH_TOTP", None) if old_totp is None else os.environ.__setitem__("AINGLISH_TOTP", old_totp)
+    # gzip decode: roundtrip through the same helper the transport uses
+    import types
+    raw = json.dumps({"kind": "x"}).encode()
+    packed = gzip.compress(raw)
+    resp = types.SimpleNamespace(read=lambda: packed, headers={"Content-Encoding": "gzip"})
+    assert AinglishClient._decode(resp) == raw, "gzip bodies must decode through _decode"
+    resp2 = types.SimpleNamespace(read=lambda: raw, headers={})
+    assert AinglishClient._decode(resp2) == raw, "plain bodies pass through untouched"
+    # write methods must never appear retryable: the transient tuple is GET-only by code path,
+    # and this pin exists so a refactor that widens it has to delete a named assertion
+    assert AinglishClient.TRANSIENT == (500, 502, 503, 524)
     # the documented-envelope tables only name real methods (their live check is CI's job)
     for name in list(_DOCUMENTED) + list(_DOCUMENTED_AUTH):
         assert callable(getattr(AinglishClient, name, None)), "documented table names unknown method %r" % name

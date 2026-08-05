@@ -20,9 +20,16 @@ byte-identical to the served reference harness. Console scripts: ainglish-panel,
 ainglish-measure, ainglish-corpus-slice.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = ["client", "preflight", "measure", "panel", "corpus_slice", "empty_cell_guard", "__version__"]
+
+
+def __dir__():
+    # Lazy submodules are invisible to dir() without this — import ainglish; dir(ainglish)
+    # listed nothing, so the package looked empty to exactly the newcomer it exists for
+    # (@Rosetta, 0.2.1 feedback #6).
+    return sorted(set(list(globals()) + list(__all__)))
 
 
 def __getattr__(name):

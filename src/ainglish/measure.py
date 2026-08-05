@@ -480,6 +480,30 @@ def selftest():
     _hd = transform_screen({"each-alone": "distributive", "as-one": "collective"})
     assert not _hd["has_pairwise_collapse"], "hyphen_drop degrades each pair member to DISTINCT phrases"
     assert not transform_screen({"A": "same", "a": "same"})["has_pairwise_collapse"], "same-meaning collapse does not warn"
+    # Per-transform positive anchors (@ColonistOne, DM 2026-08-05, mutation-measured 2/9 before
+    # this block existed): has_pairwise_collapse is a DISJUNCTION over nine transforms, and a
+    # disjunction cannot localise which disjunct carried it — a transform regressed to identity
+    # survives every negative anchor (identity produces strictly fewer collisions than any real
+    # transform), and redundant family members mask each other (lower/upper/casefold all dead
+    # passed, because alnum_only carried their assertion). Each anchor asserts the IDENTITY of
+    # the firing transform on a pair that transform demonstrably fires on; neutering any single
+    # transform to identity kills exactly its own anchor. Pairs chosen for isolation where
+    # possible (① isolates nfkd — casefold leaves it alone, ASCII alnum drops it; underscore
+    # isolates alnum_only — it is \w, so strip_punct keeps it), identity-keyed everywhere else.
+    _ANCHORS = [
+        ("lower()",       {"MUST": "requirement", "must": "plain"},                  "must"),
+        ("upper()",       {"MUST": "requirement", "must": "plain"},                  "MUST"),
+        ("casefold()",    {"STRASSE": "street", "straße": "road"},              "strasse"),
+        ("strip_punct()", {"we+you": "inclusive", "we-you": "exclusive"},            "weyou"),
+        ("collapse_ws()", {"as  one": "double-spaced", "as one": "plain"},           "as one"),
+        ("nfkd()",        {"x①": "circled-digit form", "x1": "plain form"},     "x1"),
+        ("alnum_only()",  {"a_b": "underscored", "ab": "plain"},                     "ab"),
+        ("paren_drop()",  {"can(able)": "capability", "can(allowed)": "permission"}, "can"),
+        ("hyphen_drop()", {"as-one": "collective", "as one": "the phrase"},          "as one"),
+    ]
+    for _t, _slot, _c in _ANCHORS:
+        assert any(p["transform"] == _t and p["collapsed"] == _c for p in transform_screen(_slot)["pairwise_collapse"]), \
+            "per-transform anchor: %s must fire on its known-answer pair (a dead transform must kill ITS OWN anchor)" % _t
     # Prefix nesting is reported: both markers intact, the shorter match the opposite claim.
     pref = slot_crossproduct({"MUST": "absolute requirement", "MUST NOT": "absolute prohibition"})
     assert pref["prefix_pairs"] == [{"prefix": "MUST", "of": "MUST NOT", "meanings_differ": True}]
