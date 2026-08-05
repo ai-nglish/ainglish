@@ -86,7 +86,10 @@ def one_edit_corruption(corruptions):
         # Server-checkable, so it overrides the declaration and gates. Parity with the PHP port.
         camo = is_background_word(c["to"])
         rows.append({"from": c["from"], "to": c["to"], "yields": c.get("yields", ""),
-                     "edit_distance": d, "silent_single_edit": silent,
+                     # RENAMED from silent_single_edit (@Dexagon's ruling): a distance fact that
+                     # never gates, previously sharing a name with the slot screen's load-bearing
+                     # flag. Parity-pinned with the PHP port.
+                     "edit_distance": d, "within_one_edit": silent,
                      "yields_valid_marker": vm,
                      # parity with the PHP port: declared-false and absent must be distinguishable
                      # at read time (@Rosetta) — 'unclassified' is fail-closed and named as such.
@@ -96,7 +99,7 @@ def one_edit_corruption(corruptions):
     return {"neighbours": rows,
             "min_distance_to_valid_reading": worst,
             # the dangerous shape: one character corrupts to a coherent, different claim, invisibly.
-            "has_silent_single_edit": any(r["silent_single_edit"] for r in rows),
+            "has_within_one_edit": any(r["within_one_edit"] for r in rows),
             "has_gating_neighbour": any(r["gates"] for r in rows)}
 
 
@@ -421,7 +424,7 @@ def selftest():
     assert self_negation("color=") is None, "assignment '=' is not polarity; direction matters"
     # neighbour-class anchors: a d=1 neighbour gates unless EXPLICITLY marked a visible non-marker
     nc = one_edit_corruption([{"from": "wit(", "to": "wit", "yields": "bare word", "yields_valid_marker": False}])
-    assert nc["has_silent_single_edit"] and not nc["has_gating_neighbour"], "declared non-marker must not gate"
+    assert nc["has_within_one_edit"] and not nc["has_gating_neighbour"], "declared non-marker must not gate"
     assert one_edit_corruption([{"from": "ask:", "to": "ack:", "yields": "opposite force", "yields_valid_marker": True}])["has_gating_neighbour"], "true silent flip must gate"
     assert one_edit_corruption([{"from": "iff", "to": "if", "yields": "conditional"}])["has_gating_neighbour"], "absent field fails closed"
     # camouflage overrides an honest 'visible' claim: `with` is high-frequency English
@@ -504,6 +507,22 @@ def selftest():
     for _t, _slot, _c in _ANCHORS:
         assert any(p["transform"] == _t and p["collapsed"] == _c for p in transform_screen(_slot)["pairwise_collapse"]), \
             "per-transform anchor: %s must fire on its known-answer pair (a dead transform must kill ITS OWN anchor)" % _t
+    # The declared domain must be SERIALIZED FROM the executable registry, never maintained as
+    # parallel documentation beside it (@Dexagon's condition on the pairwise filing). Both ports
+    # read `pairwise_transforms` off the same object the loop iterates — this asserts that they
+    # MOVE TOGETHER: remove a transform from execution and the served domain must lose it in the
+    # same run, and its collision must stop being reported. A served list that stayed complete
+    # while the loop shrank would be a boolean carrying a domain it no longer runs.
+    _removed = PAIRWISE_TRANSFORMS.pop("paren_drop()")
+    try:
+        _mut = transform_screen({"can(able)": "capability", "can(allowed)": "permission"})
+        assert "paren_drop()" not in _mut["pairwise_transforms"], \
+            "the served domain must be derived from the registry, not documented beside it"
+        assert not any(p["transform"] == "paren_drop()" for p in _mut["pairwise_collapse"]), \
+            "and the behaviour must move with it — domain and execution cannot disagree"
+    finally:
+        PAIRWISE_TRANSFORMS["paren_drop()"] = _removed
+    assert "paren_drop()" in transform_screen({"a(": "x", "b(": "y"})["pairwise_transforms"], "restore failed"
     # Prefix nesting is reported: both markers intact, the shorter match the opposite claim.
     pref = slot_crossproduct({"MUST": "absolute requirement", "MUST NOT": "absolute prohibition"})
     assert pref["prefix_pairs"] == [{"prefix": "MUST", "of": "MUST NOT", "meanings_differ": True}]
