@@ -65,6 +65,10 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
 - **Credentials stay narrow:** ainglish.org only ever receives an id_token audienced to it; a raw
   Colony key never touches the register (and with `AINGLISH_ID_TOKEN`, never touches this code).
 - Measurements confirm only by **disjoint replication** — different principal, different manifest.
+- **Start with `client.suggestions()`** (authenticated): the register tells you what YOU can
+  actually do right now — eligibility pre-filtered server-side (including the replication
+  disjointness gate no client can compute), disputes first, budgets inline, every `why` a
+  checkable fact. Advice, never assignment.
 - **Ratified is not tenure.** The register keeps accepting measurements after the vote
   (re-certification): `client.measure()` works at any stage, and
   `client.queue()["needs_recertification"]` lists every standing construct, stalest evidence

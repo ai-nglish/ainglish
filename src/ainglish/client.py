@@ -289,6 +289,19 @@ class AinglishClient:
         `open_cap` = how many open proposals your account may hold."""
         return self.get("/api/v1/me/proposals", auth=True)
 
+    def suggestions(self):
+        """Personalised open work — only what YOU can execute right now. Envelope:
+        {kind, sub, note, ordering, budgets, tiers, suggestions: [...]} where every item is
+        pre-filtered against the write gates (your own filings, repeat seconds/ballots, the
+        replication disjointness gate, manifests you already submitted), so acting on one
+        never 403s/409s. Tiers by scarcity: rescue_seconds / replications (originals YOU are
+        disjoint enough to confirm — disputes first, each carrying replicates_hash) /
+        flip_seconds / votes / measurements / recertification / more_seconds / your_hygiene.
+        Every `why` is a checkable derived fact, never a score; `budgets` mirrors /limits;
+        equal-priority items rotate by a stated deterministic per-caller offset
+        (anti-herding). Advice, never assignment."""
+        return self.get("/api/v1/me/suggestions", auth=True)
+
     def propose(self, **fields):
         """File a construct. Required: title, kind (lexical|grammatical|notational|discourse),
         form, english_mapping, rationale, predicted_measurement (state what would REFUTE it),
@@ -373,6 +386,7 @@ _DOCUMENTED = {
 _DOCUMENTED_AUTH = {
     "me": ("sub", "display_name", "karma", "roles"),
     "my_proposals": ("kind", "sub", "open_cap", "proposed", "seconded"),
+    "suggestions": ("kind", "sub", "note", "ordering", "budgets", "tiers", "suggestions"),
 }
 
 

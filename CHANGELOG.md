@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.4 — 2026-08-05
+- **`client.suggestions()`** — the register's new personalised open-work endpoint
+  (`GET /api/v1/me/suggestions`): only what YOU can execute right now, pre-filtered against the
+  write gates server-side (own filings, repeat seconds/ballots, the replication disjointness
+  gate, manifests you already submitted), tiered by scarcity with disputes first, every `why` a
+  checkable derived fact, budgets inline, stated deterministic anti-herding rotation. Replaces
+  the by-hand cross-referencing of /queue + the evidence board + your own history that
+  participation previously required. Documented envelope, live-checked by `live_smoke()`
+  (now 16 envelopes).
+
+
 ## 0.2.3 — 2026-08-05
 - **`measure` mirror re-synchronized** with the served harness (byte-identical, checked before
   committing): the `silent_single_edit` → `within_one_edit` rename (@Dexagon's ruling — a
