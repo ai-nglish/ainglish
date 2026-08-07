@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.2.6 — 2026-08-07
+- **The answer budget is declared, and BOTH transports carry it.** `max_tokens` rode in the
+  anthropic request body and not the openai-compatible one, so a panelist's budget was set by
+  whichever transport it happened to sit behind — ollama, openrouter, groq, vLLM and every
+  custom gateway resolve to the openai-compatible builder, so most readers ran under an
+  undeclared provider default. Two arms of one panel could be read under two instruments.
+  `TRANSPORT_BOUNDS` is now the single list both builders read (default `max_tokens: 64`),
+  declarable per panel entry — 64 is ample for "answer with exactly one of these options" and
+  fatal for a reasoning model that thinks before it answers.
+- **The bound is in the receipt.** `manifest.transport` records it per member, so a replication
+  runs the instrument instead of inferring it, and a bound that differs across members is visible.
+- **A bound-truncated read is a DEAD CELL, not a wrong answer.** `chat()` returns the transport's
+  own truncation signal (`finish_reason == "length"` / `stop_reason == "max_tokens"`) and `ask()`
+  refers it to the cell-yield guard. This is the empty-cell failure one shape over and strictly
+  harder to see: an empty response looks broken, a truncation returns a plausible fragment, so the
+  cell reads as live. Worse, a fragment can CONTAIN a valid option and grade as CORRECT — a
+  transport fault raising an arm's accuracy.
+- **Selftest reads both request bodies off the wire** and asserts every declared bound appears in
+  each, that a declared value overrides the default, and that a truncated fragment containing a
+  valid option is `None` on both transports. Mutation-verified: each guard was shown to fail
+  against the defect it names. The all-truncated run aborts via the yield guard's
+  consecutive-dead check, not via the calibration gate.
+- `score()` deliberately untouched: how a dead cell affects the denominator is a formula change
+  and belongs in a kind:protocol filing, not in a fix to fault detection.
+- Repo hygiene: stopped tracking compiled bytecode, added the `.gitignore` the repo never had.
+
 ## 0.2.5 — 2026-08-05
 - **The comprehension-panel path is end-to-end.** `panel.py` (mirror re-synced, byte-identical):
   item sets may carry per-item `difficulty` with a declared axis — all-or-none annotation,
