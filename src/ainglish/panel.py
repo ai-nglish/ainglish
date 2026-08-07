@@ -264,19 +264,56 @@ def run_panel(manifest, ask_fn=ask):
               "is indistinguishable from a result. Fix the guard, then run.")
         return None
 
-    rows = []
-    for item in items:
-        for ep in panel:
-            arm = arm_for(seed, ep["name"], item["id"])
-            answer = ask_fn(ep, item[arm], item["question"], item["options"])
-            if guard is not None:
+    def run_items(subset):
+        """Ask every panelist every item in subset. Rows, or None if the guard aborted.
+
+        No `if guard is not None`: the construction above fails closed, so by here the guard
+        always exists. A dead conditional on a safety check reads as though the check were
+        optional.
+        """
+        out = []
+        for item in subset:
+            for ep in panel:
+                arm = arm_for(seed, ep["name"], item["id"])
+                answer = ask_fn(ep, item[arm], item["question"], item["options"])
                 try:
                     guard.observe(ep["name"], arm, answer if answer is None else str(answer), answer)
                 except _ecg.CellYieldAbort as abort:
                     print(f"\n{abort}\nNo measurement emitted — a fault-produced delta is worse "
                           "than no delta, because it looks like a result.")
                     return None
-            rows.append((item["id"], arm, ep["name"], answer))
+                out.append((item["id"], arm, ep["name"], answer))
+        return out
+
+    # --- calibration EXECUTES first, and gates before a single real item is bought ------------
+    # It used to run interleaved and be SCORED last, so a panel that cannot see a planted effect
+    # paid for every real item before saying so — @Dexagon lost a primary-seat attempt to exactly
+    # that, on a metered endpoint. Running it first also makes the gate a statement about the
+    # panel at a KNOWN POINT in the run instead of a mixture of cells from before and after any
+    # mid-run degradation.
+    #
+    # The tradeoff, stated because this is a design change and not only a saving: calibration is
+    # no longer interleaved with the real items, so a reader carrying cross-call state (provider
+    # prompt caching, a warm KV cache) meets the two blocks under slightly different conditions.
+    # For the stateless temperature-0 completions this harness makes, that is the cheaper of the
+    # two risks — and unlike the old ordering it is a risk you can see in the manifest.
+    calib_rows = run_items(calib)
+    if calib_rows is None:
+        return None
+    cacc, _ = score(calib_rows, calib)
+    detectable, undetectable = cacc.get(manifest.get("planted_arm", "ainglish")), cacc.get("english")
+    if detectable is None or undetectable is None or (detectable - undetectable) < manifest.get("calibration_min_gap", 0.5):
+        print(f"CALIBRATION FAILED: planted-effect gap {detectable} vs {undetectable} — this panel "
+              "cannot detect a known difference, so its null on the real items is vacuous. "
+              "No measurement emitted. (The panel failed its positive control, not the construct.)")
+        return None
+    print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — panel can "
+          f"detect. ctl(planted-items) passes. {len(real) * len(panel)} real cells to go.")
+
+    real_rows = run_items(real)
+    if real_rows is None:
+        return None
+    rows = calib_rows + real_rows
 
     # The guard aborts at TWO points, and the first wiring only handled one: observe() catches a
     # run or window collapsing mid-run, finalise() catches a failure that BLED EVENLY — no window
@@ -290,19 +327,6 @@ def run_panel(manifest, ask_fn=ask):
         return None
     print(f"cell yield: {yield_report.get('cells')} cells, dead_rate "
           f"{yield_report.get('dead_rate')} — per (model, arm) in the manifest spec.")
-
-    # --- the calibration gate: the planted effect must be detected, or nothing is emitted ---
-    calib_rows = [r for r in rows if r[0] in {c["id"] for c in calib}]
-    cacc, _ = score(calib_rows, calib)
-    detectable, undetectable = cacc.get(manifest.get("planted_arm", "ainglish")), cacc.get("english")
-    if detectable is None or undetectable is None or (detectable - undetectable) < manifest.get("calibration_min_gap", 0.5):
-        print(f"CALIBRATION FAILED: planted-effect gap {detectable} vs {undetectable} — this panel "
-              "cannot detect a known difference, so its null on the real items is vacuous. "
-              "No measurement emitted. (The panel failed its positive control, not the construct.)")
-        return None
-    print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — panel can detect. ctl(planted-items) passes.")
-
-    real_rows = [r for r in rows if r[0] in {i["id"] for i in real}]
 
     # --- difficulty balance across arms (@Exori's collider): counterbalancing deals arms per
     # (panelist, item), so with few panelists the hard items can cluster in one arm by hash
@@ -571,6 +595,28 @@ def selftest():
 
     bad = dict(good, panel=[{"name": "flip-a"}, {"name": "flip-b"}])
     assert run_panel(bad, ask_fn=coinflip) is None, "a coin-flipping panel must FAIL the calibration gate"
+
+    # …and it must fail BEFORE buying a single real item. The gate used to be scored last, so a
+    # blind panel paid for the whole run before saying it was blind. Asserting "returns None" does
+    # not test that at all — only counting what was ASKED does, which is why this counts.
+    asked = []
+
+    def counting(ep, text, q, options):
+        asked.append(text)
+        return coinflip(ep, text, q, options)
+
+    assert run_panel(bad, ask_fn=counting) is None
+    real_texts = {i[arm] for i in items if not i.get("calibration") for arm in ("english", "ainglish")}
+    assert not (set(asked) & real_texts), \
+        f"calibration failed but {len(set(asked) & real_texts)} real items were still bought"
+    assert len(asked) == len([i for i in items if i.get("calibration")]) * len(bad["panel"]), \
+        "exactly the calibration cells should have been spent"
+
+    # Reordering must not move a number: arms are dealt per (seed, panelist, item), so execution
+    # order is not part of the estimator. A refactor that silently re-deals arms would look like
+    # a passing selftest and a changed result.
+    assert run_panel(good, ask_fn=tag_reliant)["value"] == m["value"], \
+        "calibration-first must not change the measured value"
 
     # --- difficulty (@Exori's collider condition), all four behaviours -----------------------
     assert m["manifest"]["difficulty"] == {"annotated": False}, "absence must be STATED, never implied"

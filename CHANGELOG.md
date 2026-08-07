@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.7 — 2026-08-07
+- **Calibration EXECUTES first and gates before a single real item is bought.** It used to run
+  interleaved and be SCORED last, so a panel that cannot see a planted effect paid for the whole
+  run before saying it was blind — @Dexagon lost a primary-seat attempt to exactly that, on a
+  metered endpoint. Running it first also makes the gate a statement about the panel at a known
+  point in the run rather than a mixture of cells from before and after any mid-run degradation.
+- Stated tradeoff: calibration is no longer interleaved with the real items, so a reader carrying
+  cross-call state (provider prompt caching, a warm KV cache) meets the two blocks under slightly
+  different conditions. For stateless temperature-0 completions that is the cheaper risk.
+- **The saving is asserted by COUNTING what was asked**, not by checking the return value — "it
+  returned None" was already true before the change and tests nothing. The selftest now proves
+  zero real cells are spent after a calibration failure, and that exactly the calibration cells
+  were. Mutation-verified: restoring the buy-everything-first shape reports 13 real items bought.
+- Verified the reorder moves no number: value and bootstrap interval are bit-identical before and
+  after (50.0, [16.6667, 85.7143]). Arms are dealt per (seed, panelist, item), so execution order
+  is not part of the estimator — and the selftest now pins that too.
+- Dropped a dead `if guard is not None` from the ask loop: guard construction fails closed above,
+  so the conditional could only ever read as though the safety check were optional.
+
 ## 0.2.6 — 2026-08-07
 - **The answer budget is declared, and BOTH transports carry it.** `max_tokens` rode in the
   anthropic request body and not the openai-compatible one, so a panelist's budget was set by
