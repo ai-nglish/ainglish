@@ -41,10 +41,47 @@ import hashlib
 import json
 import os
 import random
+import socket
 import sys
+import urllib.error
 import urllib.request
 
 NEUTRAL_EPS = 1e-9
+REQUEST_TIMEOUT = 120
+# Statuses that mean "the far side is busy or broken", as opposed to "you asked wrongly".
+FAULT_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+class TransportFault(Exception):
+    """A cell that failed for a reason outside the model's answer: timeout, reset, 5xx, 429.
+
+    Deliberately NARROW, and that narrowness is the whole design. A blanket `except Exception`
+    here would turn a bug in this file — a KeyError on a changed response shape, a 400 from a
+    malformed body — into a quiet crop of dead cells, which is precisely the manufactured null the
+    cell-yield guard exists to prevent. It would also hide a 401/403/404, which is a configuration
+    error the operator has to see rather than weather to be tolerated. So only faults that are
+    genuinely about the wire become cells; everything else propagates and stops the run, loudly.
+    """
+
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _fetch(req):
+    """One HTTP round trip. Transport faults are translated; nothing else is swallowed."""
+    try:
+        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:   # subclass of URLError, so it must be caught first
+        if e.code in FAULT_STATUS:
+            raise TransportFault("http_%d" % e.code) from e
+        raise
+    except (socket.timeout, TimeoutError) as e:
+        # Distinct classes before 3.10, the same class after; requires-python is >=3.9.
+        raise TransportFault("timeout") from e
+    except urllib.error.URLError as e:
+        raise TransportFault("unreachable") from e
 
 
 # ------------------------------------------------------------------ adapters
@@ -118,8 +155,7 @@ def chat(endpoint, prompt):
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
         req = urllib.request.Request(ep["base_url"].rstrip("/") + "/v1/messages",
                                      json.dumps(body).encode(), headers)
-        with urllib.request.urlopen(req, timeout=120) as r:
-            data = json.loads(r.read())
+        data = _fetch(req)
         return ("".join(b.get("text", "") for b in data.get("content", [])),
                 data.get("stop_reason") == "max_tokens")
     body = {"model": ep["model"], "temperature": 0, **bounds,
@@ -129,8 +165,7 @@ def chat(endpoint, prompt):
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(ep["base_url"].rstrip("/") + "/chat/completions",
                                  json.dumps(body).encode(), headers)
-    with urllib.request.urlopen(req, timeout=120) as r:
-        data = json.loads(r.read())
+    data = _fetch(req)
     choice = data["choices"][0]
     return choice["message"]["content"], choice.get("finish_reason") == "length"
 
@@ -264,6 +299,11 @@ def run_panel(manifest, ask_fn=ask):
               "is indistinguishable from a result. Fix the guard, then run.")
         return None
 
+    # Per (model, arm, reason) counts of cells lost to the wire. The cell-yield guard already
+    # weighs a dead cell; what it cannot know is WHY, and it is @ColonistOne's file vendored
+    # verbatim, so the cause is recorded out here rather than by editing his guard.
+    faults = {}
+
     def run_items(subset):
         """Ask every panelist every item in subset. Rows, or None if the guard aborted.
 
@@ -275,7 +315,16 @@ def run_panel(manifest, ask_fn=ask):
         for item in subset:
             for ep in panel:
                 arm = arm_for(seed, ep["name"], item["id"])
-                answer = ask_fn(ep, item[arm], item["question"], item["options"])
+                try:
+                    answer = ask_fn(ep, item[arm], item["question"], item["options"])
+                except TransportFault as fault:
+                    # A fault is a DEAD CELL WITH A STATED CAUSE — never a wrong answer, and never
+                    # a dead run. Before this, one slow reader raised out of run_panel and took
+                    # every completed cell with it: real inference paid for, nothing emitted, and
+                    # no receipt saying which reader stalled or on which arm.
+                    per_arm = faults.setdefault(ep["name"], {}).setdefault(arm, {})
+                    per_arm[fault.reason] = per_arm.get(fault.reason, 0) + 1
+                    answer = None
                 try:
                     guard.observe(ep["name"], arm, answer if answer is None else str(answer), answer)
                 except _ecg.CellYieldAbort as abort:
@@ -327,6 +376,9 @@ def run_panel(manifest, ask_fn=ask):
         return None
     print(f"cell yield: {yield_report.get('cells')} cells, dead_rate "
           f"{yield_report.get('dead_rate')} — per (model, arm) in the manifest spec.")
+    fault_total = sum(n for arms in faults.values() for reasons in arms.values() for n in reasons.values())
+    print(f"transport faults: {fault_total} cell(s) lost to the wire, not retried "
+          f"(a retried cell is a second draw and the receipt would have to say so).")
 
     # --- difficulty balance across arms (@Exori's collider): counterbalancing deals arms per
     # (panelist, item), so with few panelists the hard items can cluster in one arm by hash
@@ -451,6 +503,13 @@ def run_panel(manifest, ask_fn=ask):
     # two instruments if it thinks before answering. Recorded per member so a replication runs the
     # bound rather than inferring it — and so a bound that differs across members is visible.
     spec["transport"] = {labelled(p_): bounds_for(p_) for p_ in panel}
+    # Cells lost to the wire, per (model, arm, reason) — the same granularity the guard reports
+    # dead_rate at, plus the cause it cannot see. EMITTED EVEN AT ZERO, on purpose: a field whose
+    # absence has a direction cannot be optional, and this one's absence reads as "no faults" when
+    # it equally means "this harness never counted them". `retried: false` is part of the claim —
+    # a retried cell got two draws at the same question, and a delta over re-drawn cells is not
+    # the delta the manifest describes.
+    spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
     spec["protocol"] = "panel.py counterbalanced-arms + planted-effect calibration gate" + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
     measurement = {
@@ -590,8 +649,72 @@ def selftest():
     assert run_panel(good, ask_fn=lambda *a: None) is None, \
         "a panel whose every read is bound-truncated must emit no measurement"
 
+    # --- transport faults: a cell, with a cause, not a dead run --------------------------------
+    # _fetch's taxonomy. The NARROWNESS is the load-bearing half: a 400 or a 401 is the operator's
+    # problem and must keep travelling, or a config error arrives disguised as a thin panel.
+    class _Raiser:
+        def __init__(self, exc):
+            self.exc = exc
+
+        def __call__(self, req, timeout=None):
+            raise self.exc
+
+    real_urlopen = urllib.request.urlopen
+    try:
+        for exc, reason in (
+            (socket.timeout("timed out"), "timeout"),
+            (TimeoutError("timed out"), "timeout"),
+            (urllib.error.HTTPError("u", 503, "busy", {}, None), "http_503"),
+            (urllib.error.HTTPError("u", 429, "slow down", {}, None), "http_429"),
+            (urllib.error.URLError("connection refused"), "unreachable"),
+        ):
+            urllib.request.urlopen = _Raiser(exc)
+            try:
+                _fetch(urllib.request.Request("http://x", b"{}"))
+                raise AssertionError(f"{exc!r} must become a TransportFault")
+            except TransportFault as f:
+                assert f.reason == reason, f"{exc!r} → {f.reason!r}, expected {reason!r}"
+        # …and these must NOT be converted: they are bugs or misconfiguration, not weather.
+        for exc in (urllib.error.HTTPError("u", 400, "bad request", {}, None),
+                    urllib.error.HTTPError("u", 401, "unauthorized", {}, None),
+                    urllib.error.HTTPError("u", 404, "no such model", {}, None),
+                    ValueError("response shape changed")):
+            urllib.request.urlopen = _Raiser(exc)
+            try:
+                _fetch(urllib.request.Request("http://x", b"{}"))
+                raise AssertionError(f"{exc!r} should have propagated")
+            except TransportFault:
+                raise AssertionError(
+                    f"{exc!r} was swallowed as a transport fault — a bug or a misconfiguration "
+                    f"must stop the run, not become a quiet dead cell")
+            except (urllib.error.HTTPError, ValueError):
+                pass
+    finally:
+        urllib.request.urlopen = real_urlopen
+
+    # Integration: one reader stalls on one real cell. Before this the exception left run_panel and
+    # took every completed cell with it; now the run finishes and the receipt names reader and arm.
+    seen = {"n": 0}
+
+    def stalls_once(ep, text, q, options):
+        seen["n"] += 1
+        if seen["n"] == 9:          # calibration runs first: 4 items x 2 readers = cells 1-8
+            raise TransportFault("timeout")
+        return tag_reliant(ep, text, q, options)
+
+    m_fault = run_panel(good, ask_fn=stalls_once)
+    assert m_fault is not None, "one stalled cell must not kill the run"
+    tf = m_fault["manifest"]["transport_faults"]
+    assert tf["total"] == 1 and tf["retried"] is False, tf
+    assert sum(n for arms in tf["per_cell"].values() for r in arms.values() for n in r.values()) == 1
+    assert any("timeout" in r for arms in tf["per_cell"].values() for r in arms.values()), tf
+
     m = run_panel(good, ask_fn=tag_reliant)
     assert m is not None and m["value"] > 0, "calibrated tag-reliant panel must find the recovery effect"
+    # Absence has a direction, so the fault count is emitted even when nothing went wrong: an
+    # omitted count reads as "no faults" and equally means "this harness never counted them".
+    assert m["manifest"]["transport_faults"] == {"total": 0, "retried": False, "per_cell": {}}, \
+        "a clean run must still STATE zero faults"
 
     bad = dict(good, panel=[{"name": "flip-a"}, {"name": "flip-b"}])
     assert run_panel(bad, ask_fn=coinflip) is None, "a coin-flipping panel must FAIL the calibration gate"

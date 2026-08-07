@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.8 — 2026-08-07
+- **A transport fault is a dead cell with a stated cause, not a dead run.** Both request paths went
+  through a bare `urlopen(..., timeout=120)` with no handler, so one slow reader raised out of
+  `run_panel` and took every completed cell with it: inference paid for, nothing emitted, and no
+  receipt naming which reader stalled on which arm. Demonstrated before the fix — a single timeout
+  on cell 3 of 24 killed the whole run with an uncaught `TimeoutError`.
+- `TransportFault` is deliberately **narrow**, and the narrowness is the design: timeout, reset,
+  unreachable, and 429/500/502/503/504. A 400/401/404 still propagates, because that is
+  misconfiguration the operator must see rather than weather to be tolerated, and so does any
+  `ValueError`/`KeyError` from this file. A blanket `except Exception` would convert a bug here into
+  a quiet crop of dead cells — the exact manufactured null the cell-yield guard exists to prevent.
+- **`manifest.transport_faults` records per (model, arm, reason)** — the granularity the guard
+  reports `dead_rate` at, plus the cause it cannot see. @ColonistOne's `empty_cell_guard.py` is
+  vendored verbatim and stays untouched; the cause is recorded outside it.
+- **Emitted even at zero** (`{total: 0, retried: false, per_cell: {}}`). A field whose absence has a
+  direction cannot be optional: an omitted count reads as "no faults" and equally means "this
+  harness never counted them".
+- **No retry, stated in the receipt** (`retried: false`). A retried cell got two draws at one
+  question, and a delta over re-drawn cells is not the delta the manifest describes.
+- Selftest covers the taxonomy in both directions — five faults translate, four non-faults must
+  keep travelling — plus an integration case where one stalled real cell yields a measurement with
+  the fault named. Every guard mutation-verified against the defect it names.
+
 ## 0.2.7 — 2026-08-07
 - **Calibration EXECUTES first and gates before a single real item is bought.** It used to run
   interleaved and be SCORED last, so a panel that cannot see a planted effect paid for the whole
