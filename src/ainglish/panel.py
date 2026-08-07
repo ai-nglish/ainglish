@@ -59,6 +59,17 @@ PRESETS = {
     "ollama":     {"api": "openai",    "base_url": "http://localhost:11434/v1",    "api_key_env": ""},
 }
 
+# Every transport bound a panelist runs under, with its default — and the ONE list both request
+# builders read. The anthropic branch has carried max_tokens since the first version and the
+# openai-compatible branch never did, so a reader's answer budget depended on which transport it
+# happened to sit behind: an instrument setting that no manifest declared and no receipt recorded.
+# Naming the bounds in one place and asserting parity in the selftest is what stops that recurring.
+# They are DECLARED rather than hardcoded because the right budget is not universal — 64 tokens is
+# ample for "answer with exactly one of these options" and fatal for a reasoning model that spends
+# its budget thinking before it answers, which is the same shape as the failure the cell-yield
+# guard was written against.
+TRANSPORT_BOUNDS = {"max_tokens": 64}
+
 
 try:  # packaged (pip install ainglish) or a single curl-ed file — both are first-class
     from ainglish import __version__ as HARNESS_VERSION
@@ -77,15 +88,31 @@ def resolve(endpoint):
     return merged
 
 
+def bounds_for(endpoint):
+    """The transport bounds this entry runs under, defaults filled in.
+
+    Read off the panel entry itself, not the resolved preset: a bound is a property of how the
+    experimenter chose to run the reader, and presets describe where the reader lives.
+    """
+    return {k: endpoint.get(k, default) for k, default in TRANSPORT_BOUNDS.items()}
+
+
 def chat(endpoint, prompt):
-    """One deterministic completion. api='openai' (chat/completions) or api='anthropic' (v1/messages)."""
+    """One deterministic completion, as (text, truncated).
+
+    api='openai' (chat/completions) or api='anthropic' (v1/messages). `truncated` is the transport
+    saying it stopped at the token bound rather than at an answer — the model never reached the
+    option list. Returned separately because that is a fault, not a read, and the caller has to be
+    able to tell the difference.
+    """
     ep = resolve(endpoint)
     key = os.environ.get(ep.get("api_key_env") or "", "")
     if ep.get("api_key_env") and not key:
         raise SystemExit(f"panel entry {ep.get('name', '?')!r}: {ep['api_key_env']} is not set. "
                          "Refusing to run a panelist that would silently 401 — export the key or drop the member.")
+    bounds = bounds_for(endpoint)
     if ep.get("api", "openai") == "anthropic":
-        body = {"model": ep["model"], "max_tokens": 64, "temperature": 0,
+        body = {"model": ep["model"], "temperature": 0, **bounds,
                 "messages": [{"role": "user", "content": prompt}]}
         headers = {"Content-Type": "application/json", "User-Agent": "ainglish-panel",
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
@@ -93,8 +120,9 @@ def chat(endpoint, prompt):
                                      json.dumps(body).encode(), headers)
         with urllib.request.urlopen(req, timeout=120) as r:
             data = json.loads(r.read())
-        return "".join(b.get("text", "") for b in data.get("content", []))
-    body = {"model": ep["model"], "temperature": 0,
+        return ("".join(b.get("text", "") for b in data.get("content", [])),
+                data.get("stop_reason") == "max_tokens")
+    body = {"model": ep["model"], "temperature": 0, **bounds,
             "messages": [{"role": "user", "content": prompt}]}
     headers = {"Content-Type": "application/json", "User-Agent": "ainglish-panel"}
     if key:
@@ -103,7 +131,8 @@ def chat(endpoint, prompt):
                                  json.dumps(body).encode(), headers)
     with urllib.request.urlopen(req, timeout=120) as r:
         data = json.loads(r.read())
-    return data["choices"][0]["message"]["content"]
+    choice = data["choices"][0]
+    return choice["message"]["content"], choice.get("finish_reason") == "length"
 
 
 def ask(endpoint, text, question, options):
@@ -111,7 +140,15 @@ def ask(endpoint, text, question, options):
     prompt = (f"Read this message written by one agent to another:\n\n---\n{text}\n---\n\n"
               f"Question: {question}\nAnswer with EXACTLY one of these options and nothing else: "
               + " | ".join(options))
-    out = chat(endpoint, prompt).strip().lower()
+    out, truncated = chat(endpoint, prompt)
+    if truncated:
+        # Hit the token bound before answering. Scoring that as a wrong answer is the empty-cell
+        # failure one shape over, and strictly harder to see: an empty response at least LOOKS
+        # broken, whereas a truncation returns a plausible non-empty fragment, so the cell reads
+        # as live and the yield guard never gets to weigh it. None is the dead-cell signal
+        # observe() already understands — a fault is referred to the guard, never graded.
+        return None
+    out = out.strip().lower()
     for o in options:
         if o.lower() in out:
             return o
@@ -386,6 +423,10 @@ def run_panel(manifest, ask_fn=ask):
     # The INSTRUMENT is part of the evidence: a replication that can't name which harness
     # version produced a number can't reproduce the number's failure modes.
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
+    # An answer budget IS an instrument setting: the same reader at max_tokens 64 and at 4096 are
+    # two instruments if it thinks before answering. Recorded per member so a replication runs the
+    # bound rather than inferring it — and so a bound that differs across members is visible.
+    spec["transport"] = {labelled(p_): bounds_for(p_) for p_ in panel}
     spec["protocol"] = "panel.py counterbalanced-arms + planted-effect calibration gate" + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
     measurement = {
@@ -452,6 +493,78 @@ def selftest():
         raise AssertionError("unknown provider without base_url must refuse")
     except SystemExit:
         pass
+
+    # --- transport parity, and truncation as a dead cell -------------------------------------
+    # The defect this pins: max_tokens rode in the anthropic body and NOT the openai-compatible
+    # one, so a reader's answer budget was decided by which transport it happened to sit behind.
+    # A missing bound is invisible in every direction — no error, no warning, and the receipt named
+    # neither value — so only a test that reads the wire can hold the two builders together.
+    sent = {}
+
+    class _Resp:
+        def __init__(self, payload):
+            self._p = json.dumps(payload).encode()
+
+        def read(self):
+            return self._p
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def _capture(payload):
+        def fake(req, timeout=None):
+            sent["body"] = json.loads(req.data)
+            return _Resp(payload)
+        return fake
+
+    _ok_openai = {"choices": [{"message": {"content": "yes"}, "finish_reason": "stop"}]}
+    _ok_anthropic = {"content": [{"text": "yes"}], "stop_reason": "end_turn"}
+    real_urlopen, had_key = urllib.request.urlopen, "ANTHROPIC_API_KEY" in os.environ
+    os.environ.setdefault("ANTHROPIC_API_KEY", "selftest")
+    try:
+        bodies = {}
+        for label, entry, payload in (
+            ("openai-compatible", {"name": "o", "provider": "ollama", "model": "m"}, _ok_openai),
+            ("anthropic", {"name": "a", "provider": "anthropic", "model": "m"}, _ok_anthropic),
+        ):
+            urllib.request.urlopen = _capture(payload)
+            assert chat(entry, "hi") == ("yes", False), f"{label}: clean completion"
+            bodies[label] = sent["body"]
+        for bound, default in TRANSPORT_BOUNDS.items():
+            for label, body in bodies.items():
+                assert body.get(bound) == default, \
+                    f"{label} request body dropped the declared bound {bound!r}"
+
+        # "Declared" is decoration unless the declared value reaches the wire.
+        urllib.request.urlopen = _capture(_ok_openai)
+        chat({"name": "o", "provider": "ollama", "model": "m", "max_tokens": 4096}, "hi")
+        assert sent["body"]["max_tokens"] == 4096, "a declared bound must override the default"
+
+        # Truncation must never be graded — on either transport. The fragment here CONTAINS a valid
+        # option, so before the check it graded as a CORRECT answer: a transport fault could raise
+        # an arm's accuracy. That is why this is a dead cell and not merely a wrong one.
+        for label, entry, payload in (
+            ("openai-compatible", {"name": "o", "provider": "ollama", "model": "m"},
+             {"choices": [{"message": {"content": "process-ran, and the reason is"},
+                           "finish_reason": "length"}]}),
+            ("anthropic", {"name": "a", "provider": "anthropic", "model": "m"},
+             {"content": [{"text": "process-ran, and the reason is"}], "stop_reason": "max_tokens"}),
+        ):
+            urllib.request.urlopen = _capture(payload)
+            assert ask(entry, "text", "q?", ["process-ran", "cannot tell"]) is None, \
+                f"{label}: a bound-truncated read must be a dead cell, not a scored answer"
+    finally:
+        urllib.request.urlopen = real_urlopen
+        if not had_key:
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+
+    # …and a dead cell must reach the yield guard, which is what makes it safe not to grade it:
+    # an all-truncated run emits nothing rather than a delta over an empty denominator.
+    assert run_panel(good, ask_fn=lambda *a: None) is None, \
+        "a panel whose every read is bound-truncated must emit no measurement"
 
     m = run_panel(good, ask_fn=tag_reliant)
     assert m is not None and m["value"] > 0, "calibrated tag-reliant panel must find the recovery effect"
