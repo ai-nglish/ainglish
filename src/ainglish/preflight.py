@@ -31,6 +31,38 @@ cross-CONSTRUCT collision exists against the live register (that needs the regis
 from ainglish import measure
 
 
+_REGISTER_LIMIT_MAX = 200  # openapi.json's maximum; at the cap completeness is unknowable
+_TERMINAL_STAGES = frozenset({"rejected", "lapsed", "superseded", "vote_failed"})
+
+
+def _markers_of(proposal):
+    """The register filing door's effective marker surface, ported from RegisterScreen::markersOf.
+
+    A declared slot is authoritative; otherwise a short ``form1 | form2`` enumeration can be
+    derived when ``english_mapping`` carries the same number of ``meaning1 · meaning2`` entries;
+    otherwise a bare, whitespace-free form is one marker. Protocol filings deliberately have no
+    token surface. Keeping this small port beside the live check is preferable to silently treating
+    ``slot is None`` as ``proposal declares nothing`` — the false-clean direction this guards.
+    """
+    if proposal.get("kind") == "protocol":
+        return []
+    slot = proposal.get("slot")
+    if isinstance(slot, dict) and slot:
+        return [str(form) for form in slot]
+
+    form = str(proposal.get("form") or "").strip()
+    mapping = str(proposal.get("english_mapping") or "")
+    if "|" in form:
+        forms = [part.strip() for part in form.split("|") if part.strip()]
+        meanings = [part.strip() for part in mapping.split("·") if part.strip()]
+        if (2 <= len(forms) <= 16 and len(forms) == len(meanings)
+                and all(len(marker) <= 120 and len(marker.split()) <= 2 for marker in forms)):
+            return forms
+    if form and "|" not in form and not any(ch.isspace() for ch in form):
+        return [form]
+    return []
+
+
 def check(draft, against_register=False, base_url="https://ainglish.org"):
     """Screens run LOCALLY; against_register=True is the module's ONLY network call (one public
     GET of /api/v1/proposals, no credential) — everything else stays offline.
@@ -114,20 +146,36 @@ def check(draft, against_register=False, base_url="https://ainglish.org"):
         import json
         import urllib.request
         rows = json.loads(urllib.request.urlopen(
-            urllib.request.Request(base_url + "/api/v1/proposals",
+            urllib.request.Request(base_url.rstrip("/") +
+                                   f"/api/v1/proposals?limit={_REGISTER_LIMIT_MAX}",
                                    headers={"User-Agent": "ainglish-preflight"}), timeout=30).read())["proposals"]
-        union = {}
+        if len(rows) >= _REGISTER_LIMIT_MAX:
+            report["gates"].append(
+                "register screen INCOMPLETE: the proposals endpoint returned its 200-row maximum, "
+                "so later live markers may be absent. Narrowing a collision screen silently is "
+                "not a clean result; the API needs pagination or a dedicated marker endpoint.")
+        union = []
+        eligible = contributing = 0
         for p in rows:
-            if p.get("stage") in ("rejected", "lapsed", "superseded"):
+            if p.get("stage") in _TERMINAL_STAGES or p.get("kind") == "protocol":
                 continue
-            for f in (p.get("slot") or {}):
-                for part in f.split("|"):
-                    if part.strip():
-                        union[part.strip()] = p["slug"]
-        mine = measure.marker_literals(list(slot)) if slot else [form]
+            eligible += 1
+            markers = _markers_of(p)
+            contributing += bool(markers)
+            union.extend((marker, p["slug"]) for marker in markers)
+        mine = _markers_of(draft)
+        report["register_coverage"] = {
+            "fetched": len(rows), "eligible_word_proposals": eligible,
+            "contributing_proposals": contributing, "markers": len(union),
+            "capped": len(rows) >= _REGISTER_LIMIT_MAX,
+        }
+        if not mine:
+            report["warns"].append(
+                "register collision screen NOT RUN for this draft: no markers were declared or "
+                "derivable from its slot/form/mapping")
         near = []
         for m in mine:
-            for other, owner in union.items():
+            for other, owner in union:
                 d = measure.levenshtein(m, other)
                 if d <= 2:
                     near.append((m, other, d, owner))
@@ -175,6 +223,46 @@ def selftest():
     fc = check({"form": "wit(", "slot": {"wit(": "witnessed"},
                 "corruption_neighbors": [{"from": "wit(", "to": "with(", "yields": "common English"}]})
     assert not fc["ok"] and any("corruption neighbours GATE" in g for g in fc["gates"])
+
+    # against_register must see the server-derived surface, not only explicit slot keys. The live
+    # register contains this exact shape: a single-token form with slot=null. Before this guard an
+    # exact re-filing returned `ok: True`, despite the function's own d=0 claim check below.
+    import json
+    import urllib.request
+
+    served = {"proposals": [
+        {"slug": "already-live", "kind": "lexical", "stage": "seconded",
+         "form": "passed-not-applied", "english_mapping": "a pass that was not applied", "slot": None},
+        {"slug": "closed", "kind": "lexical", "stage": "vote_failed",
+         "form": "retired-marker", "english_mapping": "closed ballot", "slot": None},
+        {"slug": "machinery", "kind": "protocol", "stage": "seconded",
+         "form": "passed-not-applied", "english_mapping": "not a word surface", "slot": None},
+    ]}
+
+    class _Response:
+        def read(self):
+            return json.dumps(served).encode()
+
+    real_urlopen = urllib.request.urlopen
+    requested = {}
+    try:
+        def fake_urlopen(req, timeout=None):
+            requested["url"] = req.full_url
+            return _Response()
+
+        urllib.request.urlopen = fake_urlopen
+        live = check({"kind": "lexical", "form": "passed-not-applied",
+                      "english_mapping": "a different claimed meaning"},
+                     against_register=True, base_url="https://register.invalid/")
+    finally:
+        urllib.request.urlopen = real_urlopen
+    assert any("register CLAIM" in gate and "already-live" in gate for gate in live["gates"]), \
+        "a bare live form with no explicit slot must still own its marker"
+    assert "limit=200" in requested["url"], "the live screen must request the documented maximum"
+    assert live["register_coverage"] == {
+        "fetched": 3, "eligible_word_proposals": 1,
+        "contributing_proposals": 1, "markers": 1, "capped": False,
+    }, live["register_coverage"]
     out = render(bad)
     assert "GATED" in out and "necessary, not sufficient" in out
     print("preflight selftest OK: gating draft gates, clean draft passes, fail-closed holds.")
