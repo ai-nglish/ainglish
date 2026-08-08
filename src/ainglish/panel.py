@@ -280,9 +280,42 @@ def bootstrap_delta(rows, items, metric, n=2000, seed=0):
 # ------------------------------------------------------------------ the run
 def run_panel(manifest, ask_fn=ask):
     items = manifest["items"]
+    panel = manifest["panel"]
+
+    # Identity fields are load-bearing inputs, not display labels. arm_for() deals by panelist
+    # name, per-member aggregation selects by that same name, and bootstrap_delta() deduplicates
+    # item ids through a set. A duplicate reader therefore received the same arms while increasing
+    # panel_members, and a duplicate item id was scored against the last item carrying that id and
+    # collapsed to one bootstrap unit. Refuse both shapes before spending a single inference call.
+    panel_names = [p.get("name") for p in panel]
+    if any(not isinstance(name, str) or not name.strip() for name in panel_names):
+        print("REFUSING to run: every panel member needs a non-empty string `name` — the name is "
+              "the reader identity used for arm assignment and per-member scoring.")
+        return None
+    normal_names = [name.strip().casefold() for name in panel_names]
+    duplicate_names = sorted({panel_names[i] for i, key in enumerate(normal_names)
+                              if key in normal_names[:i]})
+    if duplicate_names:
+        print(f"REFUSING to run: duplicate panel member name(s) {duplicate_names}. A repeated "
+              "reader is one instrument, not two panel members; give genuinely distinct readers "
+              "unique names and represent shared lineage with panel_neff.")
+        return None
+
+    item_ids = [item.get("id") for item in items]
+    if any(not isinstance(iid, str) or not iid.strip() for iid in item_ids):
+        print("REFUSING to run: every item needs a non-empty string `id` — item identity is the "
+              "bootstrap sampling unit.")
+        return None
+    normal_ids = [iid.strip() for iid in item_ids]
+    duplicate_ids = sorted({item_ids[i] for i, key in enumerate(normal_ids)
+                            if key in normal_ids[:i]})
+    if duplicate_ids:
+        print(f"REFUSING to run: duplicate item id(s) {duplicate_ids}. Duplicate ids overwrite "
+              "the scoring key and collapse bootstrap units, so no measurement was bought.")
+        return None
+
     calib = [i for i in items if i.get("calibration")]
     real = [i for i in items if not i.get("calibration")]
-    panel = manifest["panel"]
     seed = manifest.get("seed", 0)
     if not calib:
         print("REFUSING to run: no calibration items. A panel that was never shown a detectable "
@@ -631,6 +664,24 @@ def selftest():
 
     good = {"construct": "wit-demo", "slug": "demo", "metric": "comprehension_accuracy_delta",
             "seed": 7, "items": items, "panel": [{"name": "reader-a"}, {"name": "reader-b"}]}
+
+    # Duplicate identities must refuse before inference: otherwise repeated reader names receive
+    # the same arm, are aggregated into the same per-member bucket, yet still increase the roster;
+    # repeated item ids overwrite the answer key and collapse bootstrap sampling units.
+    identity_calls = []
+
+    def identity_probe(*args):
+        identity_calls.append(args)
+        return "yes"
+
+    assert run_panel(dict(good, panel=[{"name": "reader-a"}, {"name": "READER-A"}]),
+                     ask_fn=identity_probe) is None
+    assert not identity_calls, "duplicate readers must refuse before buying calibration cells"
+    duplicate_items = [dict(item) for item in items]
+    duplicate_items[-1]["id"] = duplicate_items[0]["id"]
+    assert run_panel(dict(good, items=duplicate_items), ask_fn=identity_probe) is None
+    assert not identity_calls, "duplicate items must refuse before buying calibration cells"
+
     # Adapter resolution: preset merge works, the entry wins, and an unknown provider with no
     # base_url refuses loudly (a screen never observed rejecting anything is decoration).
     r = resolve({"name": "x", "provider": "ollama", "model": "m"})
