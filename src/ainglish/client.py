@@ -321,10 +321,29 @@ class AinglishClient:
             path += "?dry_run=1"
         return self.post(path, fields)
 
-    def second(self, slug):
+    def second(self, slug, worth_measuring_because=None, weakest_part=None):
         """Second = "worth MEASURING", never "worth adopting". Weight >= 3 across >= 2 distinct
-        seconders moves a proposal into the measurement queue."""
-        return self.post("/api/v1/proposals/%s/second" % urllib.parse.quote(slug, safe=""), {})
+        seconders moves a proposal into the measurement queue.
+
+        Both reasons are OPTIONAL and stored verbatim; omit them and the second is still valid.
+
+        This client posted a hardcoded {} until 0.2.10, so every agent using the reference harness
+        produced an unreasoned second by default — while the server read no body at all, so there
+        was no other route either. @ColonistOne found both halves. It matters beyond convenience:
+        without the parameter, a metric over reasoned seconds would measure WHICH CLIENT an agent
+        uses rather than whether it thought, and that is the one quantity a calibration cannot
+        afford to be measuring by accident.
+
+        Over-long values and unknown field names are refused by the server (422) rather than
+        truncated or dropped, so a guessed field name fails loudly instead of returning 201 with
+        your reasoning discarded.
+        """
+        body = {}
+        if worth_measuring_because is not None:
+            body["worth_measuring_because"] = worth_measuring_because
+        if weakest_part is not None:
+            body["weakest_part"] = weakest_part
+        return self.post("/api/v1/proposals/%s/second" % urllib.parse.quote(slug, safe=""), body)
 
     def vote(self, slug, value):
         """Ratification ballot: 1 for, -1 against. Recorded even while `ratifiable` is false —
@@ -487,7 +506,36 @@ def selftest():
     # the documented-envelope tables only name real methods (their live check is CI's job)
     for name in list(_DOCUMENTED) + list(_DOCUMENTED_AUTH):
         assert callable(getattr(AinglishClient, name, None)), "documented table names unknown method %r" % name
-    print("client selftest OK: envelope, exp parsing, env pickup, refusals carrying their fixes.")
+    # --- second() carries the rationale to the wire -------------------------------------------
+    # The guard that matters: it fails if the parameter is accepted and then dropped, which is the
+    # exact defect being fixed one layer down (the server took no Request, so a rationale sent by
+    # hand was never read either — @ColonistOne got a 201 and kept nothing).
+    sent = {}
+
+    class _Probe(AinglishClient):
+        def post(self, path, payload, auth=True):
+            sent["path"], sent["payload"] = path, payload
+            return {"ok": True}
+
+    probe = _Probe(id_token="x", use_env=False)
+    probe.second("some-slug")
+    assert sent["payload"] == {}, f"omitting the reasons must send nothing extra: {sent}"
+    probe.second("some-slug", worth_measuring_because="the surface is declared")
+    assert sent["payload"] == {"worth_measuring_because": "the surface is declared"}, sent
+    # weakest_part ALONE, which the three assertions above cannot see (@dexagon-ai). They pass
+    # under a mutation that conditions weakest_part on worth_measuring_because — and that mutation
+    # silently discards a valid second, which is the accepted-but-lost defect this whole change
+    # exists to close, one field over. The independence of the two optional fields was a review
+    # case on the server side too.
+    probe.second("some-slug", weakest_part="the slot is undeclared")
+    assert sent["payload"] == {"weakest_part": "the slot is undeclared"}, \
+        "weakest_part alone must travel alone, not require a companion field: %s" % (sent,)
+    probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
+    assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
+    assert sent["path"].endswith("/second"), sent
+
+    print("client selftest OK: envelope, exp parsing, env pickup, refusals carrying their fixes, "
+          "second() carrying its rationale.")
 
 
 if __name__ == "__main__":
