@@ -17,6 +17,24 @@
   four fields on `seconds`, and changed what a null there means, with no signal on this side. The
   subject is discovered live rather than pinned (a pinned slug can be superseded and would then
   fail for a reason that is not drift), and a missing subject **fails rather than skips**.
+- **Subject selection runs over the complete population, not `stage=seconded`** (@dexagon-ai). That
+  stage is mutable workflow state, not an API invariant: a healthy register holds zero rows there
+  once the measurement queue clears, so the first version reported wire drift while `proposal()`
+  and `seconds[]` were entirely correct. Selection now keys on `seconds_count > 0`, a property of
+  the row — 70 of 95 rows across five stages, where the stage filter saw 45 in one.
+- **The two-read race is followed, not reported as drift.** A surface-only amendment between the
+  list and detail reads carries the seconds onto the successor, and both endpoints are served
+  `max-age=60, s-maxage=60, stale-while-revalidate=60` and cached independently, so they can
+  legitimately disagree for up to two minutes. A moved subject is followed via `superseded_by`,
+  then abandoned for the next candidate. Failure is reserved for a population with nothing
+  inspectable, and says so in those words rather than blaming the docs.
+- Both caps are **named and printed** rather than silent: the register's documented `?limit=`
+  ceiling of 200 (past which "the population" would quietly mean "the first 200"), and the number
+  of subjects tried before giving up.
+- The selection logic has **offline tests with controlled clients** — empty population, a moved
+  subject that must be followed, an uninspectable candidate that must not end the search, every
+  documented key going missing, an unrecognised `rationale_status`, and present-and-null passing.
+  These were hand-mutations before, which verify nothing once reverted.
 - `second()` now names the published 4000-character limit and the whitespace-only-is-absent rule,
   and says why neither is enforced client-side: the server owns the limit, and a copy here is a
   number that drifts out of agreement with the one enforced.
