@@ -11,6 +11,28 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+
+      # The tag must name the version its own tree declares, checked BEFORE anything is built.
+      # v0.2.6 was tagged one commit before its bump, built ainglish-0.2.5, and was refused by
+      # PyPI only because a 0.2.5 wheel already existed — i.e. it was caught by luck. The same
+      # mistake at a version PyPI had never seen would have published a wheel whose version did
+      # not match its tag, successfully and silently. This makes it caught by construction.
+      - name: Tag must match the declared version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          declared="$(python3 - <<'EOF'
+          import re, pathlib
+          print(re.search(r'^version = "(.*)"', pathlib.Path('pyproject.toml').read_text(), re.M).group(1))
+          EOF
+          )"
+          echo "tag=$tag declared=$declared"
+          if [ "$tag" != "$declared" ]; then
+            echo "::error::tag v$tag points at a tree declaring $declared — tag the commit that CONTAINS the bump"
+            exit 1
+          fi
+
       - name: Build sdist + wheel
         run: pipx run build
       - name: Publish to PyPI
