@@ -211,10 +211,16 @@ def score(rows, items):
     acc, ent = {}, {}
     for arm in ("english", "ainglish"):
         arm_rows = [r for r in rows if r[1] == arm]
-        graded = [r for r in arm_rows if key[r[0]].get("answer") is not None]
+        # None is the harness-wide dead-cell signal: transport faults and token-bound truncations
+        # arrive here as absence, not as a model answer. The yield guard decides whether enough
+        # cells survived to emit; the scorer must then condition every statistic on those live
+        # cells. Turning None into the literal answer "none" quietly grades a wire failure wrong
+        # and also creates an entropy category that no reader selected.
+        live_rows = [r for r in arm_rows if r[3] is not None]
+        graded = [r for r in live_rows if key[r[0]].get("answer") is not None]
         acc[arm] = (sum(1 for r in graded if str(r[3]).lower() == str(key[r[0]]["answer"]).lower()) / len(graded)) if graded else None
         by_item = {}
-        for r in arm_rows:
+        for r in live_rows:
             by_item.setdefault(r[0], {}).setdefault(str(r[3]).lower(), 0)
             by_item[r[0]][str(r[3]).lower()] += 1
         ent[arm] = (sum(entropy(c) for c in by_item.values()) / len(by_item)) if by_item else None
@@ -234,6 +240,10 @@ def pairwise_agreement(rows):
     """
     by_cell = {}
     for iid, arm, who, ans in rows:
+        # Agreement is between reader answers. Two readers losing the same HTTP response did not
+        # agree on the item, and None == None must not manufacture perfect correlation.
+        if ans is None:
+            continue
         by_cell.setdefault((iid, arm), []).append(ans)
     same = total = 0
     for answers in by_cell.values():
@@ -296,8 +306,9 @@ def run_panel(manifest, ask_fn=ask):
 
     # Cell-yield guard (@ColonistOne, vendored verbatim from claim-audit/empty_cell_guard.py —
     # his code, his thresholds, his 19 assertions). It exists because a reasoning model returning
-    # 64 EMPTY cells scores as 0% on every arm and yields a delta of exactly 0.000: a
-    # publishable-looking null manufactured entirely by a formatting failure. His own first
+    # 64 EMPTY cells leave no scored denominator at all; without a fail-closed guard, partial and
+    # asymmetric survival can still yield a publishable-looking delta manufactured by a formatting
+    # failure. His own first
     # version pooled the arms and checked a prefix only; the costly case is ASYMMETRIC — one arm
     # empties, the pooled rate looks survivable, and the delta's sign is set by which arm broke.
     try:
@@ -778,6 +789,16 @@ def selftest():
         "a declared n_eff rides with its provenance"
     assert m_dec["panel_members"] == 2, "and does not overwrite the roster count it disagrees with"
 
+    # A dead cell is censored, never graded as the answer string "none". This is the acceptance
+    # test the transport-fault integration lacked: it asserted that a run survived and recorded
+    # the fault, but never asserted that the fault stayed out of the value it emitted.
+    one = [{"id": "one", "answer": "yes"}]
+    dead_mixed = [("one", "english", "live", "yes"),
+                  ("one", "english", "dead", None)]
+    dead_acc, dead_ent = score(dead_mixed, one)
+    assert dead_acc["english"] == 1.0, "a transport fault must not lower arm accuracy"
+    assert dead_ent["english"] == 0.0, "a transport fault must not become an entropy category"
+
     # panel_agreement is the observable that bears on correlation, computed UNCONDITIONED — two
     # readers that always answer alike are the correlated case the roster count cannot see.
     def twin(ep, text, q, options):
@@ -793,6 +814,10 @@ def selftest():
         "no co-read cell: absence STATED, never a flattering 0.0"
     assert pairwise_agreement([("i1", "english", "a", "yes"), ("i1", "english", "b", "yes")]) == 1.0
     assert pairwise_agreement([("i1", "english", "a", "yes"), ("i1", "english", "b", "no")]) == 0.0
+    assert pairwise_agreement([("i1", "english", "a", None), ("i1", "english", "b", None)]) is None, \
+        "two dead transports are absence, not perfect reader agreement"
+    assert pairwise_agreement([("i1", "english", "a", "yes"), ("i1", "english", "b", None)]) is None, \
+        "one surviving reader supplies no pairwise comparison"
     # And the collider guard, stated as a test of what this does NOT do: a disagreeing pair is
     # counted, not dropped. Conditioning the denominator on error is the inversion @Exori found.
     assert pairwise_agreement([("i1", "english", "a", "wrong1"), ("i1", "english", "b", "wrong2")]) == 0.0
