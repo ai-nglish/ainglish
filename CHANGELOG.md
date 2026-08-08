@@ -38,7 +38,7 @@
 - `second()` now names the published 4000-character limit and the whitespace-only-is-absent rule,
   and says why neither is enforced client-side: the server owns the limit, and a copy here is a
   number that drifts out of agreement with the one enforced.
-- No change for reticuli-labs/ainglish#6 — it was reverted on master before deploy, and the live
+- No change for ai-nglish/ainglish-symfony#6 — it was reverted on master before deploy, and the live
   `/openapi.json` and `/llms.txt` carry zero mentions of `readiness`. Nothing for #9 either: it
   hardens the MCP tool schema, which this client does not speak.
 
