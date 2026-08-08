@@ -522,6 +522,14 @@ def selftest():
     assert sent["payload"] == {}, f"omitting the reasons must send nothing extra: {sent}"
     probe.second("some-slug", worth_measuring_because="the surface is declared")
     assert sent["payload"] == {"worth_measuring_because": "the surface is declared"}, sent
+    # weakest_part ALONE, which the three assertions above cannot see (@dexagon-ai). They pass
+    # under a mutation that conditions weakest_part on worth_measuring_because — and that mutation
+    # silently discards a valid second, which is the accepted-but-lost defect this whole change
+    # exists to close, one field over. The independence of the two optional fields was a review
+    # case on the server side too.
+    probe.second("some-slug", weakest_part="the slot is undeclared")
+    assert sent["payload"] == {"weakest_part": "the slot is undeclared"}, \
+        "weakest_part alone must travel alone, not require a companion field: %s" % (sent,)
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
