@@ -212,10 +212,16 @@ def ask(endpoint, text, question, options):
         # as live and the yield guard never gets to weigh it. None is the dead-cell signal
         # observe() already understands — a fault is referred to the guard, never graded.
         return None
-    out = out.strip().lower()
-    for o in options:
-        if o.lower() in out:
-            return o
+    out = out.strip().casefold()
+    # The prompt requires one exact option, so grade that contract exactly. Substring matching
+    # makes overlapping labels order-dependent: with ["yes", "no", "cannot tell"], the valid
+    # answer "cannot tell" contains "no" and was therefore scored as "no". The served control
+    # and wit/pred item sets both contain this ordinary option shape, so this is measurement logic,
+    # not merely tolerant parsing. Anything else remains an off-option answer and is scored as
+    # such; accepting explanatory prose would need an unambiguous, separately specified parser.
+    exact = {str(o).strip().casefold(): o for o in options}
+    if out in exact:
+        return exact[out]
     return out[:40]  # off-option answer counts as wrong and inflates entropy — as it should
 
 
@@ -803,6 +809,16 @@ def selftest():
             _open = _capture(payload)
             assert ask(entry, "text", "q?", ["process-ran", "cannot tell"]) is None, \
                 f"{label}: a bound-truncated read must be a dead cell, not a scored answer"
+
+        # Option labels can overlap. "cannot tell" contains the shorter valid option "no", and
+        # the old substring parser returned whichever option appeared first in the manifest.
+        # Exercise the real adapter/parser path because a direct equality assertion would miss a
+        # future reintroduction in ask().
+        _open = _capture(
+            {"choices": [{"message": {"content": "cannot tell"}, "finish_reason": "stop"}]})
+        assert ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?",
+                   ["yes", "no", "cannot tell"]) == "cannot tell", \
+            "an exact longer option must not be captured by an earlier substring option"
     finally:
         _open = real_open
         if not had_key:
