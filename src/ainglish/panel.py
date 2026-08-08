@@ -44,12 +44,40 @@ import random
 import socket
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 NEUTRAL_EPS = 1e-9
 REQUEST_TIMEOUT = 120
 # Statuses that mean "the far side is busy or broken", as opposed to "you asked wrongly".
 FAULT_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def _origin(url):
+    p = urllib.parse.urlsplit(url)
+    port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
+    return p.scheme.lower(), (p.hostname or "").lower(), port
+
+
+class _SensitiveRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse to replay a credentialled request outside the origin the operator selected."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        sensitive = bool(getattr(req, "_ainglish_sensitive", False))
+        if sensitive and _origin(req.full_url) != _origin(newurl):
+            raise urllib.error.HTTPError(
+                newurl, code, "refusing cross-origin redirect for a credentialled request", headers, fp)
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and sensitive:
+            redirected._ainglish_sensitive = True
+        return redirected
+
+
+def _open(req, timeout, sensitive=False):
+    if not sensitive:
+        return urllib.request.urlopen(req, timeout=timeout)
+    req._ainglish_sensitive = True
+    return urllib.request.build_opener(_SensitiveRedirectHandler()).open(req, timeout=timeout)
 
 
 class TransportFault(Exception):
@@ -70,8 +98,9 @@ class TransportFault(Exception):
 
 def _fetch(req):
     """One HTTP round trip. Transport faults are translated; nothing else is swallowed."""
+    sensitive = any(k.casefold() in ("authorization", "x-api-key") for k, _v in req.header_items())
     try:
-        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as r:
+        with _open(req, timeout=REQUEST_TIMEOUT, sensitive=sensitive) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:   # subclass of URLError, so it must be caught first
         if e.code in FAULT_STATUS:
@@ -587,6 +616,7 @@ def run_panel(manifest, ask_fn=ask):
 # ------------------------------------------------------------------ selftest (mock panelists)
 def selftest():
     """A perfect reader and a coin-flipper prove the scoring and the gate, no models needed."""
+    global _open
     items = [
         # calibration: answer derivable ONLY in the ainglish arm (planted effect)
         {"id": f"c{k}", "calibration": True,
@@ -632,6 +662,20 @@ def selftest():
     except SystemExit:
         pass
 
+    # urllib's default handler forwards Authorization/x-api-key across origins. The request must
+    # be stopped before a redirect can replay a provider key (or a credential in a 307 body).
+    assert _origin("https://api.openai.com/v1") == _origin("https://API.OPENAI.COM:443/v2")
+    redirect_probe = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        b"{}", {"Authorization": "Bearer sentinel"})
+    redirect_probe._ainglish_sensitive = True
+    try:
+        _SensitiveRedirectHandler().redirect_request(
+            redirect_probe, None, 307, "Temporary Redirect", {}, "https://example.invalid/capture")
+        raise AssertionError("a credentialled cross-origin redirect must refuse before replay")
+    except urllib.error.HTTPError as err:
+        assert err.code == 307 and "refusing cross-origin" in str(err)
+
     # --- transport parity, and truncation as a dead cell -------------------------------------
     # The defect this pins: max_tokens rode in the anthropic body and NOT the openai-compatible
     # one, so a reader's answer budget was decided by which transport it happened to sit behind.
@@ -653,31 +697,34 @@ def selftest():
             return False
 
     def _capture(payload):
-        def fake(req, timeout=None):
+        def fake(req, timeout=None, sensitive=False):
             sent["body"] = json.loads(req.data)
+            sent["sensitive"] = sensitive
             return _Resp(payload)
         return fake
 
     _ok_openai = {"choices": [{"message": {"content": "yes"}, "finish_reason": "stop"}]}
     _ok_anthropic = {"content": [{"text": "yes"}], "stop_reason": "end_turn"}
-    real_urlopen, had_key = urllib.request.urlopen, "ANTHROPIC_API_KEY" in os.environ
+    real_open, had_key = _open, "ANTHROPIC_API_KEY" in os.environ
     os.environ.setdefault("ANTHROPIC_API_KEY", "selftest")
     try:
-        bodies = {}
+        bodies, sensitivities = {}, {}
         for label, entry, payload in (
             ("openai-compatible", {"name": "o", "provider": "ollama", "model": "m"}, _ok_openai),
             ("anthropic", {"name": "a", "provider": "anthropic", "model": "m"}, _ok_anthropic),
         ):
-            urllib.request.urlopen = _capture(payload)
+            _open = _capture(payload)
             assert chat(entry, "hi") == ("yes", False), f"{label}: clean completion"
             bodies[label] = sent["body"]
+            sensitivities[label] = sent["sensitive"]
+        assert sensitivities["anthropic"] is True, "x-api-key requests must use the guarded opener"
         for bound, default in TRANSPORT_BOUNDS.items():
             for label, body in bodies.items():
                 assert body.get(bound) == default, \
                     f"{label} request body dropped the declared bound {bound!r}"
 
         # "Declared" is decoration unless the declared value reaches the wire.
-        urllib.request.urlopen = _capture(_ok_openai)
+        _open = _capture(_ok_openai)
         chat({"name": "o", "provider": "ollama", "model": "m", "max_tokens": 4096}, "hi")
         assert sent["body"]["max_tokens"] == 4096, "a declared bound must override the default"
 
@@ -691,11 +738,11 @@ def selftest():
             ("anthropic", {"name": "a", "provider": "anthropic", "model": "m"},
              {"content": [{"text": "process-ran, and the reason is"}], "stop_reason": "max_tokens"}),
         ):
-            urllib.request.urlopen = _capture(payload)
+            _open = _capture(payload)
             assert ask(entry, "text", "q?", ["process-ran", "cannot tell"]) is None, \
                 f"{label}: a bound-truncated read must be a dead cell, not a scored answer"
     finally:
-        urllib.request.urlopen = real_urlopen
+        _open = real_open
         if not had_key:
             os.environ.pop("ANTHROPIC_API_KEY", None)
 
@@ -711,10 +758,10 @@ def selftest():
         def __init__(self, exc):
             self.exc = exc
 
-        def __call__(self, req, timeout=None):
+        def __call__(self, req, timeout=None, sensitive=False):
             raise self.exc
 
-    real_urlopen = urllib.request.urlopen
+    real_open = _open
     try:
         for exc, reason in (
             (socket.timeout("timed out"), "timeout"),
@@ -723,7 +770,7 @@ def selftest():
             (urllib.error.HTTPError("u", 429, "slow down", {}, None), "http_429"),
             (urllib.error.URLError("connection refused"), "unreachable"),
         ):
-            urllib.request.urlopen = _Raiser(exc)
+            _open = _Raiser(exc)
             try:
                 _fetch(urllib.request.Request("http://x", b"{}"))
                 raise AssertionError(f"{exc!r} must become a TransportFault")
@@ -734,7 +781,7 @@ def selftest():
                     urllib.error.HTTPError("u", 401, "unauthorized", {}, None),
                     urllib.error.HTTPError("u", 404, "no such model", {}, None),
                     ValueError("response shape changed")):
-            urllib.request.urlopen = _Raiser(exc)
+            _open = _Raiser(exc)
             try:
                 _fetch(urllib.request.Request("http://x", b"{}"))
                 raise AssertionError(f"{exc!r} should have propagated")
@@ -745,7 +792,7 @@ def selftest():
             except (urllib.error.HTTPError, ValueError):
                 pass
     finally:
-        urllib.request.urlopen = real_urlopen
+        _open = real_open
 
     # Integration: one reader stalls on one real cell. Before this the exception left run_panel and
     # took every completed cell with it; now the run finishes and the receipt names reader and arm.
@@ -918,8 +965,9 @@ def fetch_items(url_or_path, pinned_sha256):
     """
     if url_or_path.startswith("http"):
         import urllib.request
-        doc = json.loads(urllib.request.urlopen(
-            urllib.request.Request(url_or_path, headers={"User-Agent": "ainglish-panel/1.0"}), timeout=45).read())
+        doc = json.loads(_open(
+            urllib.request.Request(url_or_path, headers={"User-Agent": "ainglish-panel/1.0"}),
+            timeout=45).read())
     else:
         doc = json.load(open(url_or_path))
     items = doc["items"] if isinstance(doc, dict) else doc
@@ -1000,7 +1048,9 @@ def mint_id_token(colony, client_id, key, totp=None):
     def post(url, data, headers):
         req = urllib.request.Request(url, data=data, headers={"User-Agent": "ainglish-panel/1.0", **headers},
                                      method="POST")
-        with urllib.request.urlopen(req, timeout=45) as resp:
+        # Both calls carry credentials (first the raw Colony key, then the subject token in the
+        # form body). A 307/308 can replay a POST body, so protecting headers alone is insufficient.
+        with _open(req, timeout=45, sensitive=True) as resp:
             return json.loads(resp.read())
 
     auth_body = {"api_key": key}
@@ -1042,7 +1092,7 @@ def submit_measurement(measurement, slug):
     def http(url, data=None, headers=None):
         req = urllib.request.Request(url, data=data, headers={"User-Agent": "ainglish-panel/1.0", **(headers or {})},
                                      method="POST")
-        with urllib.request.urlopen(req, timeout=45) as r:
+        with _open(req, timeout=45, sensitive=True) as r:
             return r.read()
 
     tok = os.environ.get("AINGLISH_ID_TOKEN") or ""

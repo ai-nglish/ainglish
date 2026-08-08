@@ -54,6 +54,33 @@ DEFAULT_BASE = "https://ainglish.org"
 AUDIENCE = "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j"  # ainglish.org's Colony client_id
 
 
+def _origin(url):
+    p = urllib.parse.urlsplit(url)
+    port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
+    return p.scheme.lower(), (p.hostname or "").lower(), port
+
+
+class _SensitiveRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Keep credentials on their declared origin, including across 307/308 body replays."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        sensitive = bool(getattr(req, "_ainglish_sensitive", False))
+        if sensitive and _origin(req.full_url) != _origin(newurl):
+            raise urllib.error.HTTPError(
+                newurl, code, "refusing cross-origin redirect for a credentialled request", headers, fp)
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and sensitive:
+            redirected._ainglish_sensitive = True
+        return redirected
+
+
+def _open(req, timeout, sensitive=False):
+    if not sensitive:
+        return urllib.request.urlopen(req, timeout=timeout)
+    req._ainglish_sensitive = True
+    return urllib.request.build_opener(_SensitiveRedirectHandler()).open(req, timeout=timeout)
+
+
 class AinglishError(Exception):
     """The register's one error envelope, as one exception.
 
@@ -159,7 +186,10 @@ class AinglishClient:
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         for attempt in range(3):
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                # urllib forwards Authorization across origins on redirects. Mark the complete
+                # authenticated request sensitive so a redirect cannot replay either its bearer
+                # or (on 307/308) its body to another host. Public reads retain ordinary redirects.
+                with _open(req, timeout=self.timeout, sensitive=auth) as r:
                     body = self._decode(r)
                 return json.loads(body) if body else {}
             except urllib.error.HTTPError as e:
@@ -568,6 +598,16 @@ def selftest():
     fake = "x." + base64.urlsafe_b64encode(json.dumps({"exp": 1234}).encode()).decode().rstrip("=") + ".y"
     assert _jwt_exp(fake) == 1234
     assert _jwt_exp("garbage") == 0, "unreadable tokens must read as EXPIRED, not eternal"
+    assert _origin("https://ainglish.org/x") == _origin("https://AINGLISH.ORG:443/y")
+    redirect_probe = urllib.request.Request(
+        "https://ainglish.org/api/v1/me", headers={"Authorization": "Bearer sentinel"})
+    redirect_probe._ainglish_sensitive = True
+    try:
+        _SensitiveRedirectHandler().redirect_request(
+            redirect_probe, None, 302, "Found", {}, "https://example.invalid/capture")
+        raise AssertionError("a credentialled cross-origin redirect must refuse before replay")
+    except urllib.error.HTTPError as err:
+        assert err.code == 302 and "refusing cross-origin" in str(err)
     # use_env=False below: a selftest is offline by definition — on a workstation with
     # COLONY_API_KEY exported, plain AinglishClient() would MINT A REAL TOKEN here instead
     # of refusing (caught live, the first time this selftest ran on a credentialed machine)

@@ -30,6 +30,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -51,13 +52,40 @@ DIGEST_RECIPE = ("sha256 over json.dumps(records, sort_keys=True, separators=(',
                  "the digest), sorted by (created_at, kind, id) at build time.")
 
 
-def http(url, data=None, headers=None, method=None):
+def _origin(url):
+    p = urllib.parse.urlsplit(url)
+    port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
+    return p.scheme.lower(), (p.hostname or "").lower(), port
+
+
+class _SensitiveRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Refuse to replay Colony credentials outside the configured Colony origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        sensitive = bool(getattr(req, "_ainglish_sensitive", False))
+        if sensitive and _origin(req.full_url) != _origin(newurl):
+            raise urllib.error.HTTPError(
+                newurl, code, "refusing cross-origin redirect for a credentialled request", headers, fp)
+        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if redirected is not None and sensitive:
+            redirected._ainglish_sensitive = True
+        return redirected
+
+
+def _open(req, timeout, sensitive=False):
+    if not sensitive:
+        return urllib.request.urlopen(req, timeout=timeout)
+    req._ainglish_sensitive = True
+    return urllib.request.build_opener(_SensitiveRedirectHandler()).open(req, timeout=timeout)
+
+
+def http(url, data=None, headers=None, method=None, sensitive=False):
     """Polite: a 429 backs off (honouring Retry-After) and retries rather than dying mid-build —
     a builder that crashes on the rate limiter invites re-running it in a tighter loop."""
     for attempt in range(6):
         req = urllib.request.Request(url, data=data, headers={"User-Agent": UA, **(headers or {})}, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=45) as r:
+            with _open(req, timeout=45, sensitive=sensitive) as r:
                 return r.read()
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < 5:
@@ -74,7 +102,7 @@ def colony_jwt():
     if not key:
         raise SystemExit("COLONY_API_KEY not set")
     return json.loads(http(f"{COLONY}/api/v1/auth/token", json.dumps({"api_key": key}).encode(),
-                           {"Content-Type": "application/json"}, "POST"))["access_token"]
+                           {"Content-Type": "application/json"}, "POST", sensitive=True))["access_token"]
 
 
 CACHE_DIR = os.environ.get("SLICE_FETCH_CACHE") or ""
@@ -88,7 +116,8 @@ def colony_get(path, jwt):
         key = os.path.join(CACHE_DIR, hashlib.sha256(path.encode()).hexdigest()[:24] + ".json")
         if os.path.exists(key):
             return json.load(open(key))
-    out = json.loads(http(f"{COLONY}{path}", headers={"Authorization": f"Bearer {jwt}"}))
+    out = json.loads(http(f"{COLONY}{path}", headers={"Authorization": f"Bearer {jwt}"},
+                          sensitive=True))
     if CACHE_DIR:
         os.makedirs(CACHE_DIR, exist_ok=True)
         with open(key, "w") as f:
@@ -243,6 +272,21 @@ def rates(argv):
 
 
 def selftest():
+    # A 307 can replay the POST body containing COLONY_API_KEY. The auth and bearer paths mark
+    # their complete requests sensitive, and the redirect handler refuses before another origin
+    # receives either headers or body.
+    assert _origin("https://thecolony.ai/api") == _origin("https://THECOLONY.AI:443/other")
+    redirect_probe = urllib.request.Request(
+        "https://thecolony.ai/api/v1/auth/token", b'{"api_key":"sentinel"}',
+        {"Content-Type": "application/json"}, method="POST")
+    redirect_probe._ainglish_sensitive = True
+    try:
+        _SensitiveRedirectHandler().redirect_request(
+            redirect_probe, None, 307, "Temporary Redirect", {}, "https://example.invalid/capture")
+        raise AssertionError("a credentialled cross-origin redirect must refuse before replay")
+    except urllib.error.HTTPError as err:
+        assert err.code == 307 and "refusing cross-origin" in str(err)
+
     # canonicalization is order-insensitive at input and digest-stable
     a = [{"kind": "post", "id": "b", "created_at": "2", "body": "x"},
          {"kind": "post", "id": "a", "created_at": "1", "body": "y"}]
