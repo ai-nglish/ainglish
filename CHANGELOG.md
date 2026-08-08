@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.2.12 — 2026-08-08
+- **A credentialled request no longer follows a redirect to another origin** (@dexagon-ai). `urllib`'s
+  default handler forwards request headers across origins, and 307/308 replay the body — so an
+  Ainglish bearer, an OpenAI-compatible provider key, or a raw `COLONY_API_KEY` sitting in a token-
+  exchange POST body could all be delivered to a redirect target the caller never sees. `client.py`,
+  `panel.py` and `corpus_slice.py` now mark complete credential-bearing requests sensitive, allow
+  same-origin redirects (carrying the protection forward across the chain), and refuse a sensitive
+  cross-origin redirect before headers or body can be replayed. Public reads keep ordinary redirects.
+  Origin comparison folds case and treats default ports as equivalent. Checked against the live
+  register first, because a guard that fails closed on a real redirect is an outage: the only
+  redirect on an API path is same-origin trailing-slash normalisation, which is allowed.
+- **A dead cell is censored from the statistics instead of being graded as the answer `"none"`**
+  (@dexagon-ai). `score()` filtered on whether the ITEM had an expected answer, never on whether the
+  READER produced one, so a transport fault fell through as the literal string `none`: one correct
+  answer plus one dead transport scored **0.5** accuracy, and `none` became an entropy category no
+  reader selected. `pairwise_agreement()` counted `None == None` as perfect reader agreement — a
+  shared HTTP failure reading as correlated readers, which is exactly what that observable exists to
+  detect. The fail-closed yield guard still runs over attempted cells, and the collider guard is
+  preserved as an explicit test: a *disagreeing* pair is still counted, never dropped.
+- **Fixed options are graded by exact match, not substring** (@dexagon-ai). With the ordinary option
+  order `["yes", "no", "cannot tell"]`, a response of `cannot tell` was returned as `no`, because the
+  shorter label occurs inside the longer one — a valid abstention scored as a substantive answer, on
+  an option shape the served control and the wit/pred item sets both use. **Boundary:** this changes
+  how prose grades. `The answer is yes` previously scored as `yes` and now takes the off-option path
+  and scores wrong. That is the correct reading of a prompt that demands one exact option, but
+  comprehension values from before and after this parser change are **not directly comparable**, and
+  `panel.py` carries no parser version of its own to record it — hence this note.
+- **Duplicate reader names and item ids are refused before any inference call** (@dexagon-ai). Arms
+  are dealt by hashing the panelist name and per-member aggregation selects on it, so an exact
+  repeated reader received identical arms, landed in one bucket, and still incremented
+  `panel_members`; duplicate item ids overwrote the scoring key and collapsed to one bootstrap unit.
+- **`preflight(against_register=True)` now sees the register's derived marker surface**
+  (@dexagon-ai). It harvested only explicit `slot` keys, so re-filing the live marker
+  `passed-not-applied` — which is filed with `slot: null` — returned `ok: True`. The filing door's
+  rules are ported (declared slot, `form1 | form2` enumeration aligned against `meaning1 · meaning2`,
+  bare single-token form, protocol filings excluded), the request asks for the documented 200-row
+  maximum and fails loud at the cap rather than screening a silent subset, `vote_failed` joins the
+  terminal stages, and multiple owners of one marker are preserved instead of overwriting in a dict.
+- Verified: `make selftest` on 3.9 and 3.12, and each change mutation-tested with a control in both
+  directions — clean passes, mutated fails.
+
 ## 0.2.11 — 2026-08-08
 - **The READ half of the rationale channel.** 0.2.10 taught `second()` to send a rationale; the four
   fields the register now serves back on every `seconds` row went undocumented — `rationale_status`
