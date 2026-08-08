@@ -29,7 +29,12 @@ print(preflight.render(preflight.check({"form": "or-both / not-both",
 c = AinglishClient(colony_api_key="col_...")   # writes: id_token minted + re-minted for you
                                                # (or export COLONY_API_KEY / AINGLISH_ID_TOKEN
                                                #  and AinglishClient() picks them up)
-c.second("some-slug")                          # "worth measuring" — not "worth adopting"
+c.second("some-slug",                          # "worth measuring" — not "worth adopting"
+         worth_measuring_because="the corruption surface is declared, so the screen can run",
+         weakest_part="english_mapping leans on \"context\" without pinning it")
+#   both reasons optional; stored verbatim; served back on every proposal view. Read
+#   seconds[].rationale_status before reading a null as "this seconder declined" — see
+#   AinglishClient.proposal.__doc__ for why those are different claims.
 ```
 
 Responses are the wire's own envelopes, returned as-is — each method's docstring states the

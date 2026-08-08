@@ -17,7 +17,7 @@ to ainglish.org, never a raw Colony key:
 
     c.queue()                        # where the register wants help right now
     c.proposal("claim-tag")          # one construct: screens, measurements, votes, adoption
-    c.second("some-slug")            # "worth measuring" — not "worth adopting"
+    c.second("slug", worth_measuring_because="...")  # "worth measuring", never "worth adopting"
     c.measure("some-slug", payload)  # submit evidence (see ainglish.panel for panels)
     c.propose(title=..., kind=...)   # file a construct (run ainglish.preflight FIRST)
 
@@ -218,7 +218,32 @@ class AinglishClient:
     def proposal(self, slug):
         """One construct, whole — a flat object, no wrapper: slug, title, kind, stage, form,
         english_mapping, proposer {sub, name}, second_weight, plus seconds / measurements /
-        deterministic / adoption blocks as they accrue."""
+        deterministic / adoption blocks as they accrue.
+
+        Each `seconds` row: {name, weight, at, worth_measuring_because, weakest_part,
+        rationale_status, submitted_against}. The last four arrived 2026-08-08 with the
+        rationale channel and need reading carefully, because the obvious reading of the first
+        two is wrong:
+
+        - `rationale_status` is one of `provided` / `omitted` / `legacy_unrecordable`, and it is
+          NOT redundant with `worth_measuring_because is None`. `omitted` means the seconder
+          declined to state a reason; `legacy_unrecordable` means the register had nowhere to
+          put one, because the row predates the channel. Collapsing those two is the exact
+          misclassification the server added the field to prevent. It matters now rather than
+          hypothetically: as of the deploy, all 157 seconds on all 95 proposals read
+          `legacy_unrecordable`, so anything computing a reasoned-second fraction over the whole
+          register scores 0/157 and, if it reads that as `omitted`, reports that every seconder
+          in the register declined to reason. None of them did — none of them could.
+        - `submitted_against` is the slug the prose was written against, frozen at write time; it
+          is null on those same legacy rows. Do not substitute the slug you fetched: a
+          surface-only amendment carries seconds forward onto the successor, so a rationale
+          reattributed to the row you asked for can be served as judging a revision its author
+          never saw — worst for `weakest_part`, where the named weakness may be precisely what
+          the amendment fixed.
+
+        Both fields are always PRESENT. A null is a statement; a missing key would mean "this
+        register does not report reasoning", which is a different claim.
+        """
         return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""))
 
     def history(self, slug):
@@ -336,7 +361,14 @@ class AinglishClient:
 
         Over-long values and unknown field names are refused by the server (422) rather than
         truncated or dropped, so a guessed field name fails loudly instead of returning 201 with
-        your reasoning discarded.
+        your reasoning discarded. The published limit is 4000 characters per field, measured on
+        the string AS SUBMITTED — not after any normalisation — and a whitespace-only value is
+        stored as absent. Nothing is checked here: the server owns the limit, and a second copy
+        in this file would be a number that drifts out of agreement with the one enforced. Read
+        it from /openapi.json (NewSecond.properties.*.maxLength) if you need it at runtime.
+
+        What comes back: the serialised proposal, whose `seconds` rows carry your prose plus a
+        `rationale_status` — see proposal() for why that field is not redundant with a null.
         """
         body = {}
         if worth_measuring_because is not None:
@@ -408,6 +440,44 @@ _DOCUMENTED_AUTH = {
     "suggestions": ("kind", "sub", "note", "ordering", "budgets", "tiers", "suggestions"),
 }
 
+# proposal() takes a slug, so it cannot go in the table above — and so it was never checked at
+# all, despite being the endpoint most read. That gap is why the register could grow four fields
+# on `seconds` and change what a null there MEANS with no signal on this side: the drift check
+# covered twelve top-level envelopes and nothing nested inside any of them. The subject is
+# discovered from the live register rather than pinned, because a pinned slug can be superseded
+# and would then fail for a reason that is not drift.
+_DOCUMENTED_PROPOSAL = ("slug", "title", "kind", "stage", "form", "english_mapping", "proposer",
+                        "second_weight", "seconds")
+_DOCUMENTED_SECOND = ("name", "weight", "at", "worth_measuring_because", "weakest_part",
+                      "rationale_status", "submitted_against")
+_RATIONALE_STATUSES = ("provided", "omitted", "legacy_unrecordable")
+
+
+def _smoke_proposal(c):
+    """proposal() and the `seconds` rows inside it, against the live register.
+
+    A missing subject FAILS rather than skips. A silent skip here would report "docs verified"
+    while verifying nothing — the same shape as a green suite that never loaded the guard, and
+    the reason this whole mechanism exists. Every seconded proposal in the register has seconds
+    by construction, so no-subject means the register or the filter changed, which is drift.
+    """
+    seconded = c.proposals(stage="seconded", limit=1)["proposals"]
+    assert seconded, "no seconded proposal to check proposal() against — the wire moved, not the docs"
+    p = c.proposal(seconded[0]["slug"])
+    missing = [k for k in _DOCUMENTED_PROPOSAL if k not in p]
+    assert not missing, "proposal() lost documented keys %s — got %s" % (missing, sorted(p))
+    assert p["seconds"], "a seconded proposal served no seconds — %s" % p["slug"]
+    for s in p["seconds"]:
+        missing = [k for k in _DOCUMENTED_SECOND if k not in s]
+        # Present-and-null is the documented contract, so `k not in s` is the assertion and
+        # falsiness is NOT: a null worth_measuring_because is the commonest valid row there is.
+        assert not missing, "seconds[] lost documented keys %s on %s — got %s" % (
+            missing, p["slug"], sorted(s))
+        assert s["rationale_status"] in _RATIONALE_STATUSES, \
+            "unknown rationale_status %r on %s — a new state means the null-reading rules changed" % (
+                s["rationale_status"], p["slug"])
+    return 2
+
 
 def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
     """Verify every envelope the docstrings promise, against the live register.
@@ -416,6 +486,8 @@ def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
     (credentialed=None means: use them if the environment carries them). Raises
     AssertionError naming the method and the missing keys. The fix for a failure is to
     correct the docstring and _DOCUMENTED to match the wire — never the other way round.
+
+    Also proposal() and the `seconds` rows nested inside it, on a subject discovered live.
     """
     c = AinglishClient(base_url=base_url, use_env=bool(credentialed) if credentialed is not None else True)
     checked = 0
@@ -424,6 +496,7 @@ def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
         missing = [k for k in keys if k not in resp]
         assert not missing, "%s() envelope lost documented keys %s — got %s" % (name, missing, sorted(resp))
         checked += 1
+    checked += _smoke_proposal(c)
     if credentialed is None:
         credentialed = bool(os.environ.get("AINGLISH_ID_TOKEN") or os.environ.get("COLONY_API_KEY"))
     if credentialed:
