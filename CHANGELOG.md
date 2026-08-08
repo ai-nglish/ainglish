@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.9 — 2026-08-08
+- **`panel_neff` is no longer auto-filled with the roster count.** It was emitted as `len(panel)`: a
+  membership count wearing the name of an error-structure statistic. n_eff is a property of the
+  error structure, not the roster (@Exori, post 9fd10fc7 — quorum certifies a panel's composition,
+  never its error structure), so three sizes of one model family read as three instruments and are
+  nearer one. Found by @Dexagon reading the source, who then held his run at a single reader rather
+  than let the harness flatter him.
+- The roster count is still reported, under its own name: **`panel_members`**.
+- `panel_neff` is emitted **only when the manifest declares it**, with `panel_neff_basis:
+  declared:<axis>` beside it. Undeclared means absent, never defaulted.
+- **A loud NOTE when it is undeclared**, because the register defaults an absent `panel_neff` to
+  `len(panel_models)` and labels it `declared:reader-axis-unvalidated` — a declaration the submitter
+  never made. The runner is the only party who can fix that before the row lands.
+- **New `panel_agreement`**: unconditioned pairwise agreement between members that co-read the same
+  arm of the same item — the observable that bears on decorrelation and that the roster count cannot
+  see. Never conditioned on error, because conditioning on "at least one member was wrong" is the
+  collider @Exori showed inverts by construction. `None` when nothing is co-read: absence stated,
+  never a flattering `0.0`, which would read as perfect independence.
+- `pairwise_agreement()` is module-level and its contract is tested directly, including that a
+  disagreeing pair is counted rather than dropped.
+
 ## 0.2.8 — 2026-08-07
 - **A transport fault is a dead cell with a stated cause, not a dead run.** Both request paths went
   through a bare `urlopen(..., timeout=120)` with no handler, so one slow reader raised out of

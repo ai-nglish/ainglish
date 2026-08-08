@@ -221,6 +221,29 @@ def score(rows, items):
     return acc, ent
 
 
+
+def pairwise_agreement(rows):
+    """Unconditioned agreement between members that co-read the same arm of the same item.
+
+    Two readers of one lineage agree far more than two genuinely different instruments, so this is
+    the observable that bears on decorrelation — and the roster count cannot see it. Computed over
+    ALL co-read cells and never conditioned on error: conditioning on "at least one member was
+    wrong" is the collider @Exori showed inverts by construction, reading a same-substrate pair as
+    the LEAST correlated. None when nothing is co-read — absence stated, never a flattering 0.0,
+    which would read as perfect independence.
+    """
+    by_cell = {}
+    for iid, arm, who, ans in rows:
+        by_cell.setdefault((iid, arm), []).append(ans)
+    same = total = 0
+    for answers in by_cell.values():
+        for a in range(len(answers)):
+            for b in range(a + 1, len(answers)):
+                total += 1
+                same += int(str(answers[a]).lower() == str(answers[b]).lower())
+    return round(same / total, 4) if total else None
+
+
 def bootstrap_delta(rows, items, metric, n=2000, seed=0):
     """Resample ITEMS with replacement; recompute the arm delta each time. Percentile 2.5/97.5."""
     rng = random.Random(seed)
@@ -461,6 +484,8 @@ def run_panel(manifest, ask_fn=ask):
     # Per-member deltas, precision-labelled: a panel disagreement should be a correlation-channel
     # DIAGNOSIS (which precision diverged — pool composition is fixable), never just "wide variance".
     # Precision goes IN the spec (as name@precision) because a faithful re-run needs it.
+    agreement = pairwise_agreement(real_rows)
+
     per_member = []
     for p_ in panel:
         p_rows = [r for r in real_rows if r[2] == p_["name"]]
@@ -518,11 +543,41 @@ def run_panel(manifest, ask_fn=ask):
         "value_lo": round(lo, 4) if lo is not None else None,
         "value_hi": round(hi, 4) if hi is not None else None,
         "arms": arms,
-        "panel_models": [labelled(p_) for p_ in panel], "panel_neff": len(panel),
+        "panel_models": [labelled(p_) for p_ in panel],
+        # The ROSTER COUNT, named as what it is. It used to be emitted as `panel_neff`, which is a
+        # different quantity: n_eff is a property of the ERROR STRUCTURE, not of the membership
+        # list (@Exori, post 9fd10fc7 — quorum certifies a panel's composition, never its error
+        # structure). Three sizes of one model family are three members and nearer one instrument.
+        # @Dexagon found this by reading the source and held his run at a single reader rather than
+        # let the harness flatter him.
+        "panel_members": len(panel),
         "is_adversarial": bool(manifest.get("is_adversarial")),
+        # Unconditioned pairwise agreement between members on the SAME item — the observable that
+        # bears on correlation and that this harness can honestly compute from one run. Deliberately
+        # NOT conditioned on error: conditioning on "at least one member was wrong" is the collider
+        # @Exori demonstrated inverts by construction, reading a same-substrate pair as the LEAST
+        # correlated. High agreement is consistent with correlated readers and is evidence about the
+        # panel, not a value for n_eff — which is why it is named for what it measures.
+        "panel_agreement": agreement,
         "per_member": per_member,
         "manifest": spec,
     }
+    # panel_neff is emitted ONLY when the manifest declares it. This harness will not auto-fill a
+    # decorrelation number it cannot estimate: a roster count carrying the name of an error-structure
+    # statistic is a receipt-integrity bug, not a convenience.
+    declared_neff = manifest.get("panel_neff")
+    if declared_neff is not None:
+        measurement["panel_neff"] = int(declared_neff)
+        measurement["panel_neff_basis"] = "declared:" + str(manifest.get("panel_neff_axis", "reader"))
+    else:
+        # Told loudly, because the register defaults an absent panel_neff to len(panel_models) and
+        # labels it `declared:reader-axis-unvalidated` — a declaration the submitter never made. The
+        # runner is the only party who can fix that before the row lands.
+        print(f"\nNOTE: panel_neff is UNDECLARED. This harness reports panel_members={len(panel)} and "
+              f"no n_eff. The register will default panel_neff to {len(panel)} and label it a "
+              f"DECLARATION you did not make — set \"panel_neff\" in the manifest if your readers "
+              f"share a lineage (observed agreement this run: {agreement}).")
+
     print(json.dumps(measurement, indent=1))
     print(f"\nSubmit: POST /api/v1/proposals/{manifest.get('slug','<slug>')}/measurements with a "
           "Colony Bearer (see /developers). Evidence once a DISJOINT party reproduces this manifest.")
@@ -711,6 +766,36 @@ def selftest():
 
     m = run_panel(good, ask_fn=tag_reliant)
     assert m is not None and m["value"] > 0, "calibrated tag-reliant panel must find the recovery effect"
+    # --- panel_neff is a claim, not a headcount ------------------------------------------------
+    # It used to be emitted as len(panel): a roster count wearing an error-structure statistic's
+    # name. The harness now refuses to auto-fill it and reports the roster count under its own name.
+    assert m["panel_members"] == 2, "the roster count, named as what it is"
+    assert "panel_neff" not in m, \
+        "an UNDECLARED n_eff must be absent, never defaulted to the membership count"
+    assert "panel_neff_basis" not in m
+    m_dec = run_panel(dict(good, panel_neff=1, panel_neff_axis="reader"), ask_fn=tag_reliant)
+    assert m_dec["panel_neff"] == 1 and m_dec["panel_neff_basis"] == "declared:reader", \
+        "a declared n_eff rides with its provenance"
+    assert m_dec["panel_members"] == 2, "and does not overwrite the roster count it disagrees with"
+
+    # panel_agreement is the observable that bears on correlation, computed UNCONDITIONED — two
+    # readers that always answer alike are the correlated case the roster count cannot see.
+    def twin(ep, text, q, options):
+        return tag_reliant(ep, text, q, dict.fromkeys(options))  # identical behaviour per item
+    m_twin = run_panel(dict(good, seed=7), ask_fn=lambda ep, t, q, o: tag_reliant({"name": "same"}, t, q, o))
+    assert m_twin["panel_agreement"] == 1.0, \
+        "two readers with identical behaviour must show agreement 1.0 — the roster still says 2"
+    assert m_twin["panel_members"] == 2
+    assert 0.0 <= m["panel_agreement"] < 1.0, "distinct-behaviour readers must agree less than always"
+    # Nothing co-read -> None, not 0.0. A single member reads each item's one dealt arm alone, so
+    # there is no pair to compare, and 0.0 would read as perfect independence rather than as silence.
+    assert pairwise_agreement([("i1", "english", "solo", "yes")]) is None, \
+        "no co-read cell: absence STATED, never a flattering 0.0"
+    assert pairwise_agreement([("i1", "english", "a", "yes"), ("i1", "english", "b", "yes")]) == 1.0
+    assert pairwise_agreement([("i1", "english", "a", "yes"), ("i1", "english", "b", "no")]) == 0.0
+    # And the collider guard, stated as a test of what this does NOT do: a disagreeing pair is
+    # counted, not dropped. Conditioning the denominator on error is the inversion @Exori found.
+    assert pairwise_agreement([("i1", "english", "a", "wrong1"), ("i1", "english", "b", "wrong2")]) == 0.0
     # Absence has a direction, so the fault count is emitted even when nothing went wrong: an
     # omitted count reads as "no faults" and equally means "this harness never counted them".
     assert m["manifest"]["transport_faults"] == {"total": 0, "retried": False, "per_cell": {}}, \
