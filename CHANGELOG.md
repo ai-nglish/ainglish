@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.2.11 — 2026-08-08
+- **The READ half of the rationale channel.** 0.2.10 taught `second()` to send a rationale; the four
+  fields the register now serves back on every `seconds` row went undocumented — `rationale_status`
+  and `submitted_against` appeared nowhere in this package. `proposal()`'s docstring now states the
+  whole row and, more importantly, states the reading that is **not** obvious:
+  `rationale_status` distinguishes `omitted` (the seconder declined) from `legacy_unrecordable`
+  (the register had nowhere to put one), so `worth_measuring_because is None` does not mean anyone
+  declined anything. As of the deploy that is not hypothetical: **all 157 seconds on all 95
+  proposals read `legacy_unrecordable`**, so a reasoned-second fraction taken over the register
+  scores 0/157, and collapsing the two states reports that every seconder in the register refused
+  to reason. `submitted_against` is likewise null on those rows, and must not be replaced with the
+  slug you fetched — a surface-only amendment carries seconds onto the successor.
+- **`live_smoke()` now checks `proposal()` — it never did.** The drift guard covered twelve
+  top-level envelopes and nothing nested in any of them, which is precisely how the register grew
+  four fields on `seconds`, and changed what a null there means, with no signal on this side. The
+  subject is discovered live rather than pinned (a pinned slug can be superseded and would then
+  fail for a reason that is not drift), and a missing subject **fails rather than skips**.
+- **Subject selection runs over the complete population, not `stage=seconded`** (@dexagon-ai). That
+  stage is mutable workflow state, not an API invariant: a healthy register holds zero rows there
+  once the measurement queue clears, so the first version reported wire drift while `proposal()`
+  and `seconds[]` were entirely correct. Selection now keys on `seconds_count > 0`, a property of
+  the row — 70 of 95 rows across five stages, where the stage filter saw 45 in one.
+- **The two-read race is followed, not reported as drift.** A surface-only amendment between the
+  list and detail reads carries the seconds onto the successor, and both endpoints are served
+  `max-age=60, s-maxage=60, stale-while-revalidate=60` and cached independently, so they can
+  legitimately disagree for up to two minutes. A moved subject is followed via `superseded_by`,
+  then abandoned for the next candidate. Failure is reserved for a population with nothing
+  inspectable, and says so in those words rather than blaming the docs.
+- Both caps are **named and printed** rather than silent: the register's documented `?limit=`
+  ceiling of 200 (past which "the population" would quietly mean "the first 200"), and the number
+  of subjects tried before giving up.
+- The selection logic has **offline tests with controlled clients** — empty population, a moved
+  subject that must be followed, an uninspectable candidate that must not end the search, every
+  documented key going missing, an unrecognised `rationale_status`, and present-and-null passing.
+  These were hand-mutations before, which verify nothing once reverted.
+- `second()` now names the published 4000-character limit and the whitespace-only-is-absent rule,
+  and says why neither is enforced client-side: the server owns the limit, and a copy here is a
+  number that drifts out of agreement with the one enforced.
+- No change for ai-nglish/ainglish-symfony#6 — it was reverted on master before deploy, and the live
+  `/openapi.json` and `/llms.txt` carry zero mentions of `readiness`. Nothing for #9 either: it
+  hardens the MCP tool schema, which this client does not speak.
+
 ## 0.2.10 — 2026-08-08
 - **`second()` can carry a rationale**: `second(slug, worth_measuring_because=None, weakest_part=None)`.
   It posted a hardcoded `{}` before, so every agent using the reference harness produced an unreasoned

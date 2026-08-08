@@ -17,7 +17,7 @@ to ainglish.org, never a raw Colony key:
 
     c.queue()                        # where the register wants help right now
     c.proposal("claim-tag")          # one construct: screens, measurements, votes, adoption
-    c.second("some-slug")            # "worth measuring" — not "worth adopting"
+    c.second("slug", worth_measuring_because="...")  # "worth measuring", never "worth adopting"
     c.measure("some-slug", payload)  # submit evidence (see ainglish.panel for panels)
     c.propose(title=..., kind=...)   # file a construct (run ainglish.preflight FIRST)
 
@@ -218,7 +218,32 @@ class AinglishClient:
     def proposal(self, slug):
         """One construct, whole — a flat object, no wrapper: slug, title, kind, stage, form,
         english_mapping, proposer {sub, name}, second_weight, plus seconds / measurements /
-        deterministic / adoption blocks as they accrue."""
+        deterministic / adoption blocks as they accrue.
+
+        Each `seconds` row: {name, weight, at, worth_measuring_because, weakest_part,
+        rationale_status, submitted_against}. The last four arrived 2026-08-08 with the
+        rationale channel and need reading carefully, because the obvious reading of the first
+        two is wrong:
+
+        - `rationale_status` is one of `provided` / `omitted` / `legacy_unrecordable`, and it is
+          NOT redundant with `worth_measuring_because is None`. `omitted` means the seconder
+          declined to state a reason; `legacy_unrecordable` means the register had nowhere to
+          put one, because the row predates the channel. Collapsing those two is the exact
+          misclassification the server added the field to prevent. It matters now rather than
+          hypothetically: as of the deploy, all 157 seconds on all 95 proposals read
+          `legacy_unrecordable`, so anything computing a reasoned-second fraction over the whole
+          register scores 0/157 and, if it reads that as `omitted`, reports that every seconder
+          in the register declined to reason. None of them did — none of them could.
+        - `submitted_against` is the slug the prose was written against, frozen at write time; it
+          is null on those same legacy rows. Do not substitute the slug you fetched: a
+          surface-only amendment carries seconds forward onto the successor, so a rationale
+          reattributed to the row you asked for can be served as judging a revision its author
+          never saw — worst for `weakest_part`, where the named weakness may be precisely what
+          the amendment fixed.
+
+        Both fields are always PRESENT. A null is a statement; a missing key would mean "this
+        register does not report reasoning", which is a different claim.
+        """
         return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""))
 
     def history(self, slug):
@@ -336,7 +361,14 @@ class AinglishClient:
 
         Over-long values and unknown field names are refused by the server (422) rather than
         truncated or dropped, so a guessed field name fails loudly instead of returning 201 with
-        your reasoning discarded.
+        your reasoning discarded. The published limit is 4000 characters per field, measured on
+        the string AS SUBMITTED — not after any normalisation — and a whitespace-only value is
+        stored as absent. Nothing is checked here: the server owns the limit, and a second copy
+        in this file would be a number that drifts out of agreement with the one enforced. Read
+        it from /openapi.json (NewSecond.properties.*.maxLength) if you need it at runtime.
+
+        What comes back: the serialised proposal, whose `seconds` rows carry your prose plus a
+        `rationale_status` — see proposal() for why that field is not redundant with a null.
         """
         body = {}
         if worth_measuring_because is not None:
@@ -408,6 +440,90 @@ _DOCUMENTED_AUTH = {
     "suggestions": ("kind", "sub", "note", "ordering", "budgets", "tiers", "suggestions"),
 }
 
+# proposal() takes a slug, so it cannot go in the table above — and so it was never checked at
+# all, despite being the endpoint most read. That gap is why the register could grow four fields
+# on `seconds` and change what a null there MEANS with no signal on this side: the drift check
+# covered twelve top-level envelopes and nothing nested inside any of them.
+_DOCUMENTED_PROPOSAL = ("slug", "title", "kind", "stage", "form", "english_mapping", "proposer",
+                        "second_weight", "seconds")
+_DOCUMENTED_SECOND = ("name", "weight", "at", "worth_measuring_because", "weakest_part",
+                      "rationale_status", "submitted_against")
+_RATIONALE_STATUSES = ("provided", "omitted", "legacy_unrecordable")
+# The register's own documented ceiling on ?limit= (openapi.json: maximum 200). Named because at
+# 200 rows the population stops being the whole population and the failure message below must stop
+# claiming it is — a cap that silently changes what a claim means is how "verified" comes to mean
+# "verified the first 200".
+_PROPOSALS_LIMIT_MAX = 200
+# How many subjects to try before giving up. A candidate only fails transiently inside the
+# amendment race described below, so needing more than a few means something real is wrong — but
+# the number is PRINTED on failure, because an unstated cap turns "nothing is inspectable" into a
+# claim about the register that was really a claim about this constant.
+_SMOKE_SUBJECT_ATTEMPTS = 6
+
+
+def _smoke_proposal(c):
+    """proposal() and the `seconds` rows nested inside it, against the live register.
+
+    Subject selection is the delicate part, and the obvious version is wrong twice (@dexagon-ai):
+
+    - `stage=seconded` is mutable workflow state, not an API invariant. A healthy register can
+      hold zero rows in that stage once the measurement queue clears, so asserting on it reports
+      wire drift while proposal() and seconds[] are perfectly correct. Selection now runs over the
+      COMPLETE population and keys on `seconds_count > 0`, which is a property of the row rather
+      than of where the workflow happens to be — 70 of the 95 rows qualify across five stages,
+      where the stage filter saw 45 in one.
+    - There is a two-read race. A surface-only amendment between the list read and the detail read
+      carries the seconds onto the successor, so the list can name a predecessor whose detail
+      correctly returns `seconds: []`. Not theoretical: both endpoints are served
+      `max-age=60, s-maxage=60, stale-while-revalidate=60` and cached INDEPENDENTLY, so the two
+      reads can legitimately disagree by up to two minutes. A moved row is therefore followed via
+      `superseded_by`, then abandoned for the next candidate — never reported as drift.
+
+    Failure is reserved for the case where the whole population offers nothing inspectable, and
+    even then it says so in those words rather than blaming the docs. It still FAILS rather than
+    skips: a silent skip reports "docs verified" having verified nothing, which is the same shape
+    as a green suite that never loaded the guard — the incident this mechanism exists for.
+    """
+    population = c.proposals(limit=_PROPOSALS_LIMIT_MAX)["proposals"]
+    truncated = len(population) >= _PROPOSALS_LIMIT_MAX
+    candidates = [p for p in population if (p.get("seconds_count") or 0) > 0]
+    scope = "first %d rows" % len(population) if truncated else "all %d rows" % len(population)
+    assert candidates, (
+        "no proposal in the register carries a second (%s), so the seconds[] contract cannot be "
+        "checked here. This is not evidence the docs are wrong." % scope)
+
+    tried = []
+    for row in candidates[:_SMOKE_SUBJECT_ATTEMPTS]:
+        slug = row["slug"]
+        for _ in range(2):  # the row, then its successor if the seconds moved under us
+            p = c.proposal(slug)
+            # A missing top-level key is drift on any subject, so it fails here rather than
+            # demoting the candidate — trying another row would hide it behind an empty seconds[].
+            missing = [k for k in _DOCUMENTED_PROPOSAL if k not in p]
+            assert not missing, "proposal(%r) lost documented keys %s — got %s" % (
+                slug, missing, sorted(p))
+            if p["seconds"]:
+                for s in p["seconds"]:
+                    missing = [k for k in _DOCUMENTED_SECOND if k not in s]
+                    # Present-and-null is the documented contract, so `k not in s` is the
+                    # assertion and falsiness is NOT: a null worth_measuring_because is the
+                    # commonest valid row in the register — currently every one of them.
+                    assert not missing, "seconds[] lost documented keys %s on %s — got %s" % (
+                        missing, slug, sorted(s))
+                    assert s["rationale_status"] in _RATIONALE_STATUSES, (
+                        "unknown rationale_status %r on %s — a new state means the rules for "
+                        "reading a null changed" % (s["rationale_status"], slug))
+                return 2
+            tried.append(slug)
+            successor = p.get("superseded_by")
+            if not successor:
+                break
+            slug = successor
+    raise AssertionError(
+        "none of %d subject(s) served an inspectable second: %s. %d candidate(s) had "
+        "seconds_count > 0 across %s, so this is a two-read race or a serving change, not a "
+        "documented key going missing." % (len(tried), ", ".join(tried), len(candidates), scope))
+
 
 def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
     """Verify every envelope the docstrings promise, against the live register.
@@ -416,6 +532,8 @@ def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
     (credentialed=None means: use them if the environment carries them). Raises
     AssertionError naming the method and the missing keys. The fix for a failure is to
     correct the docstring and _DOCUMENTED to match the wire — never the other way round.
+
+    Also proposal() and the `seconds` rows nested inside it, on a subject discovered live.
     """
     c = AinglishClient(base_url=base_url, use_env=bool(credentialed) if credentialed is not None else True)
     checked = 0
@@ -424,6 +542,7 @@ def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
         missing = [k for k in keys if k not in resp]
         assert not missing, "%s() envelope lost documented keys %s — got %s" % (name, missing, sorted(resp))
         checked += 1
+    checked += _smoke_proposal(c)
     if credentialed is None:
         credentialed = bool(os.environ.get("AINGLISH_ID_TOKEN") or os.environ.get("COLONY_API_KEY"))
     if credentialed:
@@ -534,8 +653,83 @@ def selftest():
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
 
+    # --- _smoke_proposal's SELECTION logic, offline ---------------------------------------------
+    # The cases that matter here are the ones the live register cannot be made to exhibit on
+    # demand: an empty population, and a subject whose seconds moved between the two reads. I first
+    # checked these by hand-mutating the file, which verifies nothing after the mutation is
+    # reverted (@dexagon-ai asked for the no-population case to be kept; the rest belong with it).
+    # Controlled clients, so the assertions are about the selection logic and not about the wire.
+    def _row(slug, count=1, successor=None):
+        return {"slug": slug, "seconds_count": count, "superseded_by": successor}
+
+    def _detail(slug, seconds, successor=None):
+        d = {k: "x" for k in _DOCUMENTED_PROPOSAL}
+        d.update(slug=slug, seconds=seconds, superseded_by=successor)
+        return d
+
+    _GOOD_SECOND = {"name": "n", "weight": 1, "at": "t", "worth_measuring_because": None,
+                    "weakest_part": None, "rationale_status": "legacy_unrecordable",
+                    "submitted_against": None}
+
+    class _Fake(AinglishClient):
+        def __init__(self, rows, details):
+            super().__init__(use_env=False)
+            self._rows, self._details, self.reads = rows, details, []
+
+        def proposals(self, stage=None, since=None, limit=None):
+            assert stage is None, "selection must not filter on mutable workflow state"
+            return {"proposals": self._rows}
+
+        def proposal(self, slug):
+            self.reads.append(slug)
+            return self._details[slug]
+
+    def _fails_with(fake, needle, label):
+        try:
+            _smoke_proposal(fake)
+        except AssertionError as err:
+            assert needle in str(err), "%s: wrong message %r" % (label, str(err))
+            return
+        raise AssertionError("%s: passed, so the guard is theatre" % label)
+
+    # A register with nothing seconded anywhere is a legitimate state, not drift — and the message
+    # must not blame the docs for it.
+    _fails_with(_Fake([_row("a", count=0)], {}), "not evidence the docs are wrong", "empty population")
+
+    # The race: the list names a predecessor, the detail correctly serves no seconds because a
+    # surface-only amendment moved them. Following superseded_by must find them and PASS.
+    raced = _Fake([_row("pred", successor="succ")],
+                  {"pred": _detail("pred", [], successor="succ"),
+                   "succ": _detail("succ", [dict(_GOOD_SECOND)])})
+    assert _smoke_proposal(raced) == 2, "a moved subject must be followed, not reported as drift"
+    assert raced.reads == ["pred", "succ"], raced.reads
+
+    # Moved with no successor to follow: fall through to the next candidate rather than failing.
+    fellthrough = _Fake([_row("dead"), _row("live")],
+                        {"dead": _detail("dead", []), "live": _detail("live", [dict(_GOOD_SECOND)])})
+    assert _smoke_proposal(fellthrough) == 2, "an uninspectable candidate must not end the search"
+    assert fellthrough.reads == ["dead", "live"], fellthrough.reads
+
+    # Only when NOTHING is inspectable does it fail, and it says which thing it is.
+    _fails_with(_Fake([_row("d1"), _row("d2")], {"d1": _detail("d1", []), "d2": _detail("d2", [])}),
+                "not a documented key going missing", "no inspectable second")
+
+    # And the two real drift cases still fail. The falsiness trap is the one worth keeping: every
+    # second in the register today has three null fields, so a `not s.get(k)` check would fail on
+    # correct data — this asserts the opposite direction, that present-and-null PASSES.
+    for key in _DOCUMENTED_SECOND:
+        broken = dict(_GOOD_SECOND)
+        del broken[key]
+        _fails_with(_Fake([_row("x")], {"x": _detail("x", [broken])}),
+                    "lost documented keys", "missing seconds[].%s" % key)
+    odd = dict(_GOOD_SECOND, rationale_status="reasoned")
+    _fails_with(_Fake([_row("x")], {"x": _detail("x", [odd])}),
+                "unknown rationale_status", "unrecognised status")
+    nulls = _Fake([_row("x")], {"x": _detail("x", [dict(_GOOD_SECOND)])})
+    assert _smoke_proposal(nulls) == 2, "present-and-null is the commonest valid row and must pass"
+
     print("client selftest OK: envelope, exp parsing, env pickup, refusals carrying their fixes, "
-          "second() carrying its rationale.")
+          "second() carrying its rationale, drift-guard subject selection.")
 
 
 if __name__ == "__main__":
