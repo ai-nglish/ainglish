@@ -42,11 +42,51 @@ jobs:
   parity:
     runs-on: ubuntu-latest
     steps:
+      # Tags and full history are required: this compares the served bytes against `git show <tag>`,
+      # and actions/checkout is shallow and tagless by default.
       - uses: actions/checkout@v4
-      - name: Package modules are byte-identical to the served reference harness
+        with: { fetch-depth: 0 }
+      - name: The register's harness URLs redirect to the pinned bytes of a release tag
+        # Replaces a byte-mirror check that did not work. It ran
+        #     diff -q "/tmp/$f" "src/ainglish/$f" && echo "  parity: $f"
+        # under `set -e`, and `set -e` is ignored for a command that is not the LAST in an AND-OR
+        # list — so a failing diff was swallowed and the loop's exit status was just its final
+        # iteration's. Parity was therefore enforced on corpus_slice.py alone, and three PRs that
+        # changed panel.py showed a green parity job while the log said the files differed
+        # (reported by @dexagon-ai on #4). Every branch below sets `fail=1` explicitly and the step
+        # ends in `exit $fail`, so no status depends on a short-circuit.
+        #
+        # It also no longer compares against the working tree, which would go red on every commit
+        # after a release: the register pins a TAG, so the honest question is whether the URL
+        # resolves to the bytes of the tag it names.
         run: |
-          set -e
-          for f in panel.py measure.py empty_cell_guard.py corpus_slice.py; do
-            curl -fsS "https://ainglish.org/$f" -o "/tmp/$f"
-            diff -q "/tmp/$f" "src/ainglish/$f" && echo "  parity: $f"
+          set -uo pipefail
+          fail=0
+          for f in measure.py panel.py corpus_slice.py empty_cell_guard.py; do
+            url="https://ainglish.org/$f"
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url" || echo 000)
+            loc=$(curl -sI "$url" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')
+            # A 200 means a stale copy is being served and shadowing the redirect — the exact
+            # failure this design exists to remove, so it must be loud rather than "in sync".
+            if [ "$code" != "302" ]; then
+              echo "FAIL $f: expected 302, got $code — is a stale file still in the web root?"
+              fail=1; continue
+            fi
+            case "$loc" in
+              https://raw.githubusercontent.com/ai-nglish/ainglish/v*/src/ainglish/"$f") ;;
+              *) echo "FAIL $f: target is not pinned to a version tag: $loc"; fail=1; continue;;
+            esac
+            tag=${loc#https://raw.githubusercontent.com/ai-nglish/ainglish/}
+            tag=${tag%%/*}
+            if ! curl -fsSL "$loc" -o "/tmp/served-$f"; then
+              echo "FAIL $f: redirect target did not fetch: $loc"; fail=1; continue
+            fi
+            if ! git show "$tag:src/ainglish/$f" > "/tmp/tagged-$f" 2>/dev/null; then
+              echo "FAIL $f: $tag does not carry src/ainglish/$f in this repository"; fail=1; continue
+            fi
+            if ! diff -q "/tmp/served-$f" "/tmp/tagged-$f" >/dev/null; then
+              echo "FAIL $f: served bytes differ from $tag"; fail=1; continue
+            fi
+            echo "  ok  $f -> $tag ($(sha256sum "/tmp/served-$f" | cut -c1-12))"
           done
+          exit $fail

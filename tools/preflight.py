@@ -40,12 +40,16 @@ import re
 import subprocess
 import sys
 import urllib.error
+import hashlib
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SITE_MIRROR = ROOT.parent / "ainglish" / "public" / "panel.py"
-SERVED_URL = "https://ainglish.org/panel.py"
+# The register no longer serves copies of these: those paths 302 to a pinned tag in THIS repo
+# (see the RewriteRule in ainglish-symfony public/.htaccess). So the check is no longer
+# "does a mirror match" but "does the redirect resolve to the bytes of the tag it names".
+MIRRORED = ("measure.py", "panel.py", "corpus_slice.py", "empty_cell_guard.py")
+REGISTER = "https://ainglish.org"
 PKG = "ainglish"
 
 # Tags known to violate the version check, with the ruling that left them alone. NEVER a silent
@@ -146,15 +150,63 @@ def check_head_tag_matches_declared() -> None:
     check(f"the version tag on HEAD matches the declared version ({dv})", not bad, "; ".join(bad))
 
 
-def check_mirror_parity() -> None:
-    """The served copy and the packaged copy of panel.py must be the same bytes."""
-    local = ROOT / "src" / PKG / "panel.py"
-    if not SITE_MIRROR.exists():
-        notes.append(f"site checkout not found at {SITE_MIRROR} — mirror parity not checked")
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Report the redirect instead of following it — the status and target ARE the assertion."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def check_mirror_parity(offline: bool) -> None:
+    """Every harness URL the register advertises must 302 to a pinned tag carrying those bytes.
+
+    This replaced a check hardcoded to panel.py, which left measure.py, corpus_slice.py and
+    empty_cell_guard.py mirrored but unguarded. It also no longer compares against the working
+    tree: the register pins a TAG, so comparing to HEAD would go red on every commit after a
+    release. The honest question is whether the advertised URL resolves to the tag it names.
+    """
+    if offline:
+        notes.append("--offline: harness redirects not checked")
         return
-    check("panel.py mirror is byte-identical to the packaged copy",
-          local.read_bytes() == SITE_MIRROR.read_bytes(),
-          "the served harness and the published one have diverged")
+    for name in MIRRORED:
+        url = f"{REGISTER}/{name}"
+        try:
+            req = urllib.request.Request(url, method="HEAD")
+            opener = urllib.request.build_opener(_NoRedirect())
+            resp = opener.open(req, timeout=40)
+            code, loc = resp.status, resp.headers.get("Location", "")
+        except urllib.error.HTTPError as e:
+            code, loc = e.code, e.headers.get("Location", "")
+        except (urllib.error.URLError, TimeoutError) as e:
+            notes.append(f"{url} unreachable ({e}) — redirect not checked")
+            continue
+        # A 200 means a stale copy is being served and shadowing the rule: the precise failure
+        # this design removes, so it is loud rather than quietly "in sync".
+        if code != 302:
+            check(f"{name} redirects to a pinned tag", False,
+                  f"expected 302, got {code} — is a stale file still in the web root?")
+            continue
+        m = re.match(r"https://raw\.githubusercontent\.com/ai-nglish/ainglish/(v[^/]+)/src/"
+                     + re.escape(PKG) + r"/" + re.escape(name) + r"$", loc)
+        if not m:
+            check(f"{name} redirects to a pinned tag", False, f"target not tag-pinned: {loc}")
+            continue
+        tag = m.group(1)
+        try:
+            served = urllib.request.urlopen(loc, timeout=40).read()
+        except (urllib.error.URLError, TimeoutError) as e:
+            check(f"{name} redirect target fetches", False, f"{loc} ({e})")
+            continue
+        try:
+            tagged = subprocess.run(["git", "show", f"{tag}:src/{PKG}/{name}"], cwd=ROOT,
+                                    capture_output=True, check=True).stdout
+        except subprocess.CalledProcessError:
+            check(f"{name} tag {tag} carries the file", False, f"{tag}:src/{PKG}/{name} missing")
+            continue
+        check(f"{name} -> {tag} serves the tagged bytes", served == tagged,
+              detail=f"served {hashlib.sha256(served).hexdigest()[:12]}… vs "
+                     f"{tag} {hashlib.sha256(tagged).hexdigest()[:12]}…",
+              info=f"{tag} {hashlib.sha256(served).hexdigest()[:12]}…")
 
 
 def check_index(offline: bool) -> None:
@@ -178,33 +230,14 @@ def check_index(offline: bool) -> None:
           info=f"latest {data['info']['version']}")
 
 
-def check_served_matches_local(offline: bool) -> None:
-    """The digest I publish must be the digest that serves."""
-    if offline:
-        notes.append("--offline: served bytes not checked")
-        return
-    local = ROOT / "src" / PKG / "panel.py"
-    try:
-        with urllib.request.urlopen(SERVED_URL, timeout=40) as r:
-            served = r.read()
-    except (urllib.error.URLError, TimeoutError) as e:
-        notes.append(f"{SERVED_URL} unreachable ({e}) — served bytes not checked")
-        return
-    import hashlib
-    a, b = hashlib.sha256(served).hexdigest(), hashlib.sha256(local.read_bytes()).hexdigest()
-    check("the live URL serves the packaged bytes", a == b,
-          detail=f"served {a[:12]}… vs local {b[:12]}…", info=f"sha256 {b[:12]}…")
-
-
 def main(argv: list[str]) -> int:
     offline = "--offline" in argv
     print(f"preflight — {PKG} {declared_version()} at {git('rev-parse', '--short', 'HEAD')}\n")
     check_untracked()
     check_tags_declare_their_own_version()
     check_head_tag_matches_declared()
-    check_mirror_parity()
+    check_mirror_parity(offline)
     check_index(offline)
-    check_served_matches_local(offline)
 
     if notes:
         print("\nnotes (not failures):")
