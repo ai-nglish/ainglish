@@ -154,9 +154,10 @@ class CellYieldGuard:
         if self._run >= self.max_consecutive_dead:
             raise CellYieldAbort(
                 f"ABORT: {self._run} consecutive cells carried no answer "
-                f"(last: {model} / {arm}). Dead cells score as 0 on their arm, "
-                f"so a run that continues from here reports a delta produced by "
-                f"the fault. empty={self._all.empty} unparsed={self._all.unparsed} "
+                f"(last: {model} / {arm}). Dead cells are censored from scoring, "
+                f"so a run that continues from here reports a delta over an undeclared, "
+                f"potentially arm-asymmetric surviving denominator. "
+                f"empty={self._all.empty} unparsed={self._all.unparsed} "
                 f"of {self._all.n}. If empty dominates, check `think`/num_predict "
                 f"and the response field; if unparsed dominates, check the label "
                 f"extraction against the raw text."
