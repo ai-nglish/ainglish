@@ -1,7 +1,21 @@
 name: publish
 on:
+  # A tag IS the release decision. Publishing hung off `release: published` alone, which is one
+  # manual step past the tag, and 0.2.10 and 0.2.11 both sat unpublished because of it: they were
+  # the first two versions to reach master via pull request, and the tag-and-release habit had only
+  # ever been attached to a direct push. No failed run to notice — no run at all.
+  push: { tags: ['v*'] }
   release: { types: [published] }
   workflow_dispatch:
+
+# Tagging and THEN releasing — the normal flow — now fires this twice for one version. The second
+# run is expected and harmless (see skip-existing below); this only stops the two from racing each
+# other mid-upload, so the log reads as one publish followed by one skip rather than a coin toss.
+# Never cancel-in-progress: that would abort an upload that is already partway to the index.
+concurrency:
+  group: publish-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   pypi:
     runs-on: ubuntu-latest
@@ -17,10 +31,20 @@ jobs:
       # PyPI only because a 0.2.5 wheel already existed — i.e. it was caught by luck. The same
       # mistake at a version PyPI had never seen would have published a wheel whose version did
       # not match its tag, successfully and silently. This makes it caught by construction.
+      # No `if:` guard on this step, deliberately. It used to be gated on the ref being a v-tag,
+      # which meant a workflow_dispatch from a branch SKIPPED the check and published whatever the
+      # branch declared — an exception that announced itself nowhere. That was survivable while
+      # PyPI's duplicate rejection sat behind it; it is not survivable now that skip-existing
+      # suppresses that rejection. So publishing requires a v-tag ref, always. The manual escape
+      # hatch survives: dispatch against the TAG, which the ref picker offers, not against a branch.
       - name: Tag must match the declared version
-        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           set -euo pipefail
+          case "${GITHUB_REF:-}" in
+            refs/tags/v*) ;;
+            *) echo "::error::publishing requires a v-tag ref; got '${GITHUB_REF:-<unset>}'. Tag the commit that contains the version bump and dispatch against that tag."
+               exit 1;;
+          esac
           tag="${GITHUB_REF_NAME#v}"
           declared="$(python3 - <<'EOF'
           import re, pathlib
@@ -35,5 +59,17 @@ jobs:
 
       - name: Build sdist + wheel
         run: pipx run build
+
+      # skip-existing because tag-then-release now fires twice for one version, and the second run
+      # must not go red for doing exactly what it should.
+      #
+      # State the cost, because it is real: PyPI's duplicate rejection is what caught v0.2.6, which
+      # was tagged one commit early and built ainglish-0.2.5. That backstop is now suppressed. It is
+      # only acceptable because the check above replaced it with a stronger one — the tag/tree
+      # comparison runs BEFORE the build and fails by construction rather than by luck, and 0.2.6
+      # was caught by luck (had PyPI never seen 0.2.5, it would have published silently). If that
+      # check is ever weakened or made skippable, this line has to go back with it.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
