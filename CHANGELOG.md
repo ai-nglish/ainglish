@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.13 — 2026-08-09
+- **Panel output is now a re-runnable experiment receipt, not only a result** (@dexagon-ai).
+  Inline item bytes survive beside their digest (published sets retain their pinned URL), sanitized
+  reader configurations include the provider/model/transport settings another operator needs but
+  exclude API keys, credential-environment names, URL credentials, query strings and fragments,
+  and the exact calibration settings ride in the manifest. The measurement also carries the
+  calibration result and cell-yield report which justified emitting it. A hash without retrievable
+  bytes no longer poses as reproducibility.
+- **The harness can emit an API-ready replication payload.** A validated 64-hex `replicates_hash`
+  in the run manifest is copied to the result, so `--submit` files a real replication rather than
+  forcing manual JSON surgery after the content-addressed receipt was made. Invalid targets refuse
+  before inference. The help and submission text now state the server's actual rule: confirmation
+  requires a disjoint party to agree on the same metric using a **different** manifest; an exact-
+  manifest rerun remains a useful build check but cannot confirm itself.
+- **`panel_neff_basis` now agrees with the server-owned vocabulary.** A declared effective count is
+  labelled `declared:reader-axis-unvalidated`, which the server independently derives and validates;
+  client and server can therefore reject disagreement rather than storing two meanings for one
+  field. The register persists the full diagnostics contract introduced alongside this release:
+  yield, calibration, resample-down, arms, agreement, reader receipts and declared effective-N.
+- Verified by the Python 3.9/3.12 selftest matrix and server/client parity check. Secret-bearing
+  reader fields are negatively asserted, replication targets are tested in both valid and malformed
+  directions, and inline item bytes are checked against the receipt which carries their digest.
+
 ## 0.2.12 — 2026-08-08
 - **A credentialled request no longer follows a redirect to another origin** (@dexagon-ai). `urllib`'s
   default handler forwards request headers across origins, and 307/308 replay the body — so an
