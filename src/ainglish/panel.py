@@ -438,6 +438,12 @@ def run_robustness(manifest, ask_fn=ask):
         print("REFUSING to run: robustness needs at least two items — resample-down sensitivity "
               "is undefined over one cell, and a one-cell differential is not a measurement.")
         return None
+    if manifest.get("panel_neff") is None:
+        print("REFUSING to run: robustness needs an EXPLICIT panel_neff declaration. The register "
+              "defaults an absent n_eff to the roster count and labels it `declared:` — a "
+              "declaration you never made, minted by omission on the --submit path. Say what you "
+              "mean: panel_neff = the number of genuinely independent reader lineages.")
+        return None
     # The shared identity gate in run_panel() covered the panel and the REAL items; the
     # calibration set is this runner's own input and gets the same discipline.
     calib_ids = [c.get("id") for c in calib]
@@ -537,16 +543,40 @@ def run_robustness(manifest, ask_fn=ask):
               "none, because it looks like a result.")
         return None
 
-    # per-item differentials, per-item chance floors (chance is a property of EACH item's option
-    # count, never of whichever item happens to be first)
+    # COMPLETE-QUARTET SCORING (@dexagon-ai, #11 review 3): a reader contributes to an item only
+    # when ALL FOUR of its cells are live. Averaging each cell over whichever readers happened to
+    # survive lets condition-specific loss manufacture the differential — two dead cells (5.6%,
+    # under the guard's threshold) on corrupted-ainglish alone turned a true 0 into -25 pp,
+    # because the wrong-on-ainglish reader vanished from exactly one mean. The guard bounds HOW
+    # MUCH died; only quartet completeness bounds WHERE it died.
+    key_items = {i["id"]: i for i in items}
+    quartets = {}
+    for item_id, arm, cond, reader, answer in rows:
+        if item_id in key_items:
+            quartets.setdefault((item_id, reader), {})[(arm, cond)] = answer
+    complete = {k: v for k, v in quartets.items()
+                if len(v) == 4 and all(a is not None for a in v.values())}
+
     diffs = []
     floors = 0
+    per_reader_cells = {}
     for item in items:
-        ids = {item["id"]}
-        cells = {(arm, cond): acc(items, arm, cond, ids)
-                 for arm in ("english", "ainglish") for cond in ("baseline", "corrupted")}
-        if any(v is None for v in cells.values()):
-            continue  # dead item: the yield report carries it
+        readers_in = [r for (iid, r) in complete if iid == item["id"]]
+        if not readers_in:
+            continue  # no complete quartet: the item is dead, the yield report carries the cause
+        answer = str(item["answer"])
+        cells = {}
+        for arm in ("english", "ainglish"):
+            for cond in ("baseline", "corrupted"):
+                got = [complete[(item["id"], r)][(arm, cond)] for r in readers_in]
+                cells[(arm, cond)] = sum(1 for g in got if str(g).strip() == answer) / len(got)
+        for r in readers_in:
+            q = complete[(item["id"], r)]
+            per_reader_cells.setdefault(r, []).append(100.0 * (
+                ((1 if str(q[("ainglish", "corrupted")]).strip() == answer else 0)
+                 - (1 if str(q[("ainglish", "baseline")]).strip() == answer else 0))
+                - ((1 if str(q[("english", "corrupted")]).strip() == answer else 0)
+                   - (1 if str(q[("english", "baseline")]).strip() == answer else 0))))
         d = 100.0 * ((cells[("ainglish", "corrupted")] - cells[("ainglish", "baseline")])
                      - (cells[("english", "corrupted")] - cells[("english", "baseline")]))
         chance = 1.0 / max(1, len(item["options"]))
@@ -571,19 +601,25 @@ def run_robustness(manifest, ask_fn=ask):
 
     # resample-down on the CENSORED value (the figure selection could be steering). No interval
     # is computed for robustness, so outside_interval is honestly null, never a hardcoded pass.
+    # A row is emitted only when thinning actually HAPPENED, and kept_fraction is the ACTUAL
+    # fraction retained — at three live items the old rows claimed 0.75/0.50 while both kept 2/3,
+    # and at two items both "thinnings" kept 100% and tested nothing (@dexagon-ai, review 3).
     import random as _rnd
     resample = []
     live = [(i, d, f) for i, (d, f) in enumerate(diffs)]
     for frac in (0.75, 0.50):
-        keep = min(len(live), max(2, int(len(live) * frac)))
+        keep = max(2, int(len(live) * frac))
+        if keep >= len(live):
+            continue  # no thinning performed — an untested sensitivity must not read as tested
         sub = _rnd.Random(f"{seed}:{frac}").sample(live, keep)
         ssurv = [d for _, d, f in sub if not f]
+        actual = round(keep / len(live), 3)
         if not ssurv:
-            resample.append({"kept_fraction": frac, "items": keep, "value": None,
+            resample.append({"kept_fraction": actual, "items": keep, "value": None,
                              "sign_flipped": False, "outside_interval": None})
             continue
         sval = round(sum(ssurv) / len(ssurv), 2)
-        resample.append({"kept_fraction": frac, "items": keep, "value": sval,
+        resample.append({"kept_fraction": actual, "items": keep, "value": sval,
                          "sign_flipped": (sval < 0) != (value < 0) and value != 0,
                          "outside_interval": None})
 
@@ -613,8 +649,24 @@ def run_robustness(manifest, ask_fn=ask):
     spec["transport"] = {p_["name"]: bounds_for(p_) for p_ in panel}
     spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
-    spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, calibration-gated-first, per-item chance floors, censored value beside its uncensored twin" + (
+    spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, calibration-gated-first, per-item chance floors, COMPLETE-QUARTET scoring, censored value beside its uncensored twin" + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
+
+    # per-reader differentials + agreement: the diagnostics a reader needs to ASSESS the
+    # explicit n_eff declaration this runner requires (review 3, finding 2's tail).
+    per_member = {r: round(sum(v) / len(v), 2) for r, v in sorted(per_reader_cells.items())}
+    agree_cells = 0
+    agree_hits = 0
+    for item in items:
+        readers_in = [r for (iid, r) in complete if iid == item["id"]]
+        if len(readers_in) < 2:
+            continue
+        for cell in (("english", "baseline"), ("english", "corrupted"),
+                     ("ainglish", "baseline"), ("ainglish", "corrupted")):
+            got = {str(complete[(item["id"], r)][cell]).strip() for r in readers_in}
+            agree_cells += 1
+            agree_hits += 1 if len(got) == 1 else 0
+    panel_agreement = round(agree_hits / agree_cells, 4) if agree_cells else None
 
     measurement = {
         "metric": "robustness_delta",
@@ -628,18 +680,12 @@ def run_robustness(manifest, ask_fn=ask):
                         "min_gap": min_gap, "passed": True},
         "panel_models": [p_["name"] for p_ in panel],
         "panel_members": len(panel),
+        "panel_agreement": panel_agreement,
+        "per_member": per_member,
+        "panel_neff": int(manifest["panel_neff"]),
+        "panel_neff_basis": "declared:reader-axis-unvalidated",
         "manifest": spec,
     }
-    if manifest.get("panel_neff") is not None:
-        measurement["panel_neff"] = int(manifest["panel_neff"])
-        measurement["panel_neff_basis"] = "declared:reader-axis-unvalidated"
-    else:
-        # Told loudly, exactly as the comprehension branch tells it: the register defaults an
-        # absent panel_neff to len(panel_models) and labels it `declared:...` — a declaration the
-        # submitter never made. Silence here would let omission become assertion on the server.
-        print(f"NOTE: no panel_neff declared — the register will DEFAULT it to "
-              f"{len(panel)} (the roster count) and label it declared. Declare panel_neff "
-              "yourself if these readers share a lineage.")
     if replicates_hash is not None:
         measurement["replicates_hash"] = replicates_hash.lower()
     print(json.dumps(measurement, indent=1))
@@ -1321,7 +1367,7 @@ def selftest():
     r_good = {"construct": "rob-demo", "slug": "demo", "metric": "robustness_delta", "seed": r_seed,
               "items": r_items, "calibration_items": r_calib, "planted_arm": "ainglish",
               "panel": [{"name": "reader-a"}, {"name": "reader-b"}],
-              "corruption": {"channel": "drop_token"}}
+              "panel_neff": 2, "corruption": {"channel": "drop_token"}}
     rm = run_panel(dict(r_good), ask_fn=r_oracle)
     assert rm is not None, "a readable panel with live items must emit"
     assert rm["metric"] == "robustness_delta" and "value_uncensored" in rm and "floor_cells" in rm, \
@@ -1427,12 +1473,59 @@ def selftest():
     assert r_calls == [], \
         f"the one-item refusal must fire before a single inference call ({len(r_calls)} made)"
 
-    # (4) omission must not become a server-side declaration silently: the roster count travels,
-    # and the payload only carries panel_neff when the manifest DECLARED one
+    # (4) omission must not become a server-side declaration ANYWHERE, including --submit: the
+    # runner refuses outright without an explicit n_eff (the server defaults absence to the
+    # roster count and stamps `declared:` — an assertion the submitter never made), and the
+    # refusal costs zero inference calls.
+    r_calls.clear()
+    no_neff = {k: v for k, v in r_good.items() if k != "panel_neff"}
+    assert run_panel(no_neff, ask_fn=r_counting_oracle) is None, \
+        "robustness without an explicit panel_neff must refuse — omission is not a declaration"
+    assert r_calls == [], "and the refusal must cost nothing"
     assert rm["panel_members"] == 2
-    assert "panel_neff" not in rm, "an undeclared n_eff must be absent, never invented"
+    assert rm["panel_neff"] == 2 and rm["panel_neff_basis"] == "declared:reader-axis-unvalidated"
+    assert set(rm["per_member"]) == {"reader-a", "reader-b"}, \
+        "per-reader differentials travel so a reader can assess the n_eff declaration"
+    assert rm["panel_agreement"] is not None
     rn = run_panel(dict(r_good, panel_neff=1), ask_fn=r_oracle)
     assert rn["panel_neff"] == 1 and rn["panel_neff_basis"] == "declared:reader-axis-unvalidated"
+
+    # (5) COMPLETE QUARTETS: condition-specific cell loss below the guard threshold must not
+    # manufacture the veto. Two readers, NO true degradation anywhere (every per-reader quartet
+    # is flat); reader-a faults on exactly two corrupted-ainglish cells. Cell-wise means would
+    # read -25 pp from those two dead cells alone; quartet scoring reads the truth: 0.
+    q_ainglish = set()
+    q_calib_texts = set()
+    for item in r_items:
+        q_ainglish.add(item["ainglish"])
+        q_ainglish.add(corrupt(item["ainglish"], f"{r_seed}:{item['id']}:ainglish", "drop_token"))
+    for item in r_calib:
+        q_calib_texts.update({item["ainglish"], item["english"]})
+    q_faults = {corrupt(r_items[i]["ainglish"], f"{r_seed}:{r_items[i]['id']}:ainglish", "drop_token")
+                for i in (0, 1)}
+
+    def q_oracle(ep, text, question, options):
+        if text in q_calib_texts:
+            return "yes" if text == r_calib[0]["ainglish"] else "no"   # gate: planted arm readable
+        if ep["name"] == "reader-a" and text in q_faults:
+            raise TransportFault("timeout")
+        if text in q_ainglish:
+            return "yes" if ep["name"] == "reader-a" else "no"         # flat per reader, both conds
+        return "yes"                                                    # english: everyone, both conds
+
+    qm = run_panel(dict(r_good), ask_fn=q_oracle)
+    assert qm is not None, "5.6% dead cells is under the guard threshold — the run may emit"
+    assert qm["value"] == 0.0 and qm["value_uncensored"] == 0.0, \
+        f"asymmetric cell loss must never manufacture degradation (got {qm['value']})"
+
+    # (6) resample rows exist only when thinning HAPPENED, and say the actual fraction: with two
+    # live items both requested thinnings clamp to keeping everything — an untested sensitivity
+    # must not read as tested.
+    two = run_panel(dict(r_good, items=r_items[:2]), ask_fn=r_oracle)
+    assert two is not None and two["resample_down"] == [], \
+        "no thinning performed at two live items -> no sensitivity rows, never 100%-kept rows dressed as 50%"
+    assert all(r["kept_fraction"] == round(r["items"] / 4, 3) for r in rm["resample_down"]), \
+        "kept_fraction is the ACTUAL retained fraction of the four live items"
 
     rm_rep = run_panel(dict(r_good, replicates_hash="b" * 64), ask_fn=r_oracle)
     assert rm_rep["replicates_hash"] == "b" * 64
