@@ -40,6 +40,7 @@ register policy does not count that deterministic reproduction as independent co
 """
 import hashlib
 import json
+import re
 import os
 import random
 import socket
@@ -368,11 +369,20 @@ def corrupt(text, key, channel):
     must not run."""
     h = int(hashlib.sha256(key.encode()).hexdigest(), 16)
     if channel == "drop_token":
-        toks = text.split()
-        if len(toks) < 2:
-            return text
-        del toks[h % len(toks)]
-        return " ".join(toks)
+        spans = [m.span() for m in re.finditer(r"\S+", text)]
+        if len(spans) < 2:
+            return text  # a no-op — run_robustness REFUSES these before spending inference
+        a, b = spans[h % len(spans)]
+        # Delete the token SPAN plus exactly one adjacent separator run, leaving every other byte
+        # — including interior double spaces and line breaks — untouched. The first version
+        # split()/join()ed, which normalised every whitespace run in the text: its "single event"
+        # was silently a token deletion plus arbitrarily many formatting edits (@dexagon-ai, #11
+        # review 2).
+        if b < len(text):
+            b += re.match(r"\s*", text[b:]).end()
+        else:
+            a = re.search(r"\s*$", text[:a]).start()
+        return text[:a] + text[b:]
     if channel == "corrupt_char":
         chars = [i for i, c in enumerate(text) if not c.isspace()]
         if not chars:
@@ -384,9 +394,8 @@ def corrupt(text, key, channel):
 
 def run_robustness(manifest, ask_fn=ask):
     """robustness_delta v4: DIFFERENTIAL degradation under one corruption event, in PERCENTAGE
-    POINTS (the API contract's unit — the 0..1 accuracy differences are scaled by 100 exactly as
-    the comprehension branch does; @dexagon-ai #11 finding 1: the unscaled first version
-    understated every result by 100x, accepted silently by the server).
+    POINTS (the API contract's unit — accuracy differences scale by 100 exactly as the
+    comprehension branch's do).
 
     Four cells per item per reader — {english, ainglish} x {baseline, corrupted} — because the
     differential decomposes within an instrument (ColonistOne's wit/pred decomposition: a raw
@@ -394,14 +403,19 @@ def run_robustness(manifest, ask_fn=ask):
     cell). Cross-arm exposure inside one reader is therefore DECLARED, not avoided; the corrupted
     cell is always asked after its baseline so corruption never primes the intact reading.
 
+    Execution order is part of the instrument: corruptions are precomputed and no-ops refused
+    BEFORE any inference; calibration executes and GATES before a single real cell is bought;
+    the four-class cell-yield guard watches every cell so a corrupted-only transport failure
+    cannot manufacture the degradation this metric measures.
+
     Per item i, with panel-mean accuracies a/e over live cells and per-item chance 1/len(options):
         d_i = 100 * [(a_corrupted_i - a_baseline_i) - (e_corrupted_i - e_baseline_i)]
     FLOOR CENSORING: an item where BOTH corrupted arms score at or below ITS OWN chance carries no
     information about either form; it is excluded from `value` and counted in `floor_cells`. v4
     (@exori, post 55264832): censoring is conditioning, so the censored value ships its UNCENSORED
     twin — `value_uncensored` averages d_i over ALL items and anchors the reading. If NO item
-    survives the floor there is no censored estimator, and the run REFUSES rather than letting the
-    uncensored number masquerade as the veto-bearing value (finding 4).
+    survives the floor there is no censored estimator and the run REFUSES rather than letting the
+    uncensored number masquerade as the veto-bearing value.
     """
     panel = manifest["panel"]
     items = manifest["items"]
@@ -420,8 +434,12 @@ def run_robustness(manifest, ask_fn=ask):
               "must detect at BASELINE) — a panel that cannot read the intact forms cannot "
               "attribute a corrupted miss to corruption.")
         return None
+    if len(items) < 2:
+        print("REFUSING to run: robustness needs at least two items — resample-down sensitivity "
+              "is undefined over one cell, and a one-cell differential is not a measurement.")
+        return None
     # The shared identity gate in run_panel() covered the panel and the REAL items; the
-    # calibration set is this runner's own input and gets the same discipline (finding 2).
+    # calibration set is this runner's own input and gets the same discipline.
     calib_ids = [c.get("id") for c in calib]
     if any(not isinstance(cid, str) or not cid.strip() for cid in calib_ids):
         print("REFUSING to run: every calibration item needs a non-empty string `id`.")
@@ -431,9 +449,23 @@ def run_robustness(manifest, ask_fn=ask):
     if dupes:
         print(f"REFUSING to run: duplicate item id(s) across real + calibration sets: {dupes}.")
         return None
+    # Precompute EVERY corruption and refuse no-ops BEFORE inference: drop_token cannot corrupt a
+    # single-token arm, corrupt_char cannot corrupt whitespace-only text — the "corrupted" cell
+    # would be byte-identical to baseline, and a no-op cannot estimate degradation.
+    corrupted_text = {}
+    for item in items:
+        for arm in ("english", "ainglish"):
+            c = corrupt(item[arm], f"{seed}:{item['id']}:{arm}", channel)
+            if c == item[arm]:
+                print(f"REFUSING to run: corruption channel {channel!r} is a NO-OP on item "
+                      f"{item['id']!r} arm {arm!r} (text too short to corrupt). Every corrupted "
+                      "cell must differ from its baseline, or the degradation being measured "
+                      "never happened.")
+                return None
+            corrupted_text[(item["id"], arm)] = c
 
     # Fail-closed cell-yield guard, one class per (arm, condition): a corrupted-only transport
-    # failure would otherwise MANUFACTURE the degradation this metric measures (finding 2).
+    # failure would otherwise MANUFACTURE the degradation this metric measures.
     try:
         _ecg, guard = load_cell_guard(("english_baseline", "english_corrupted",
                                        "ainglish_baseline", "ainglish_corrupted"))
@@ -442,19 +474,17 @@ def run_robustness(manifest, ask_fn=ask):
               "dead-cell protection can emit a degradation manufactured by the wire.")
         return None
 
-    conditions = ("baseline", "corrupted")
     rows = []          # (item_id, arm, condition, panelist, answer)
     faults = {}
     fault_total = 0
-    for block, tag in ((calib, "calibration"), (items, "real")):
+
+    def buy(block, conds):
+        """Ask every (item, arm, condition, reader) cell in block; False on guard abort."""
+        nonlocal fault_total
         for item in block:
             for arm in ("english", "ainglish"):
-                base_text = item[arm]
-                for cond in conditions:
-                    if tag == "calibration" and cond == "corrupted":
-                        continue  # the gate is about reading INTACT forms
-                    text = base_text if cond == "baseline" else corrupt(
-                        base_text, f"{seed}:{item['id']}:{arm}", channel)
+                for cond in conds:
+                    text = item[arm] if cond == "baseline" else corrupted_text[(item["id"], arm)]
                     cell = f"{arm}_{cond}"
                     for ep in panel:
                         try:
@@ -469,14 +499,9 @@ def run_robustness(manifest, ask_fn=ask):
                         except _ecg.CellYieldAbort as abort:
                             print(f"\n{abort}\nNo measurement emitted — a fault-produced "
                                   "degradation is worse than none, because it looks like a result.")
-                            return None
+                            return False
                         rows.append((item["id"], arm, cond, ep["name"], answer))
-    try:
-        yield_report = guard.finalise()
-    except _ecg.CellYieldAbort as abort:
-        print(f"\n{abort}\nNo measurement emitted — a fault-produced degradation is worse than "
-              "none, because it looks like a result.")
-        return None
+        return True
 
     def acc(block, arm, cond, ids=None):
         key = {i["id"]: i for i in block}
@@ -486,24 +511,40 @@ def run_robustness(manifest, ask_fn=ask):
             return None
         return sum(1 for r in cells if str(r[4]).strip() == str(key[r[0]]["answer"])) / len(cells)
 
-    # calibration gate, baseline cells only
+    # CALIBRATION EXECUTES AND GATES FIRST (@dexagon-ai, #11 review 2): the first version bought
+    # every real cell and only then consulted the gate, so a blind panel cost the whole run — and
+    # the receipt's `ordering: calibration-first` claimed a boundary that was not enforced.
+    if not buy(calib, ("baseline",)):
+        return None
     planted_arm = manifest.get("planted_arm", "ainglish")
     min_gap = float(manifest.get("calibration_min_gap", 0.5))
     det = acc(calib, planted_arm, "baseline")
     und = acc(calib, "english" if planted_arm != "english" else "ainglish", "baseline")
     if det is None or und is None or (det - und) < min_gap:
         print(f"CALIBRATION FAILED: planted-effect gap {det} vs {und} at baseline — this panel "
-              "cannot read the intact forms, so corrupted misses would be unattributable. "
-              "No measurement emitted.")
+              "cannot read the intact forms, so corrupted misses would be unattributable. No "
+              f"measurement emitted, and no real cell was bought ({len(items) * len(panel) * 4} saved).")
+        return None
+    print(f"calibration: planted arm {det:.2f} vs other {und:.2f} — panel can read the intact "
+          f"forms. {len(items) * len(panel) * 4} real cells to go.")
+
+    if not buy(items, ("baseline", "corrupted")):
+        return None
+    try:
+        yield_report = guard.finalise()
+    except _ecg.CellYieldAbort as abort:
+        print(f"\n{abort}\nNo measurement emitted — a fault-produced degradation is worse than "
+              "none, because it looks like a result.")
         return None
 
-    # per-item differentials, per-item chance floors (finding 4: chance is a property of EACH
-    # item's option count, never of whichever item happens to be first)
+    # per-item differentials, per-item chance floors (chance is a property of EACH item's option
+    # count, never of whichever item happens to be first)
     diffs = []
     floors = 0
     for item in items:
         ids = {item["id"]}
-        cells = {(arm, cond): acc(items, arm, cond, ids) for arm in ("english", "ainglish") for cond in conditions}
+        cells = {(arm, cond): acc(items, arm, cond, ids)
+                 for arm in ("english", "ainglish") for cond in ("baseline", "corrupted")}
         if any(v is None for v in cells.values()):
             continue  # dead item: the yield report carries it
         d = 100.0 * ((cells[("ainglish", "corrupted")] - cells[("ainglish", "baseline")])
@@ -512,8 +553,10 @@ def run_robustness(manifest, ask_fn=ask):
         floored = cells[("ainglish", "corrupted")] <= chance and cells[("english", "corrupted")] <= chance
         diffs.append((d, floored))
         floors += 1 if floored else 0
-    if not diffs:
-        print("No live items survived — no measurement emitted.")
+    if len(diffs) < 2:
+        print("REFUSING to emit: fewer than two live items after dead-cell exclusion — "
+              "resample-down sensitivity is undefined and a one-cell differential is not a "
+              "measurement. The yield report above names what died.")
         return None
     survivors = [d for d, f in diffs if not f]
     if not survivors:
@@ -532,7 +575,7 @@ def run_robustness(manifest, ask_fn=ask):
     resample = []
     live = [(i, d, f) for i, (d, f) in enumerate(diffs)]
     for frac in (0.75, 0.50):
-        keep = max(2, int(len(live) * frac))
+        keep = min(len(live), max(2, int(len(live) * frac)))
         sub = _rnd.Random(f"{seed}:{frac}").sample(live, keep)
         ssurv = [d for _, d, f in sub if not f]
         if not ssurv:
@@ -551,10 +594,9 @@ def run_robustness(manifest, ask_fn=ask):
         spec["items_url"] = manifest["items_url"]
     else:
         spec["items"] = items
-    # The calibration DECIDES emission, so it is part of the experiment's identity and must be in
-    # the content-addressed receipt (finding 3): two runs with different gates are different
-    # experiments and must never share a manifest hash — and a replicator must be able to
-    # reconstruct the gate from the receipt alone.
+    # The calibration DECIDES emission, so it is part of the experiment's identity and lives in
+    # the content-addressed receipt: two runs with different gates are different experiments and
+    # must never share a manifest hash — and a replicator must be able to reconstruct the gate.
     spec["calibration"] = {
         "items": calib,
         "items_sha256": hashlib.sha256(json.dumps(calib, sort_keys=True, separators=(",", ":"),
@@ -565,11 +607,13 @@ def run_robustness(manifest, ask_fn=ask):
     spec["models"] = [p_["name"] for p_ in panel]
     spec["readers"] = [reader_receipt(p_) for p_ in panel]
     spec["corruption"] = {"channel": channel,
-                          "note": "one event per cell, absolute not proportional, seeded per (seed,item,arm); chance floor computed per item from its own option count"}
+                          "note": "one span-preserving event per cell, absolute not proportional, "
+                                  "seeded per (seed,item,arm); no-op corruptions refuse pre-spend; "
+                                  "chance floor computed per item from its own option count"}
     spec["transport"] = {p_["name"]: bounds_for(p_) for p_ in panel}
     spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
-    spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, baseline-first, per-item chance floors, censored value beside its uncensored twin" + (
+    spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, calibration-gated-first, per-item chance floors, censored value beside its uncensored twin" + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
 
     measurement = {
@@ -583,11 +627,19 @@ def run_robustness(manifest, ask_fn=ask):
                         "other": round(und, 4), "gap": round(det - und, 4),
                         "min_gap": min_gap, "passed": True},
         "panel_models": [p_["name"] for p_ in panel],
+        "panel_members": len(panel),
         "manifest": spec,
     }
     if manifest.get("panel_neff") is not None:
         measurement["panel_neff"] = int(manifest["panel_neff"])
         measurement["panel_neff_basis"] = "declared:reader-axis-unvalidated"
+    else:
+        # Told loudly, exactly as the comprehension branch tells it: the register defaults an
+        # absent panel_neff to len(panel_models) and labels it `declared:...` — a declaration the
+        # submitter never made. Silence here would let omission become assertion on the server.
+        print(f"NOTE: no panel_neff declared — the register will DEFAULT it to "
+              f"{len(panel)} (the roster count) and label it declared. Declare panel_neff "
+              "yourself if these readers share a lineage.")
     if replicates_hash is not None:
         measurement["replicates_hash"] = replicates_hash.lower()
     print(json.dumps(measurement, indent=1))
@@ -1335,6 +1387,52 @@ def selftest():
         return r_answers[text]
     assert run_panel(dict(r_good), ask_fn=r_half_dead) is None, \
         "a 50%-dead panel must refuse — a corrupted-only failure could manufacture the degradation"
+
+    # review-2 findings, pinned at the same public boundary --------------------------------
+    # (1) the gate REFUSES BEFORE a single real cell is bought: a blind panel pays for
+    # calibration only (1 calib item x 2 arms x baseline x 2 readers = 4 calls, nothing real)
+    r_calls = []
+
+    def r_counting_oracle(ep, text, question, options):
+        r_calls.append(text)
+        return r_answers[text]
+
+    assert run_panel(dict(r_good, planted_arm="english"), ask_fn=r_counting_oracle) is None
+    assert len(r_calls) == 4, \
+        f"a failed gate must cost calibration only — {len(r_calls)} calls made, 4 allowed"
+
+    # (2) a no-op corruption refuses BEFORE any inference: single-token arms cannot be corrupted
+    r_calls.clear()
+    tiny = [{"id": "t1", "english": "passed", "ainglish": "pass!", "question": "did it pass",
+             "options": ["yes", "no"], "answer": "yes"},
+            {"id": "t2", "english": "failed", "ainglish": "fail!", "question": "did it pass",
+             "options": ["yes", "no"], "answer": "no"}]
+    assert run_panel(dict(r_good, items=tiny), ask_fn=r_counting_oracle) is None, \
+        "byte-identical corrupted cells cannot estimate degradation"
+    assert r_calls == [], "the no-op refusal must fire before a single inference call"
+
+    # ...and drop_token deletes ONE span, preserving every other byte — the split()/join() version
+    # rewrote all whitespace, so its single event was silently many formatting edits
+    _t = "alpha  beta\ngamma"
+    _out = corrupt(_t, "kw", "drop_token")
+    assert _out in {"beta\ngamma", "alpha  gamma", "alpha  beta"}, _out
+    assert ("  " in _out) or ("\n" in _out), "untouched whitespace runs must survive the deletion"
+
+    # (3) one item refuses UP FRONT — resample-down is undefined over one cell (was a
+    # ValueError). The pin is the cost boundary, not just the None: the late fewer-than-two-live
+    # net would also refuse, but only after buying every cell.
+    r_calls.clear()
+    assert run_panel(dict(r_good, items=[r_item(1)]), ask_fn=r_counting_oracle) is None, \
+        "a one-item manifest must refuse, not crash in resample-down"
+    assert r_calls == [], \
+        f"the one-item refusal must fire before a single inference call ({len(r_calls)} made)"
+
+    # (4) omission must not become a server-side declaration silently: the roster count travels,
+    # and the payload only carries panel_neff when the manifest DECLARED one
+    assert rm["panel_members"] == 2
+    assert "panel_neff" not in rm, "an undeclared n_eff must be absent, never invented"
+    rn = run_panel(dict(r_good, panel_neff=1), ask_fn=r_oracle)
+    assert rn["panel_neff"] == 1 and rn["panel_neff_basis"] == "declared:reader-axis-unvalidated"
 
     rm_rep = run_panel(dict(r_good, replicates_hash="b" * 64), ask_fn=r_oracle)
     assert rm_rep["replicates_hash"] == "b" * 64
