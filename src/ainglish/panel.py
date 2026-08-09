@@ -338,6 +338,183 @@ def bootstrap_delta(rows, items, metric, n=2000, seed=0):
 
 
 # ------------------------------------------------------------------ the run
+def corrupt(text, key, channel):
+    """One deterministic corruption event — ABSOLUTE, not proportional to length, because real
+    corruption (a truncated field, a clipped preview, a dropped byte) does not scale with message
+    length; the shorter form therefore loses a larger fraction, and that asymmetry is the metric's
+    subject, not a bug. Seeded by content-independent key so a replication reproduces the exact
+    same corrupted bytes. Channels:
+      drop_token   — remove one whitespace-delimited token
+      corrupt_char — replace one non-space character with 'x' ('z' if it was already 'x')
+    Length-truncation is deliberately NOT offered: the protocol requires the fractional-cut
+    control alongside that channel, and a channel this harness cannot control for is a channel it
+    must not run."""
+    h = int(hashlib.sha256(key.encode()).hexdigest(), 16)
+    if channel == "drop_token":
+        toks = text.split()
+        if len(toks) < 2:
+            return text
+        del toks[h % len(toks)]
+        return " ".join(toks)
+    if channel == "corrupt_char":
+        chars = [i for i, c in enumerate(text) if not c.isspace()]
+        if not chars:
+            return text
+        i = chars[h % len(chars)]
+        return text[:i] + ("z" if text[i] == "x" else "x") + text[i + 1:]
+    raise SystemExit(f"unknown corruption channel {channel!r} — declare drop_token or corrupt_char")
+
+
+def run_robustness(manifest, ask_fn=ask):
+    """robustness_delta v4: DIFFERENTIAL degradation under one corruption event.
+
+    Four cells per item per reader — {english, ainglish} x {baseline, corrupted} — because the
+    differential decomposes within an instrument (ColonistOne's wit/pred decomposition: a raw
+    corrupted-accuracy gap inherits the baseline comprehension gap, which is a different metric's
+    cell). Cross-arm exposure inside one reader is therefore DECLARED, not avoided; the corrupted
+    cell is always asked after its baseline so corruption never primes the intact reading.
+
+    Per item i, with panel-mean accuracies a/e over live cells:
+        d_i = (a_corrupted_i - a_baseline_i) - (e_corrupted_i - e_baseline_i)
+    FLOOR CENSORING: an item where BOTH corrupted arms score at or below chance carries no
+    information about either form; it is excluded from `value` and counted in `floor_cells`. v4
+    (@exori, post 55264832): censoring is conditioning, so the censored value ships its UNCENSORED
+    twin — `value_uncensored` averages d_i over ALL items and anchors the reading; a large gap
+    between the two is a finding about the selection, not the construct.
+    """
+    # Raw entries, exactly as run_panel holds them: ask() resolves presets at call time, so a
+    # mock panel in the selftest needs no base_url here either.
+    panel = manifest["panel"]
+    items = manifest["items"]
+    calib = manifest.get("calibration_items", [])
+    seed = manifest.get("seed", 0)
+    channel = (manifest.get("corruption") or {}).get("channel", "drop_token")
+    replicates_hash = manifest.get("replicates_hash")
+    if replicates_hash is not None and (not isinstance(replicates_hash, str)
+                                        or len(replicates_hash) != 64
+                                        or any(c not in "0123456789abcdefABCDEF" for c in replicates_hash)):
+        print("REFUSING to run: replicates_hash must be the original measurement's 64-character "
+              "hex manifest hash.")
+        return None
+    if not calib:
+        print("REFUSING to run: robustness needs calibration_items (a planted effect the panel "
+              "must detect at BASELINE) — a panel that cannot read the intact forms cannot "
+              "attribute a corrupted miss to corruption.")
+        return None
+
+    conditions = ("baseline", "corrupted")
+    rows = []          # (item_id, arm, condition, panelist, answer)
+    fault_count = 0
+    for block, tag in ((calib, "calibration"), (items, "real")):
+        for item in block:
+            for arm in ("english", "ainglish"):
+                base_text = item[arm]
+                for cond in conditions:
+                    if tag == "calibration" and cond == "corrupted":
+                        continue  # the gate is about reading INTACT forms
+                    text = base_text if cond == "baseline" else corrupt(
+                        base_text, f"{seed}:{item['id']}:{arm}", channel)
+                    for ep in panel:
+                        try:
+                            answer = ask_fn(ep, text, item["question"], item["options"])
+                        except TransportFault:
+                            answer = None
+                            fault_count += 1
+                        rows.append((item["id"], arm, cond, ep["name"], answer))
+
+    def acc(block, arm, cond, ids=None):
+        cells = [r for r in rows if r[1] == arm and r[2] == cond and r[4] is not None
+                 and (ids is None or r[0] in ids)
+                 and any(i["id"] == r[0] for i in block)]
+        if not cells:
+            return None
+        key = {i["id"]: i for i in block}
+        return sum(1 for r in cells if str(r[4]).strip() == str(key[r[0]]["answer"])) / len(cells)
+
+    # calibration gate, baseline cells only
+    planted_arm = manifest.get("planted_arm", "ainglish")
+    min_gap = float(manifest.get("calibration_min_gap", 0.5))
+    det = acc(calib, planted_arm, "baseline")
+    und = acc(calib, "english", "baseline")
+    if det is None or und is None or (det - und) < min_gap:
+        print(f"CALIBRATION FAILED: planted-effect gap {det} vs {und} at baseline — this panel "
+              "cannot read the intact forms, so corrupted misses would be unattributable. "
+              "No measurement emitted.")
+        return None
+
+    # per-item differentials + v4 floor censoring
+    chance = 1.0 / max(1, len(items[0]["options"]))
+    diffs, floors = [], 0
+    for item in items:
+        ids = {item["id"]}
+        cells = {(arm, cond): acc(items, arm, cond, ids) for arm in ("english", "ainglish") for cond in conditions}
+        if any(v is None for v in cells.values()):
+            continue  # dead item: no live cells in some condition — the yield report carries it
+        d = (cells[("ainglish", "corrupted")] - cells[("ainglish", "baseline")]) \
+            - (cells[("english", "corrupted")] - cells[("english", "baseline")])
+        floored = cells[("ainglish", "corrupted")] <= chance and cells[("english", "corrupted")] <= chance
+        diffs.append((d, floored))
+        floors += 1 if floored else 0
+    if not diffs:
+        print("No live items survived — no measurement emitted.")
+        return None
+    survivors = [d for d, f in diffs if not f]
+    value_uncensored = round(sum(d for d, _ in diffs) / len(diffs), 4)
+    value = round(sum(survivors) / len(survivors), 4) if survivors else value_uncensored
+
+    # resample-down on the CENSORED value (the figure selection could be steering)
+    import random as _rnd
+    resample = []
+    live = [(i, d, f) for i, (d, f) in enumerate(diffs)]
+    for frac in (0.75, 0.50):
+        keep = max(2, int(len(live) * frac))
+        sub = _rnd.Random(f"{seed}:{frac}").sample(live, keep)
+        ssurv = [d for _, d, f in sub if not f] or [d for _, d, _ in sub]
+        sval = round(sum(ssurv) / len(ssurv), 4)
+        resample.append({"kept_fraction": frac, "items": keep, "value": sval,
+                         "sign_flipped": (sval < 0) != (value < 0) and value != 0,
+                         "outside_interval": False})
+
+    spec = {k: manifest[k] for k in ("construct", "metric", "seed") if k in manifest}
+    spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
+        json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+    if manifest.get("items_url"):
+        spec["items_url"] = manifest["items_url"]
+    else:
+        spec["items"] = items
+    spec["models"] = [p_["name"] for p_ in panel]
+    spec["readers"] = [reader_receipt(p_) for p_ in panel]
+    spec["corruption"] = {"channel": channel,
+                          "note": "one event per cell, absolute not proportional, seeded per (seed,item,arm)"}
+    spec["chance_floor"] = chance
+    spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
+    spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, baseline-first, floor-censored with uncensored twin"
+
+    measurement = {
+        "metric": "robustness_delta",
+        "value": value,
+        "value_uncensored": value_uncensored,
+        "floor_cells": floors,
+        "resample_down": resample,
+        "calibration": {"planted_arm": planted_arm, "detectable": round(det, 4),
+                        "other": round(und, 4), "gap": round(det - und, 4),
+                        "min_gap": min_gap, "passed": True},
+        "panel_models": [p_["name"] for p_ in panel],
+        "manifest": spec,
+    }
+    if manifest.get("panel_neff") is not None:
+        measurement["panel_neff"] = int(manifest["panel_neff"])
+        measurement["panel_neff_basis"] = "declared:reader-axis-unvalidated"
+    if replicates_hash is not None:
+        measurement["replicates_hash"] = replicates_hash.lower()
+    print(json.dumps(measurement, indent=1))
+    if fault_count:
+        print(f"transport faults: {fault_count} dead cell(s), graded as absent, never as wrong")
+    print(f"\nfloor-censored {floors}/{len(diffs)} cells; censored {value} vs uncensored "
+          f"{value_uncensored} — a large gap is a finding about the selection, not the construct.")
+    return measurement
+
+
 def run_panel(manifest, ask_fn=ask):
     items = manifest["items"]
     panel = manifest["panel"]
@@ -349,6 +526,9 @@ def run_panel(manifest, ask_fn=ask):
         print("REFUSING to run: replicates_hash must be the original measurement's 64-character "
               "hex manifest hash. A malformed replication receipt cannot identify its original.")
         return None
+
+    if manifest.get("metric") == "robustness_delta":
+        return run_robustness(manifest, ask_fn)
 
     # Identity fields are load-bearing inputs, not display labels. arm_for() deals by panelist
     # name, per-member aggregation selects by that same name, and bootstrap_delta() deduplicates
@@ -969,6 +1149,60 @@ def selftest():
     assert m_rep["replicates_hash"] == original_hash, \
         "--submit must be able to file a replication without manual payload surgery"
 
+    # --- robustness_delta v4: differential degradation, floor censoring, uncensored twin -------
+    # The oracle answers by EXACT LOOKUP over texts precomputed with the same deterministic
+    # corrupt() the runner uses — no prefix heuristics for the corruption to break. Behaviour:
+    # english survives its corruption; ainglish misreads when corrupted; one item floors BOTH
+    # corrupted arms; the calibration planted effect is an unreadable english arm.
+    def r_item(i, floor=False):
+        return {"id": f"r{i}", "english": f"the build finished and every check passed run {i}",
+                "ainglish": f"build pass(clean) run {i}",
+                "question": "did it pass", "options": ["yes", "no"], "answer": "yes"}
+
+    r_items = [r_item(1), r_item(2), r_item(3), r_item(4)]
+    r_floor_id = "r4"
+    r_calib = [{"id": "rc1", "english": "the weather is unrelated to any build",
+                "ainglish": "build pass(clean) calibration", "question": "did it pass",
+                "options": ["yes", "no"], "answer": "yes"}]
+    r_seed = 11
+    r_answers = {}
+    for item in r_items + r_calib:
+        for arm in ("english", "ainglish"):
+            intact = item[arm]
+            corrupted = corrupt(intact, f"{r_seed}:{item['id']}:{arm}", "drop_token")
+            unreadable_calib = item["id"].startswith("rc") and arm == "english"
+            r_answers[intact] = "no" if unreadable_calib else "yes"
+            if item["id"] == r_floor_id:
+                r_answers[corrupted] = "no"                       # both arms floor
+            else:
+                r_answers[corrupted] = "yes" if arm == "english" else "no"
+
+    def r_oracle(ep, text, question, options):
+        return r_answers[text]
+
+    r_good = {"construct": "rob-demo", "slug": "demo", "metric": "robustness_delta", "seed": r_seed,
+              "items": r_items, "calibration_items": r_calib, "planted_arm": "ainglish",
+              "panel": [{"name": "reader-a"}, {"name": "reader-b"}],
+              "corruption": {"channel": "drop_token"}}
+    rm = run_robustness(dict(r_good), ask_fn=r_oracle)
+    assert rm is not None, "a readable panel with live items must emit"
+    assert rm["metric"] == "robustness_delta" and "value_uncensored" in rm and "floor_cells" in rm, \
+        "v4 requires the censored value to ship its uncensored twin and the floor count"
+    assert rm["floor_cells"] == 1, "the both-arms-at-chance item is censored and counted"
+    assert rm["value"] == -1.0, "ainglish breaks (delta -1) while english survives (0): differential -1 on survivors"
+    assert rm["value_uncensored"] != rm["value"], \
+        "the floored item is excluded from value but present in value_uncensored — censoring is visible"
+    assert rm["manifest"]["corruption"]["channel"] == "drop_token"
+    assert [r["kept_fraction"] for r in rm["resample_down"]] == [0.75, 0.5], "resample-down rides along"
+    assert corrupt("alpha beta gamma", "k1", "drop_token") == corrupt("alpha beta gamma", "k1", "drop_token"), \
+        "corruption is deterministic — a replication reproduces the exact corrupted bytes"
+    assert corrupt("alpha beta gamma", "k1", "drop_token") != "alpha beta gamma"
+    assert corrupt("ab", "k", "corrupt_char") in ("xb", "ax"), "one character, replaced with x"
+    rm_rep = run_robustness(dict(r_good, replicates_hash="b" * 64), ask_fn=r_oracle)
+    assert rm_rep["replicates_hash"] == "b" * 64
+    blind = run_robustness(dict(r_good, planted_arm="english"), ask_fn=r_oracle)
+    assert blind is None, "a panel that cannot read the intact planted arm must refuse at calibration"
+
     # A dead cell is censored, never graded as the answer string "none". This is the acceptance
     # test the transport-fault integration lacked: it asserted that a run survived and recorded
     # the fault, but never asserted that the fault stayed out of the value it emitted.
@@ -1088,7 +1322,8 @@ def selftest():
     _os.unlink(tmp); _os.unlink(tmp2)
 
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
-          "arms ship with the payload; unpinned/tampered/swapped item sets refuse.")
+          "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
+          "censors floors beside their uncensored twin.")
 
 
 DEMO_NOTE = """{
