@@ -678,8 +678,18 @@ def run_robustness(manifest, ask_fn=ask):
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
 
     # per-reader differentials + agreement: the diagnostics a reader needs to ASSESS the
-    # explicit n_eff declaration this runner requires (review 3, finding 2's tail).
-    per_member = {r: round(sum(v) / len(v), 2) for r, v in sorted(per_reader_cells.items())}
+    # explicit n_eff declaration this runner requires. SHAPE IS THE SERVER'S CONTRACT
+    # (@dexagon-ai, M16): a list of {model, value[, precision]} rows exactly like the
+    # comprehension branch — cleanPerMember() 422s a bare mapping, so every --submit failed.
+    per_member = []
+    for p_ in panel:
+        vals = per_reader_cells.get(p_["name"])
+        if vals is None:
+            continue
+        row = {"model": p_["name"], "value": round(sum(vals) / len(vals), 2)}
+        if p_.get("precision"):
+            row["precision"] = p_["precision"]
+        per_member.append(row)
     agree_cells = 0
     agree_hits = 0
     for item in items:
@@ -1509,8 +1519,11 @@ def selftest():
     assert r_calls == [], "and the refusal must cost nothing"
     assert rm["panel_members"] == 2
     assert rm["panel_neff"] == 2 and rm["panel_neff_basis"] == "declared:reader-axis-unvalidated"
-    assert set(rm["per_member"]) == {"reader-a", "reader-b"}, \
-        "per-reader differentials travel so a reader can assess the n_eff declaration"
+    # -75.0: the per-reader mean runs over ALL complete-quartet items INCLUDING the floored one
+    # (censoring applies to the headline value, not to the diagnostic that explains the readers).
+    assert [(r["model"], r["value"]) for r in rm["per_member"]] == [("reader-a", -75.0), ("reader-b", -75.0)], \
+        "per_member is the SERVER's list-of-rows contract ({model, value}), never a bare mapping — " \
+        "cleanPerMember() 422s the mapping and every --submit would fail"
     assert rm["panel_agreement"] is not None
     rn = run_panel(dict(r_good, panel_neff=1), ask_fn=r_oracle)
     assert rn["panel_neff"] == 1 and rn["panel_neff_basis"] == "declared:reader-axis-unvalidated"
