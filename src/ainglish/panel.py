@@ -34,8 +34,9 @@ Usage:
   python3 panel.py --demo-manifest          # print a ready manifest skeleton for wit/pred
   python3 panel.py --selftest               # mock panelists prove the scoring + the calibration gate
 
-A measurement produced here is still only EVIDENCE once a disjoint party reproduces the same
-manifest within tolerance — this file replaces the excuse, not the replication.
+A measurement produced here is still provisional until a disjoint party agrees on the same metric
+using a DIFFERENT manifest. Re-running this exact manifest is a useful build check, but current
+register policy does not count that deterministic reproduction as independent confirmation.
 """
 import hashlib
 import json
@@ -161,6 +162,30 @@ def bounds_for(endpoint):
     experimenter chose to run the reader, and presets describe where the reader lives.
     """
     return {k: endpoint.get(k, default) for k, default in TRANSPORT_BOUNDS.items()}
+
+
+def reader_receipt(endpoint):
+    """Re-runnable, non-secret reader configuration for the content-addressed spec.
+
+    API keys and the names of environment variables that contain them are deliberately excluded.
+    URL credentials, query strings and fragments are excluded too: gateways sometimes carry a
+    token there. Provider/model/transport identity remains, which is enough to reconstruct the
+    reader after supplying credentials out of band.
+    """
+    resolved = dict(PRESETS.get(endpoint.get("provider", ""), {}))
+    resolved.update(endpoint)
+    out = {k: resolved[k] for k in ("name", "provider", "model", "precision", "api")
+           if k in resolved and resolved[k] not in (None, "")}
+    if resolved.get("base_url"):
+        parsed = urllib.parse.urlsplit(str(resolved["base_url"]))
+        host = parsed.hostname or ""
+        if ":" in host and not host.startswith("["):
+            host = "[" + host + "]"
+        if parsed.port is not None:
+            host += ":" + str(parsed.port)
+        out["base_url"] = urllib.parse.urlunsplit((parsed.scheme, host, parsed.path, "", ""))
+    out.update(bounds_for(endpoint))
+    return out
 
 
 def chat(endpoint, prompt):
@@ -317,6 +342,14 @@ def run_panel(manifest, ask_fn=ask):
     items = manifest["items"]
     panel = manifest["panel"]
 
+    replicates_hash = manifest.get("replicates_hash")
+    if replicates_hash is not None and (not isinstance(replicates_hash, str)
+                                        or len(replicates_hash) != 64
+                                        or any(c not in "0123456789abcdefABCDEF" for c in replicates_hash)):
+        print("REFUSING to run: replicates_hash must be the original measurement's 64-character "
+              "hex manifest hash. A malformed replication receipt cannot identify its original.")
+        return None
+
     # Identity fields are load-bearing inputs, not display labels. arm_for() deals by panelist
     # name, per-member aggregation selects by that same name, and bootstrap_delta() deduplicates
     # item ids through a set. A duplicate reader therefore received the same arms while increasing
@@ -452,8 +485,10 @@ def run_panel(manifest, ask_fn=ask):
     if calib_rows is None:
         return None
     cacc, _ = score(calib_rows, calib)
-    detectable, undetectable = cacc.get(manifest.get("planted_arm", "ainglish")), cacc.get("english")
-    if detectable is None or undetectable is None or (detectable - undetectable) < manifest.get("calibration_min_gap", 0.5):
+    planted_arm = manifest.get("planted_arm", "ainglish")
+    calibration_min_gap = float(manifest.get("calibration_min_gap", 0.5))
+    detectable, undetectable = cacc.get(planted_arm), cacc.get("english")
+    if detectable is None or undetectable is None or (detectable - undetectable) < calibration_min_gap:
         print(f"CALIBRATION FAILED: planted-effect gap {detectable} vs {undetectable} — this panel "
               "cannot detect a known difference, so its null on the real items is vacuous. "
               "No measurement emitted. (The panel failed its positive control, not the construct.)")
@@ -593,9 +628,17 @@ def run_panel(manifest, ask_fn=ask):
     spec = {k: manifest[k] for k in ("construct", "metric", "seed") if k in manifest}
     spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
         json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
-    spec["items_url"] = manifest.get("items_url", "(inline)")
+    if manifest.get("items_url"):
+        spec["items_url"] = manifest["items_url"]
+    else:
+        # A hash without retrievable bytes is not a re-runnable item set. Inline callers therefore
+        # keep the exact items in the spec; bulky sets should be published and digest-pinned by URL.
+        spec["items"] = items
     spec["models"] = [labelled(p_) for p_ in panel]
+    spec["readers"] = [reader_receipt(p_) for p_ in panel]
     spec["item_counts"] = {"real": len(real), "calibration": len(calib)}
+    spec["calibration"] = {"planted_arm": planted_arm, "min_gap": calibration_min_gap,
+                           "ordering": "calibration-first"}
     # Difficulty is part of the experiment's identity, and ABSENCE IS STATED: a set that was
     # never annotated and a set that balanced perfectly must not read the same. The per-item
     # values ride inside items_sha256, so the pin covers them.
@@ -619,6 +662,11 @@ def run_panel(manifest, ask_fn=ask):
     measurement = {
         "metric": metric, "value": value,
         "resample_down": resample,
+        "yield_report": yield_report,
+        "calibration": {"planted_arm": planted_arm, "detectable": round(detectable, 4),
+                        "other": round(undetectable, 4),
+                        "gap": round(detectable - undetectable, 4),
+                        "min_gap": calibration_min_gap, "passed": True},
         "value_lo": round(lo, 4) if lo is not None else None,
         "value_hi": round(hi, 4) if hi is not None else None,
         "arms": arms,
@@ -647,7 +695,10 @@ def run_panel(manifest, ask_fn=ask):
     declared_neff = manifest.get("panel_neff")
     if declared_neff is not None:
         measurement["panel_neff"] = int(declared_neff)
-        measurement["panel_neff_basis"] = "declared:" + str(manifest.get("panel_neff_axis", "reader"))
+        # The API owns the vocabulary and derives this value independently. Emit its exact value so
+        # a coordinated client/server contract can reject disagreement instead of silently storing
+        # two meanings for one field.
+        measurement["panel_neff_basis"] = "declared:reader-axis-unvalidated"
     else:
         # Told loudly, because the register defaults an absent panel_neff to len(panel_models) and
         # labels it `declared:reader-axis-unvalidated` — a declaration the submitter never made. The
@@ -658,8 +709,12 @@ def run_panel(manifest, ask_fn=ask):
               f"share a lineage (observed agreement this run: {agreement}).")
 
     print(json.dumps(measurement, indent=1))
+    if replicates_hash is not None:
+        measurement["replicates_hash"] = replicates_hash.lower()
+
     print(f"\nSubmit: POST /api/v1/proposals/{manifest.get('slug','<slug>')}/measurements with a "
-          "Colony Bearer (see /developers). Evidence once a DISJOINT party reproduces this manifest.")
+          "Colony Bearer (see /developers). Confirmation needs a DISJOINT party to agree on the "
+          "same metric using a DIFFERENT manifest; this exact manifest is only a build check.")
     return measurement
 
 
@@ -899,9 +954,20 @@ def selftest():
         "an UNDECLARED n_eff must be absent, never defaulted to the membership count"
     assert "panel_neff_basis" not in m
     m_dec = run_panel(dict(good, panel_neff=1, panel_neff_axis="reader"), ask_fn=tag_reliant)
-    assert m_dec["panel_neff"] == 1 and m_dec["panel_neff_basis"] == "declared:reader", \
+    assert m_dec["panel_neff"] == 1 and m_dec["panel_neff_basis"] == "declared:reader-axis-unvalidated", \
         "a declared n_eff rides with its provenance"
     assert m_dec["panel_members"] == 2, "and does not overwrite the roster count it disagrees with"
+    assert m["yield_report"]["cells"] == len(items) * 2
+    assert m["calibration"] == {"planted_arm": "ainglish", "detectable": 1.0, "other": 0.0,
+                                "gap": 1.0, "min_gap": 0.5, "passed": True}
+    assert m["manifest"]["items"] == items and "items_url" not in m["manifest"], \
+        "inline bytes must survive beside their digest so another party can rerun them"
+    assert all("api_key_env" not in r for r in m["manifest"]["readers"]), \
+        "reproducible reader configuration must never carry credential locations"
+    original_hash = "a" * 64
+    m_rep = run_panel(dict(good, replicates_hash=original_hash), ask_fn=tag_reliant)
+    assert m_rep["replicates_hash"] == original_hash, \
+        "--submit must be able to file a replication without manual payload surgery"
 
     # A dead cell is censored, never graded as the answer string "none". This is the acceptance
     # test the transport-fault integration lacked: it asserted that a run survived and recorded
