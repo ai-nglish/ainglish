@@ -665,13 +665,20 @@ def run_robustness(manifest, ask_fn=ask):
         "counts": {"calibration": len(calib), "real": len(items)},
         "planted_arm": planted_arm, "min_gap": min_gap, "ordering": "calibration-first",
     }
-    spec["models"] = [p_["name"] for p_ in panel]
+    # ROSTER IDENTITY IS name@precision when a precision is declared (@dexagon-ai, M17): the
+    # server reconstructs each per_member row's identity as model + '@' + precision and requires
+    # it verbatim in panel_models — the comprehension branch's labelled() rule, applied here to
+    # every roster surface, while per-member rows keep {model, precision} separate.
+    def _labelled(p_):
+        return p_["name"] + ("@" + p_["precision"] if p_.get("precision") else "")
+
+    spec["models"] = [_labelled(p_) for p_ in panel]
     spec["readers"] = [reader_receipt(p_) for p_ in panel]
     spec["corruption"] = {"channel": channel,
                           "note": "one span-preserving event per cell, absolute not proportional, "
                                   "seeded per (seed,item,arm); no-op corruptions refuse pre-spend; "
                                   "chance floor computed per item from its own option count"}
-    spec["transport"] = {p_["name"]: bounds_for(p_) for p_ in panel}
+    spec["transport"] = {_labelled(p_): bounds_for(p_) for p_ in panel}
     spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
     spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, calibration-gated-first, per-item chance floors, COMPLETE-QUARTET scoring, censored value beside its uncensored twin" + (
@@ -713,7 +720,7 @@ def run_robustness(manifest, ask_fn=ask):
         "calibration": {"planted_arm": planted_arm, "detectable": round(det, 4),
                         "other": round(und, 4), "gap": round(det - und, 4),
                         "min_gap": min_gap, "passed": True},
-        "panel_models": [p_["name"] for p_ in panel],
+        "panel_models": [_labelled(p_) for p_ in panel],
         "panel_members": len(panel),
         "panel_agreement": panel_agreement,
         "per_member": per_member,
@@ -1401,7 +1408,7 @@ def selftest():
 
     r_good = {"construct": "rob-demo", "slug": "demo", "metric": "robustness_delta", "seed": r_seed,
               "items": r_items, "calibration_items": r_calib, "planted_arm": "ainglish",
-              "panel": [{"name": "reader-a"}, {"name": "reader-b"}],
+              "panel": [{"name": "reader-a"}, {"name": "reader-b", "precision": "q4_k_m"}],
               "panel_neff": 2, "corruption": {"channel": "drop_token"}}
     rm = run_panel(dict(r_good), ask_fn=r_oracle)
     assert rm is not None, "a readable panel with live items must emit"
@@ -1521,9 +1528,17 @@ def selftest():
     assert rm["panel_neff"] == 2 and rm["panel_neff_basis"] == "declared:reader-axis-unvalidated"
     # -75.0: the per-reader mean runs over ALL complete-quartet items INCLUDING the floored one
     # (censoring applies to the headline value, not to the diagnostic that explains the readers).
-    assert [(r["model"], r["value"]) for r in rm["per_member"]] == [("reader-a", -75.0), ("reader-b", -75.0)], \
-        "per_member is the SERVER's list-of-rows contract ({model, value}), never a bare mapping — " \
-        "cleanPerMember() 422s the mapping and every --submit would fail"
+    assert [(r["model"], r["value"], r.get("precision")) for r in rm["per_member"]] == \
+        [("reader-a", -75.0, None), ("reader-b", -75.0, "q4_k_m")], \
+        "per_member is the SERVER's list-of-rows contract, precision separate when declared"
+    # ...and the SERVER's identity rule holds end to end (M17): every per_member row's
+    # model[@precision] identity appears verbatim in BOTH submitted roster arrays.
+    assert rm["panel_models"] == ["reader-a", "reader-b@q4_k_m"]
+    assert rm["manifest"]["models"] == rm["panel_models"]
+    for row in rm["per_member"]:
+        ident = row["model"] + ("@" + row["precision"] if row.get("precision") else "")
+        assert ident in rm["panel_models"], \
+            f"{ident} missing from panel_models — cleanPerMember() would 422 this payload"
     assert rm["panel_agreement"] is not None
     rn = run_panel(dict(r_good, panel_neff=1), ask_fn=r_oracle)
     assert rn["panel_neff"] == 1 and rn["panel_neff_basis"] == "declared:reader-axis-unvalidated"
