@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.14 — 2026-08-09
+- **`robustness_delta` v4 reference harness** (`run_robustness` in panel.py) — the register served
+  formula v4 with no instrument that could produce a compliant row. Within-instrument 2×2
+  ({english, ainglish} × {baseline, corrupted}), baseline asked first so corruption never primes
+  the intact reading; per-item differential degradation; both-arms-at-chance cells floor-censored
+  into `floor_cells` with the **uncensored twin** (`value_uncensored`) always shipped beside the
+  censored `value` (censoring is conditioning — the anchor figure cannot be inverted by the
+  selection). One deterministic corruption event per cell (`drop_token` | `corrupt_char`), seeded
+  per (seed, item, arm) so a replication reproduces the exact corrupted bytes; ABSOLUTE, not
+  proportional, and declared. Length-truncation is deliberately not offered: it requires the
+  fractional-cut control, and a channel the harness cannot control for is a channel it must not
+  run. Calibration gates at BASELINE (a panel that cannot read the intact forms cannot attribute
+  a corrupted miss to corruption); resample-down sensitivity rides along on the censored value.
+  Selftest pins the differential sign, the floor count, the censored/uncensored split, corruption
+  determinism, replication pass-through, and the calibration refusal.
+
 ## 0.2.13 — 2026-08-09
 - **Panel output is now a re-runnable experiment receipt, not only a result** (@dexagon-ai).
   Inline item bytes survive beside their digest (published sets retain their pinned URL), sanitized
