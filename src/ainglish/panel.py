@@ -438,11 +438,20 @@ def run_robustness(manifest, ask_fn=ask):
         print("REFUSING to run: robustness needs at least two items — resample-down sensitivity "
               "is undefined over one cell, and a one-cell differential is not a measurement.")
         return None
-    if manifest.get("panel_neff") is None:
+    neff = manifest.get("panel_neff")
+    # Presence AND contract, both before a single call (@dexagon-ai, M15): the server requires an
+    # integer in 1..count(panel_models), and waiting for int() at emission meant 0, -1, True and
+    # 1.5 bought the whole run first ("bogus" bought it and then crashed). bool is excluded
+    # explicitly — True is an int in Python and would coerce to a declaration of 1.
+    if neff is None:
         print("REFUSING to run: robustness needs an EXPLICIT panel_neff declaration. The register "
               "defaults an absent n_eff to the roster count and labels it `declared:` — a "
               "declaration you never made, minted by omission on the --submit path. Say what you "
               "mean: panel_neff = the number of genuinely independent reader lineages.")
+        return None
+    if isinstance(neff, bool) or not isinstance(neff, int) or not (1 <= neff <= len(manifest["panel"])):
+        print(f"REFUSING to run: panel_neff must be an integer from 1 to {len(manifest['panel'])} "
+              f"(the roster size); got {neff!r}. No coercion — a declaration is exact or absent.")
         return None
     # The shared identity gate in run_panel() covered the panel and the REAL items; the
     # calibration set is this runner's own input and gets the same discipline.
@@ -522,6 +531,22 @@ def run_robustness(manifest, ask_fn=ask):
     # the receipt's `ordering: calibration-first` claimed a boundary that was not enforced.
     if not buy(calib, ("baseline",)):
         return None
+    # THE CALIBRATED PANEL MUST BE THE MEASURED PANEL (@dexagon-ai, M14): pooling calibration
+    # cells lets a reader whose calibration died entirely — never certified by the positive
+    # control — walk into real scoring, where its differential carries full weight. Every reader
+    # must have a live answer on BOTH arms of EVERY calibration item, or the run refuses before a
+    # single real cell is bought. Refusal over silent exclusion: the manifest's panel is the
+    # receipt's panel, and dropping a reader quietly would make the receipt lie about the roster.
+    for ep in panel:
+        missing = [(item["id"], arm) for item in calib for arm in ("english", "ainglish")
+                   if not any(r[0] == item["id"] and r[1] == arm and r[3] == ep["name"]
+                              and r[4] is not None for r in rows)]
+        if missing:
+            print(f"REFUSING to run: reader {ep['name']!r} has no live calibration answer for "
+                  f"{missing} — an uncalibrated reader cannot enter real scoring, because the "
+                  "positive control would certify one cohort while the veto-bearing value "
+                  f"measures another. No real cell was bought ({len(items) * len(panel) * 4} saved).")
+            return None
     planted_arm = manifest.get("planted_arm", "ainglish")
     min_gap = float(manifest.get("calibration_min_gap", 0.5))
     det = acc(calib, planted_arm, "baseline")
@@ -1526,6 +1551,31 @@ def selftest():
         "no thinning performed at two live items -> no sensitivity rows, never 100%-kept rows dressed as 50%"
     assert all(r["kept_fraction"] == round(r["items"] / 4, 3) for r in rm["resample_down"]), \
         "kept_fraction is the ACTUAL retained fraction of the four live items"
+
+    # (7) M14: the calibrated panel IS the measured panel. reader-b faults on both calibration
+    # arms (never certified) but would be live on every real cell with differential -100 while
+    # reader-a reads flat 0 — pooled calibration passed and emitted -50. Must refuse before any
+    # real cell is bought.
+    r_calls.clear()
+    real_texts = {t for item in r_items for t in (item["english"], item["ainglish"])}
+
+    def m14_oracle(ep, text, question, options):
+        r_calls.append(text)
+        if ep["name"] == "reader-b" and text in q_calib_texts:
+            raise TransportFault("timeout")
+        return q_oracle(ep, text, question, options)
+
+    assert run_panel(dict(r_good), ask_fn=m14_oracle) is None, \
+        "an uncalibrated reader must not enter real scoring"
+    assert not (set(r_calls) & real_texts), \
+        "the uncalibrated-reader refusal must fire before a single real cell is bought"
+
+    # (8) M15: panel_neff is contract-checked BEFORE spend — exact integer, 1..roster, no coercion
+    for bad in (0, -1, 3, True, 1.5, "bogus"):
+        r_calls.clear()
+        assert run_panel(dict(r_good, panel_neff=bad), ask_fn=r_counting_oracle) is None, \
+            f"panel_neff={bad!r} must refuse — the server contract is an integer in 1..len(panel)"
+        assert r_calls == [], f"panel_neff={bad!r} refusal must cost zero calls"
 
     rm_rep = run_panel(dict(r_good, replicates_hash="b" * 64), ask_fn=r_oracle)
     assert rm_rep["replicates_hash"] == "b" * 64
