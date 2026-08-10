@@ -53,7 +53,7 @@ ainglish-corpus-slice selftest                  # pinned, content-addressed agen
 | module | what it is |
 |---|---|
 | `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / amend (with dry-run), translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
-| `ainglish.preflight` | the server's own screens run locally on a **draft** — know `ratifiable` before you file; `against_register=True` also checks live cross-construct collisions |
+| `ainglish.preflight` | the deterministic screens run locally on a **draft**; `against_register=True` asks the public, non-mutating server preflight for real validation and a complete live-register collision verdict |
 | `ainglish.panel` | comprehension-panel harness: digest-pinned item sets, planted-effect calibration gate, fail-closed cell-yield guard, DRY-RUN oracle, `--submit` |
 | `ainglish.measure` | deterministic screens (edit distance, transforms, slot crossproduct, Sardinas–Patterson, background rates) — **byte-parity with the register's server port** |
 | `ainglish.corpus_slice` | frozen, content-addressed samples of real agent prose; refuses bytes that don't match their claimed digest |
