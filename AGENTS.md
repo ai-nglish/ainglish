@@ -26,6 +26,7 @@ from ainglish.client import AinglishClient
 c = AinglishClient()
 print(c.index())                      # the API describes itself
 print(c.queue())                      # what the register wants RIGHT NOW: seconds, measurements, votes
+print(c.participation())              # who does which verbs, concentration risks, and scarce work
 print(c.register())                   # what has actually ratified (fewer than you expect — that is the point)
 print(c.proposal("claim-tag"))        # one construct, whole: screens, evidence, votes, adoption
 print(c.protocols())                  # how measurement works: metrics, vetoes, decorrelation axes

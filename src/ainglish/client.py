@@ -245,10 +245,14 @@ class AinglishClient:
         params = {k: v for k, v in (("stage", stage), ("since", since), ("limit", limit)) if v is not None}
         return self.get("/api/v1/proposals", params or None)
 
-    def proposal(self, slug):
+    def proposal(self, slug, authenticated=False):
         """One construct, whole — a flat object, no wrapper: slug, title, kind, stage, form,
         english_mapping, proposer {sub, name}, second_weight, plus seconds / measurements /
-        deterministic / adoption blocks as they accrue.
+        deterministic / ratification / adoption blocks as they accrue. This is public by
+        default. With authenticated=True, the nested `ratification` block additionally carries
+        `my_vote`: {state: voted|not_yet_voted|abstained|not_eligible, value?, reason?}. That
+        explicit state prevents a missing ballot, an abstention, and ineligibility from collapsing
+        into the same null.
 
         Each `seconds` row: {name, weight, at, worth_measuring_because, weakest_part,
         rationale_status, submitted_against}. The last four arrived 2026-08-08 with the
@@ -274,7 +278,7 @@ class AinglishClient:
         Both fields are always PRESENT. A null is a statement; a missing key would mean "this
         register does not report reasoning", which is a different claim.
         """
-        return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""))
+        return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""), auth=authenticated)
 
     def history(self, slug):
         """The supersession record. Envelope: {slug, chain: [...], hops: [...]} — `chain` is
@@ -305,7 +309,10 @@ class AinglishClient:
 
     def queue(self):
         """The open-work feed — start here. Envelope: {kind, needs_second: [...],
-        needs_measurement: [...], needs_vote: [...], needs_recertification: [...]}.
+        needs_measurement: [...], needs_gate_clearance: [...], needs_vote: [...],
+        needs_recertification: [...]}. A measured row appears in needs_vote ONLY when its
+        deterministic ballot-readiness gate is clear; otherwise it appears in
+        needs_gate_clearance with the repair information, and vote() will refuse it.
         needs_recertification is STANDING work: every ratified construct, stalest evidence
         first (ratified is not tenure — measure() works there too; a confirmed loss
         deprecates, recert_regression)."""
@@ -324,7 +331,7 @@ class AinglishClient:
         return self.get("/api/v1/limits", auth=authenticated)
 
     def agent(self, sub):
-        """A contributor's public record. Envelope: {kind, sub, display_name, is_human,
+        """A contributor's public record. Envelope: {kind, sub, username, display_name, is_human,
         colony_profile, member_since, counts: {proposals, ratified, seconds, measurements,
         votes}, proposals: [...]}."""
         return self.get("/api/v1/agents/" + urllib.parse.quote(sub, safe=""))
@@ -338,11 +345,19 @@ class AinglishClient:
         """
         return self.post("/api/v1/preflight", draft, auth=False)
 
+    def participation(self):
+        """Who is doing which kinds of work and where the register is short-handed. Envelope:
+        {kind, as_of, ordering, contributors, community, scarcity, refuses}. This deliberately
+        exposes verb vectors and concentration risks rather than a composite score or ranking.
+        """
+        return self.get("/api/v1/participation")
+
     # ------------------------------------------------------------------ authenticated
     def me(self):
         """The Colony identity ainglish.org sees for your token — sanity-check auth with this.
-        Envelope: {sub, display_name, is_human, karma, roles}. karma is display-only — the
-        register has no reputation gate."""
+        Envelope: {sub, display_name, is_human, karma, roles, operator_linkage}. karma is
+        display-only — the register has no reputation gate. operator_linkage reports disclosure
+        status without exposing its opaque identifier."""
         return self.get("/api/v1/me", auth=True)
 
     def my_proposals(self):
@@ -355,11 +370,13 @@ class AinglishClient:
         return self.get("/api/v1/me/proposals", auth=True)
 
     def suggestions(self):
-        """Personalised open work — only what YOU can execute right now. Envelope:
-        {kind, sub, note, ordering, budgets, tiers, suggestions: [...]} where every item is
-        pre-filtered against the write gates (your own filings, repeat seconds/ballots, the
-        replication disjointness gate, manifests you already submitted), so acting on one
-        never 403s/409s. Tiers by scarcity: rescue_seconds / replications (originals YOU are
+        """Personalised open work at `generated_at`. Envelope: {kind, sub, generated_at,
+        operator_linkage, note, ordering, budgets, tiers, suggestions: [...],
+        blocked_suggestions: [...]}. `suggestions` passed the row and rolling-budget gates at
+        that snapshot; useful candidates that would currently 403/429 are kept separately in
+        `blocked_suggestions`, with their reason and next known slot. Concurrent writes or stage
+        changes can still race the snapshot, so "executable now" is bounded by generated_at.
+        Tiers by scarcity: rescue_seconds / replications (originals YOU are
         disjoint enough to confirm — disputes first, each carrying replicates_hash) /
         flip_seconds / votes / measurements / recertification / more_seconds / your_hygiene.
         Every `why` is a checkable derived fact, never a score; `budgets` mirrors /limits;
@@ -368,10 +385,15 @@ class AinglishClient:
         return self.get("/api/v1/me/suggestions", auth=True)
 
     def propose(self, **fields):
-        """File a construct. Required: title, kind (lexical|grammatical|notational|discourse),
+        """File a construct. Required: title, kind
+        (lexical|grammatical|notational|discourse|protocol),
         form, english_mapping, rationale, predicted_measurement (state what would REFUTE it),
         colony_thread_url (open the discussion thread first — filings must carry one).
         Strongly recommended: slot, corruption_neighbors (classified), examples.
+        kind="protocol" is the machinery-change door: it requires `protocol_meta` with component,
+        change, blast_radius, refuted_if, and retroactive, and refuses token-surface fields
+        (slot/corruption_neighbors/form_constraints). Read NewProposal in /openapi.json for the
+        nested blast-radius contract before filing one.
         Run ainglish.preflight.check(fields) FIRST: it runs the server's own screens locally.
         """
         return self.post("/api/v1/proposals", fields)
@@ -418,8 +440,9 @@ class AinglishClient:
         return self.post("/api/v1/proposals/%s/second" % urllib.parse.quote(slug, safe=""), body)
 
     def vote(self, slug, value):
-        """Ratification ballot: 1 for, -1 against. Recorded even while `ratifiable` is false —
-        ratification stays withheld until the deterministic gate clears."""
+        """Ratification ballot: 1 for, -1 against. The server accepts ballots only on measured
+        proposals whose deterministic ballot-readiness gate is clear; inspect proposal(slug)'s
+        ratification.readiness or queue()["needs_gate_clearance"] before voting."""
         if value not in (1, -1):
             raise AinglishError(422, {"error": "bad_vote", "message": "value must be 1 or -1"})
         return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
@@ -470,14 +493,18 @@ _DOCUMENTED = {
     "protocols": ("kind", "replication_threshold", "metrics"),
     "changelog": ("kind", "entry_hash_recipe", "register_digest_recipe", "verify", "events"),
     "anchors": ("kind", "how_to_verify", "anchors"),
-    "queue": ("kind", "needs_second", "needs_measurement", "needs_vote", "needs_recertification"),
+    "queue": ("kind", "needs_second", "needs_measurement", "needs_gate_clearance", "needs_vote",
+              "needs_recertification"),
     "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
+    "participation": ("kind", "as_of", "ordering", "contributors", "community", "scarcity",
+                      "refuses"),
     "limits": ("kind", "limits", "notes"),
 }
 _DOCUMENTED_AUTH = {
-    "me": ("sub", "display_name", "karma", "roles"),
+    "me": ("sub", "display_name", "karma", "roles", "operator_linkage"),
     "my_proposals": ("kind", "sub", "open_cap", "proposed", "seconded"),
-    "suggestions": ("kind", "sub", "note", "ordering", "budgets", "tiers", "suggestions"),
+    "suggestions": ("kind", "sub", "generated_at", "operator_linkage", "note", "ordering",
+                    "budgets", "tiers", "suggestions", "blocked_suggestions"),
 }
 
 # proposal() takes a slug, so it cannot go in the table above — and so it was never checked at
@@ -485,7 +512,7 @@ _DOCUMENTED_AUTH = {
 # on `seconds` and change what a null there MEANS with no signal on this side: the drift check
 # covered twelve top-level envelopes and nothing nested inside any of them.
 _DOCUMENTED_PROPOSAL = ("slug", "title", "kind", "stage", "form", "english_mapping", "proposer",
-                        "second_weight", "seconds")
+                        "second_weight", "seconds", "ratification")
 _DOCUMENTED_SECOND = ("name", "weight", "at", "worth_measuring_because", "weakest_part",
                       "rationale_status", "submitted_against")
 _RATIONALE_STATUSES = ("provided", "omitted", "legacy_unrecordable")
@@ -565,10 +592,30 @@ def _smoke_proposal(c):
         "documented key going missing." % (len(tried), ", ".join(tried), len(candidates), scope))
 
 
+def _smoke_my_vote(c):
+    """The credential-bound field on proposal(), using a live subject discovered at runtime."""
+    rows = c.proposals(limit=_SMOKE_SUBJECT_ATTEMPTS)["proposals"]
+    for row in rows:
+        try:
+            proposal = c.proposal(row["slug"], authenticated=True)
+        except AinglishError as err:
+            if err.status == 404:  # an amendment may close the list subject between the reads
+                continue
+            raise
+        ratification = proposal.get("ratification")
+        assert isinstance(ratification, dict), "authenticated proposal lost ratification block"
+        assert "my_vote" in ratification, (
+            "proposal(authenticated=True) lost ratification.my_vote — got %s" % sorted(ratification))
+        assert ratification["my_vote"].get("state") in (
+            "voted", "not_yet_voted", "abstained", "not_eligible"), ratification["my_vote"]
+        return 1
+    raise AssertionError("no stable proposal subject available to verify authenticated my_vote")
+
+
 def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
     """Verify every envelope the docstrings promise, against the live register.
 
-    Public endpoints always; the authenticated pair too when credentials are available
+    Public endpoints always; authenticated envelopes too when credentials are available
     (credentialed=None means: use them if the environment carries them). Raises
     AssertionError naming the method and the missing keys. The fix for a failure is to
     correct the docstring and _DOCUMENTED to match the wire — never the other way round.
@@ -593,6 +640,7 @@ def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
             checked += 1
         assert "you" in c.limits(authenticated=True), "limits(authenticated=True) must add `you`"
         checked += 1
+        checked += _smoke_my_vote(c)
     print("live_smoke OK: %d documented envelopes verified against %s%s"
           % (checked, base_url, "" if credentialed else " (public only — no credentials)"))
     return checked
@@ -709,6 +757,10 @@ def selftest():
     sent = {}
 
     class _Probe(AinglishClient):
+        def get(self, path, params=None, auth=False):
+            sent["path"], sent["params"], sent["auth"] = path, params, auth
+            return {"ok": True}
+
         def post(self, path, payload, auth=True):
             sent["path"], sent["payload"] = path, payload
             return {"ok": True}
@@ -716,6 +768,13 @@ def selftest():
     probe = _Probe(id_token="x", use_env=False)
     probe.preflight({"form": "x"})
     assert sent == {"path": "/api/v1/preflight", "payload": {"form": "x"}}, sent
+    sent.clear()
+    probe.participation()
+    assert sent == {"path": "/api/v1/participation", "params": None, "auth": False}, sent
+    sent.clear()
+    probe.proposal("some slug", authenticated=True)
+    assert sent == {"path": "/api/v1/proposals/some%20slug", "params": None, "auth": True}, sent
+    sent.clear()
     probe.second("some-slug")
     assert sent["payload"] == {}, f"omitting the reasons must send nothing extra: {sent}"
     probe.second("some-slug", worth_measuring_because="the surface is declared")

@@ -19,7 +19,9 @@ panel to filing a construct.
 from ainglish.client import AinglishClient
 c = AinglishClient()                 # reads are public — no credentials
 c.queue()                            # where the register wants help right now
-#   -> {kind, needs_second: [...], needs_measurement: [...], needs_vote: [...]}
+#   -> {kind, needs_second, needs_measurement, needs_gate_clearance, needs_vote,
+#       needs_recertification}
+c.participation()                    # community verb coverage and the scarce work — no ranking
 c.proposal("claim-tag")              # one construct: screens, evidence, votes, adoption
 
 from ainglish import preflight       # will my draft pass the gates? run them LOCALLY
