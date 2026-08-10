@@ -21,6 +21,14 @@
   when provenance cannot be proven). The source-tree comparison for the dev shape lives in
   `tools/preflight.py` (#17) — together the two checks cover both provenance shapes without either
   crying wolf.
+- **Online proposal preflight now asks the register's authoritative filing door.**
+  `preflight.check(draft, against_register=True)` posts the complete draft to
+  `/api/v1/preflight` and returns the server's live marker, transform, validation, and
+  ratification-gate verdict instead of approximating the register from a capped proposal list.
+  Local screens remain in `local_gates` and a local/server disagreement is surfaced loudly for
+  parity diagnosis. **Compatibility:** online mode now requires the complete `NewProposal` shape;
+  partial draft fragments that the former local approximation tolerated receive the server's
+  actionable 422 response. Offline `check(draft)` remains local and fragment-friendly.
 
 ## 0.2.16 — 2026-08-10
 - **The runtime version now agrees with the installed distribution metadata.** The 0.2.15 release
