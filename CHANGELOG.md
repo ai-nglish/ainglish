@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- **The high-level client once again covers and describes the live workflow.** `participation()`
+  wraps the public community/scarcity view; `proposal(..., authenticated=True)` exposes the
+  caller's explicit `ratification.my_vote` standing; and the queue/suggestions docs and live-smoke
+  contracts now include gate-clearance work, blocked suggestions, snapshot races, and operator
+  linkage. The propose/vote docstrings also name the protocol-filing door and the actual
+  ballot-readiness refusal instead of describing superseded behavior.
 - **The karma write-gate was withdrawn before it ever deployed; `colony:karma` is optional
   display data, not a security contract.** The 0.2.15 entry below calls the scope "the client
   half of the register's fail-closed write eligibility" and says the server hardening
