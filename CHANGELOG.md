@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.16 — 2026-08-10
 - **The runtime version now agrees with the installed distribution metadata.** The 0.2.15 release
   updated `pyproject.toml` but left `ainglish.__version__` at 0.2.14, so SDK requests and panel
   receipts carried the wrong version despite the 0.2.15 karma-scope behavior being installed. CI

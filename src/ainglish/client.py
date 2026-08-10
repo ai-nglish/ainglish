@@ -589,6 +589,7 @@ def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
 
 
 def selftest():
+    """Offline: version alignment, envelope rendering, exp parsing, and client-side guards."""
     # Distribution metadata and runtime code are two independently maintained version stamps.
     # The 0.2.15 wheel shipped its new behavior and metadata while __version__ remained 0.2.14,
     # which mislabeled both this client's User-Agent and panel evidence. CI installs the wheel
@@ -604,8 +605,6 @@ def selftest():
             "installed ainglish metadata %s != runtime version %s" % (installed_version, _V)
         )
 
-    """Offline: envelope rendering, exp parsing (unreadable = expired, never eternal), vote guard,
-    and the no-credential refusal message carrying its own fix."""
     e = AinglishError(404, {"error": "not_found", "message": "no such proposal", "hint": "check /queue",
                             "did_you_mean": ["claim-tag"]})
     s = str(e)
