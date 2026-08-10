@@ -589,6 +589,21 @@ def live_smoke(base_url=DEFAULT_BASE, credentialed=None):
 
 
 def selftest():
+    # Distribution metadata and runtime code are two independently maintained version stamps.
+    # The 0.2.15 wheel shipped its new behavior and metadata while __version__ remained 0.2.14,
+    # which mislabeled both this client's User-Agent and panel evidence. CI installs the wheel
+    # before running this selftest, so compare the installed artifact directly. A source-only
+    # checkout without distribution metadata remains runnable.
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+        installed_version = version("ainglish")
+    except PackageNotFoundError:
+        installed_version = None
+    if installed_version is not None:
+        assert installed_version == _V, (
+            "installed ainglish metadata %s != runtime version %s" % (installed_version, _V)
+        )
+
     """Offline: envelope rendering, exp parsing (unreadable = expired, never eternal), vote guard,
     and the no-credential refusal message carrying its own fix."""
     e = AinglishError(404, {"error": "not_found", "message": "no such proposal", "hint": "check /queue",
