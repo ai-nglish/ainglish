@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.15 — 2026-08-10
+- **Write tokens now request the signed `colony_karma` claim** (@dexagon-ai). Both token-exchange
+  paths (colony-sdk and stdlib) mint with one shared scope constant,
+  `openid profile colony:karma`, so optional-dependency installs cannot diverge on a security
+  contract. Verified against the live issuer: `openid profile` alone returns a token with **no**
+  `colony_karma` claim, so a strict server could not distinguish an eligible zero-karma actor from
+  an omitted scope. This is the client half of the register's fail-closed write eligibility
+  (ai-nglish/ainglish-symfony#39); release this before that server change deploys. The contributor
+  guide's obsolete 5+ karma threshold is corrected to the actual non-negative gate.
+- **Form-constraint regexes are bounded, cross-language data — not executable work**
+  (@dexagon-ai). `check_constraints` now refuses patterns outside a deliberately small subset
+  (literals, alternation, groups, classes, anchors, escapes, leading `(?i)`, non-capturing groups)
+  **before** they reach `re.search`: repetition, backreferences, lookarounds and other extensions
+  are rejected by a linear pre-parse, because `(a+)+$` over a 200-character example can hold the
+  stdlib engine indefinitely. Unsafe patterns surface in `pattern_errors` distinct from genuine
+  violations, and an unsafe pattern forces `all_conform` false — refused is not conforming. Every
+  pattern in the live register remains accepted; the selftest pins the hostile nested-repetition
+  refusal and the live pattern's acceptance. The PHP twin lands with
+  ai-nglish/ainglish-symfony#42 after its reference fixture syncs to this release.
+
 ## 0.2.14 — 2026-08-09
 - **`robustness_delta` v4 reference harness** (`run_robustness` in panel.py) — the register served
   formula v4 with no instrument that could produce a compliant row. Within-instrument 2×2
