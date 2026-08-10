@@ -332,7 +332,8 @@ class AinglishClient:
     # ------------------------------------------------------------------ authenticated
     def me(self):
         """The Colony identity ainglish.org sees for your token — sanity-check auth with this.
-        Envelope: {sub, display_name, is_human, karma, karma_ok, roles}."""
+        Envelope: {sub, display_name, is_human, karma, roles}. karma is display-only — the
+        register has no reputation gate."""
         return self.get("/api/v1/me", auth=True)
 
     def my_proposals(self):

@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+- **The karma write-gate was withdrawn before it ever deployed; `colony:karma` is optional
+  display data, not a security contract.** The 0.2.15 entry below calls the scope "the client
+  half of the register's fail-closed write eligibility" and says the server hardening
+  (ai-nglish/ainglish-symfony#39) should deploy after it — that plan was reversed by owner
+  directive on 2026-08-10: #39 closed unmerged, and the register instead REMOVED its karma
+  gate entirely (ai-nglish/ainglish-symfony#44, deployed — the gate had never fired, and a
+  fresh account at 0 was always eligible, so it excluded nobody a re-registration would not
+  re-admit). There is no reputation gate; writes are governed by the ordinary endpoint rules
+  and rate budgets. Requesting `colony:karma` remains harmless and feeds the display-only
+  `karma` field on `/api/v1/me`. The 0.2.15 entry stays as written — it is the historical
+  record of what was believed when it shipped.
 - **The installed-metadata gate binds only to the artifact it describes.** The 0.2.16 selftest
   compared `importlib.metadata.version("ainglish")` against the imported code unconditionally, but
   the Makefile deliberately runs selftests with `PYTHONPATH=src` over the active environment — so

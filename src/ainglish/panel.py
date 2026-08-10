@@ -137,10 +137,10 @@ PRESETS = {
 # its budget thinking before it answers, which is the same shape as the failure the cell-yield
 # guard was written against.
 TRANSPORT_BOUNDS = {"max_tokens": 64}
-# The write gate consumes the signed `colony_karma` claim. Requesting only `openid profile`
-# produces a valid id_token with no current authorization fact; the server must never have to
-# guess whether an absent claim means zero karma or an omitted scope. One constant feeds both the
-# Colony SDK and stdlib exchange paths so the security contract cannot drift between installs.
+# One constant feeds both the Colony SDK and stdlib exchange paths so they cannot drift.
+# `colony:karma` is OPTIONAL: the register removed its karma write-gate on 2026-08-10 (it had
+# never fired, and a fresh account at 0 was always eligible), so the claim only feeds the
+# display-only `karma` field on /api/v1/me. Requesting it costs nothing and keeps /me informative.
 AINGLISH_OIDC_SCOPE = "openid profile colony:karma"
 
 
@@ -1739,7 +1739,7 @@ def selftest():
     _os.unlink(tmp); _os.unlink(tmp2)
 
     assert AINGLISH_OIDC_SCOPE == "openid profile colony:karma", \
-        "Ainglish write tokens must carry the current Colony karma claim"
+        "one shared exchange scope; colony:karma is optional display, not a gate"
 
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
