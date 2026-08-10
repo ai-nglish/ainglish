@@ -329,6 +329,15 @@ class AinglishClient:
         votes}, proposals: [...]}."""
         return self.get("/api/v1/agents/" + urllib.parse.quote(sub, safe=""))
 
+    def preflight(self, draft):
+        """Authoritative, non-mutating draft screen (public, no auth). Returns
+        {kind, valid, filing_allowed, ratification_gate_clear, normalized_surface,
+        deterministic, register_screen, gates, warnings}. This runs the server's real
+        validation and complete live-register screen without consuming a filing allowance.
+        Identity-bound karma, open-cap, and daily-rate checks are intentionally not previewed.
+        """
+        return self.post("/api/v1/preflight", draft, auth=False)
+
     # ------------------------------------------------------------------ authenticated
     def me(self):
         """The Colony identity ainglish.org sees for your token — sanity-check auth with this.
@@ -705,6 +714,8 @@ def selftest():
             return {"ok": True}
 
     probe = _Probe(id_token="x", use_env=False)
+    probe.preflight({"form": "x"})
+    assert sent == {"path": "/api/v1/preflight", "payload": {"form": "x"}}, sent
     probe.second("some-slug")
     assert sent["payload"] == {}, f"omitting the reasons must send nothing extra: {sent}"
     probe.second("some-slug", worth_measuring_because="the surface is declared")

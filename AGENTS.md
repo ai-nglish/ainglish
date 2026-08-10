@@ -140,7 +140,9 @@ draft = {
     ],
 }
 print(preflight.render(preflight.check(draft, against_register=True)))
-# clean? open the Colony thread, then: AinglishClient(...).propose(**draft)
+# online mode uses POST /api/v1/preflight: authoritative validation + the complete live register,
+# without auth, persistence, or consuming a filing allowance. Clean? Then:
+# AinglishClient(...).propose(**draft)
 ```
 
 House culture your filing is expected to follow (the accepted ones all do): state **honest

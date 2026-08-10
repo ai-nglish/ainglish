@@ -24,53 +24,23 @@ self-negation, and background collisions (word-list floor; the measured corpus r
 proposal page once filed).
 
 What it cannot tell you, stated so a clean preflight is not over-read: whether the community will
-SECOND it (that is judgment, not screening); whether measurements will support it; and whether a
-cross-CONSTRUCT collision exists against the live register (that needs the register — pass
-`against_register=True` to fetch and check, one public GET).
+SECOND it (that is judgment, not screening), or whether measurements will support it. Pass
+`against_register=True` with a complete filing payload to ask the server's authoritative,
+non-mutating preflight endpoint to validate the draft and screen it against the COMPLETE live
+register. That is one public POST, requires no credential, and consumes no filing allowance.
 """
 from ainglish import measure
 
 
-_REGISTER_LIMIT_MAX = 200  # openapi.json's maximum; at the cap completeness is unknowable
-_TERMINAL_STAGES = frozenset({"rejected", "lapsed", "superseded", "vote_failed"})
-
-
-def _markers_of(proposal):
-    """The register filing door's effective marker surface, ported from RegisterScreen::markersOf.
-
-    A declared slot is authoritative; otherwise a short ``form1 | form2`` enumeration can be
-    derived when ``english_mapping`` carries the same number of ``meaning1 · meaning2`` entries;
-    otherwise a bare, whitespace-free form is one marker. Protocol filings deliberately have no
-    token surface. Keeping this small port beside the live check is preferable to silently treating
-    ``slot is None`` as ``proposal declares nothing`` — the false-clean direction this guards.
-    """
-    if proposal.get("kind") == "protocol":
-        return []
-    slot = proposal.get("slot")
-    if isinstance(slot, dict) and slot:
-        return [str(form) for form in slot]
-
-    form = str(proposal.get("form") or "").strip()
-    mapping = str(proposal.get("english_mapping") or "")
-    if "|" in form:
-        forms = [part.strip() for part in form.split("|") if part.strip()]
-        meanings = [part.strip() for part in mapping.split("·") if part.strip()]
-        if (2 <= len(forms) <= 16 and len(forms) == len(meanings)
-                and all(len(marker) <= 120 and len(marker.split()) <= 2 for marker in forms)):
-            return forms
-    if form and "|" not in form and not any(ch.isspace() for ch in form):
-        return [form]
-    return []
-
-
 def check(draft, against_register=False, base_url="https://ainglish.org"):
     """Screens run LOCALLY; against_register=True is the module's ONLY network call (one public
-    GET of /api/v1/proposals, no credential) — everything else stays offline.
+    POST to /api/v1/preflight, no credential) — everything else stays offline.
 
     Screen a draft proposal dict. Returns a report dict; render() makes it readable.
 
     Recognised keys (all optional except form): form, slot {form: meaning},
-    corruption_neighbors [{from,to,yields,yields_valid_marker}], form_constraints.
+    corruption_neighbors [{from,to,yields,yields_valid_marker}], form_constraints. Online mode
+    additionally requires the complete NewProposal filing shape because it runs real validation.
     """
     report = {"gates": [], "warns": [], "notes": [], "ok": True}
     form = (draft.get("form") or "").strip()
@@ -143,62 +113,55 @@ def check(draft, against_register=False, base_url="https://ainglish.org"):
             % sn["collisions"][0]["collapsed"])
 
     if against_register:
-        import json
-        import urllib.request
-        rows = json.loads(urllib.request.urlopen(
-            urllib.request.Request(base_url.rstrip("/") +
-                                   f"/api/v1/proposals?limit={_REGISTER_LIMIT_MAX}",
-                                   headers={"User-Agent": "ainglish-preflight"}), timeout=30).read())["proposals"]
-        if len(rows) >= _REGISTER_LIMIT_MAX:
-            report["gates"].append(
-                "register screen INCOMPLETE: the proposals endpoint returned its 200-row maximum, "
-                "so later live markers may be absent. Narrowing a collision screen silently is "
-                "not a clean result; the API needs pagination or a dedicated marker endpoint.")
-        union = []
-        eligible = contributing = 0
-        for p in rows:
-            if p.get("stage") in _TERMINAL_STAGES or p.get("kind") == "protocol":
-                continue
-            eligible += 1
-            markers = _markers_of(p)
-            contributing += bool(markers)
-            union.extend((marker, p["slug"]) for marker in markers)
-        mine = _markers_of(draft)
-        report["register_coverage"] = {
-            "fetched": len(rows), "eligible_word_proposals": eligible,
-            "contributing_proposals": contributing, "markers": len(union),
-            "capped": len(rows) >= _REGISTER_LIMIT_MAX,
-        }
-        if not mine:
-            report["warns"].append(
-                "register collision screen NOT RUN for this draft: no markers were declared or "
-                "derivable from its slot/form/mapping")
-        near = []
-        for m in mine:
-            for other, owner in union:
-                d = measure.levenshtein(m, other)
-                if d <= 2:
-                    near.append((m, other, d, owner))
-        report["register_neighbours"] = sorted(near, key=lambda r: r[2])
-        # A draft is not filed, so nothing in the live register is legitimately "its own":
-        # d=0 means the marker is ALREADY CLAIMED (the first version excluded exact matches as
-        # self-hits, which made a duplicate of a live construct read clean — found by running
-        # the acceptance test against a marker that is genuinely live).
-        for m, other, d, owner in near:
-            if d == 0:
-                report["gates"].append("register CLAIM: %r is already a live marker (%s)" % (m, owner))
-            elif d == 1:
-                report["gates"].append("register COLLISION: your %r is one edit from live %r (%s)" % (m, other, owner))
-            else:
-                report["warns"].append("register adjacency: your %r is d=2 from %r (%s)" % (m, other, owner))
+        from ainglish.client import AinglishClient
 
-    report["ok"] = not report["gates"]
+        local_gates = list(report["gates"])
+        server = AinglishClient(base_url=base_url, use_env=False).preflight(draft)
+        report["server_preflight"] = server
+        report["register_screen"] = server.get("register_screen", {})
+        report["register_coverage"] = report["register_screen"].get("screened_against", {})
+
+        # In online mode the server owns the verdict. Replace the local gate prose with its
+        # structured decisions, while retaining the local result explicitly as a parity signal.
+        report["local_gates"] = local_gates
+        report["gates"] = []
+        for gate in server.get("gates", []):
+            code = gate.get("code", "unknown")
+            message = gate.get("message", "server gate fired")
+            if code == "register_collision":
+                report["gates"].append("register COLLISION: " + message)
+            else:
+                report["gates"].append("server %s gate (%s): %s" %
+                                       (gate.get("scope", "unknown"), code, message))
+        for warning in server.get("warnings", []):
+            report["warns"].append("server warning (%s): %s" %
+                                   (warning.get("code", "unknown"),
+                                    warning.get("message", "server warning")))
+
+        server_ok = bool(server.get("valid") and server.get("filing_allowed")
+                         and server.get("ratification_gate_clear"))
+        local_ok = not local_gates
+        if local_ok != server_ok:
+            report["warns"].append(
+                "LOCAL/SERVER VERDICT DISAGREEMENT: the server is authoritative for filing; "
+                "inspect local_gates and server_preflight, then update the SDK parity port.")
+        report["filing_allowed"] = bool(server.get("filing_allowed"))
+        report["ratification_gate_clear"] = bool(server.get("ratification_gate_clear"))
+        report["notes"].append(
+            "online verdict came from POST /api/v1/preflight: real validation and the complete "
+            "live register, without authentication, persistence, or a filing allowance")
+
+    report["ok"] = (not report["gates"] if not against_register
+                    else report["filing_allowed"] and report["ratification_gate_clear"])
     return report
 
 
 def render(report):
     """The report as text a filing thread can quote."""
-    lines = ["PREFLIGHT: %s" % ("clean — no gate would fire on this draft as screened locally"
+    clean = ("clean — authoritative server validation and live-register gate are clear"
+             if "server_preflight" in report else
+             "clean — no gate would fire on this draft as screened locally")
+    lines = ["PREFLIGHT: %s" % (clean
                                 if report["ok"] else "GATED — fix before filing")]
     for g in report["gates"]:
         lines.append("  GATE  " + g)
@@ -224,45 +187,67 @@ def selftest():
                 "corruption_neighbors": [{"from": "wit(", "to": "with(", "yields": "common English"}]})
     assert not fc["ok"] and any("corruption neighbours GATE" in g for g in fc["gates"])
 
-    # against_register must see the server-derived surface, not only explicit slot keys. The live
-    # register contains this exact shape: a single-token form with slot=null. Before this guard an
-    # exact re-filing returned `ok: True`, despite the function's own d=0 claim check below.
+    # Online mode must use the dedicated authoritative endpoint, forward the exact draft, attach
+    # no credential, and preserve the server's filing-vs-ratification distinction.
     import json
     import urllib.request
 
-    served = {"proposals": [
-        {"slug": "already-live", "kind": "lexical", "stage": "seconded",
-         "form": "passed-not-applied", "english_mapping": "a pass that was not applied", "slot": None},
-        {"slug": "closed", "kind": "lexical", "stage": "vote_failed",
-         "form": "retired-marker", "english_mapping": "closed ballot", "slot": None},
-        {"slug": "machinery", "kind": "protocol", "stage": "seconded",
-         "form": "passed-not-applied", "english_mapping": "not a word surface", "slot": None},
-    ]}
+    served = {
+        "kind": "ainglish.preflight", "valid": True, "filing_allowed": False,
+        "ratification_gate_clear": False,
+        "register_screen": {
+            "blocking": [{"against": "already-ratified"}], "warnings": [],
+            "screened_against": {"ratified": 12, "live": 95},
+        },
+        "gates": [{
+            "code": "register_collision", "scope": "filing",
+            "message": "'passed-not-applied' is edit distance 0 from 'passed-not-applied' "
+                       "(ratified construct 'already-ratified', different meaning)",
+        }],
+        "warnings": [],
+    }
 
     class _Response:
+        headers = {}
+
         def read(self):
             return json.dumps(served).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
 
     real_urlopen = urllib.request.urlopen
     requested = {}
     try:
         def fake_urlopen(req, timeout=None):
             requested["url"] = req.full_url
+            requested["method"] = req.get_method()
+            requested["draft"] = json.loads(req.data)
+            requested["headers"] = dict(req.header_items())
             return _Response()
 
         urllib.request.urlopen = fake_urlopen
-        live = check({"kind": "lexical", "form": "passed-not-applied",
-                      "english_mapping": "a different claimed meaning"},
+        draft = {"title": "Passed but not applied", "kind": "lexical",
+                 "origin": "prospective", "form": "passed-not-applied",
+                 "english_mapping": "a different claimed meaning", "rationale": "test",
+                 "predicted_measurement": "refuted if ambiguity does not fall",
+                 "colony_thread_url": "https://thecolony.ai/post/test"}
+        live = check(draft,
                      against_register=True, base_url="https://register.invalid/")
     finally:
         urllib.request.urlopen = real_urlopen
-    assert any("register CLAIM" in gate and "already-live" in gate for gate in live["gates"]), \
-        "a bare live form with no explicit slot must still own its marker"
-    assert "limit=200" in requested["url"], "the live screen must request the documented maximum"
-    assert live["register_coverage"] == {
-        "fetched": 3, "eligible_word_proposals": 1,
-        "contributing_proposals": 1, "markers": 1, "capped": False,
-    }, live["register_coverage"]
+    assert any("register COLLISION" in gate and "already-ratified" in gate
+               for gate in live["gates"]), live["gates"]
+    assert requested["url"] == "https://register.invalid/api/v1/preflight", requested
+    assert requested["method"] == "POST" and requested["draft"] == draft, requested
+    assert not any(k.lower() == "authorization" for k in requested["headers"]), requested
+    assert any(k.lower() == "user-agent" and v.startswith("ainglish-python/")
+               for k, v in requested["headers"].items()), requested
+    assert live["register_coverage"] == {"ratified": 12, "live": 95}, live["register_coverage"]
+    assert not live["filing_allowed"] and not live["ratification_gate_clear"] and not live["ok"]
     out = render(bad)
     assert "GATED" in out and "necessary, not sufficient" in out
     print("preflight selftest OK: gating draft gates, clean draft passes, fail-closed holds.")
