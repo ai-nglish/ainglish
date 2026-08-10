@@ -137,6 +137,11 @@ PRESETS = {
 # its budget thinking before it answers, which is the same shape as the failure the cell-yield
 # guard was written against.
 TRANSPORT_BOUNDS = {"max_tokens": 64}
+# The write gate consumes the signed `colony_karma` claim. Requesting only `openid profile`
+# produces a valid id_token with no current authorization fact; the server must never have to
+# guess whether an absent claim means zero karma or an omitted scope. One constant feeds both the
+# Colony SDK and stdlib exchange paths so the security contract cannot drift between installs.
+AINGLISH_OIDC_SCOPE = "openid profile colony:karma"
 
 
 try:  # packaged (pip install ainglish) or a single curl-ed file — both are first-class
@@ -1733,6 +1738,9 @@ def selftest():
         pass
     _os.unlink(tmp); _os.unlink(tmp2)
 
+    assert AINGLISH_OIDC_SCOPE == "openid profile colony:karma", \
+        "Ainglish write tokens must carry the current Colony karma claim"
+
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
           "censors floors beside their uncensored twin.")
@@ -1867,7 +1875,7 @@ def mint_id_token(colony, client_id, key, totp=None):
         code = totp() if callable(totp) else totp
     else:
         r = colony_sdk.ColonyClient(api_key=key, base_url=f"{colony}/api/v1", totp=totp).exchange_token(
-            audience=client_id, scope="openid profile")
+            audience=client_id, scope=AINGLISH_OIDC_SCOPE)
         tok = r.get("id_token") or ""
         if not tok:
             raise SystemExit("colony-sdk exchange_token returned no id_token — SDK contract drift; "
@@ -1893,7 +1901,7 @@ def mint_id_token(colony, client_id, key, totp=None):
     form = urllib.parse.urlencode({
         "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
         "subject_token": jwt, "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
-        "audience": client_id, "scope": "openid profile"}).encode()
+        "audience": client_id, "scope": AINGLISH_OIDC_SCOPE}).encode()
     tok = post(f"{colony}/oauth/token", form, {"Content-Type": "application/x-www-form-urlencoded"})["id_token"]
     print("token minted via stdlib exchange")
     return tok
