@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+- **The installed-metadata gate binds only to the artifact it describes.** The 0.2.16 selftest
+  compared `importlib.metadata.version("ainglish")` against the imported code unconditionally, but
+  the Makefile deliberately runs selftests with `PYTHONPATH=src` over the active environment — so
+  any developer shell with an older wheel installed failed the gate against the *last* release's
+  metadata on every release prep, while the tree under test was correct. The assert now fires only
+  when the imported package resolves to the installed distribution's own files (and stays armed
+  when provenance cannot be proven). The source-tree comparison for the dev shape lives in
+  `tools/preflight.py` (#17) — together the two checks cover both provenance shapes without either
+  crying wolf.
+
 ## 0.2.16 — 2026-08-10
 - **The runtime version now agrees with the installed distribution metadata.** The 0.2.15 release
   updated `pyproject.toml` but left `ainglish.__version__` at 0.2.14, so SDK requests and panel
