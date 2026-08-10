@@ -541,19 +541,80 @@ def selftest():
     assert not bad["uniquely_decodable"] and bad["witness"] == "a"
     assert sardinas_patterson(["MUST", "MUST NOT"])["uniquely_decodable"]
     assert sardinas_patterson(["obs:", "inf:", "rep("])["uniquely_decodable"]
+
+    # Authored regex is data, never an unbounded computation. Preserve the live pattern shape and
+    # refuse the exact nested-repetition input that previously hung this selftest process.
+    live_pattern = r"(?i)\b(start|complete)-by-(unknown|withheld)\b"
+    assert constraint_pattern_problem(live_pattern) is None
+    assert check_constraints({"forbid": [live_pattern], "strings": ["dropped by-unknown"]})["all_conform"]
+    hostile = check_constraints({"forbid": ["(a+)+$"], "strings": ["a" * 199 + "X"]})
+    assert hostile["all_conform"] is False and hostile["pattern_errors"], \
+        "unsafe regex must refuse without reaching re.search"
+    assert "repetition" in hostile["pattern_errors"][0]["error"]
     print("selftest: 6 known-positives caught, 3 known-negatives passed, symmetry law holds. OK")
 
 
 # ------------------------------------------------------------------ constraints
+def constraint_pattern_problem(pattern):
+    """Why *pattern* is outside the bounded cross-language subset, else ``None``.
+
+    Form constraints are authored data evaluated by both Python and PHP. Arbitrary backtracking
+    regex makes that data executable work: ``(a+)+$`` over a 200-character example exhausts PCRE's
+    backtrack budget and can hold Python's stdlib engine indefinitely. The constraint vocabulary
+    needs alternation, groups, classes, anchors and escapes; it does not need input-consuming
+    repetition or backreferences. Excluding those makes work bounded by the <=64-character pattern
+    structure. A leading ``(?i)`` and non-capturing groups remain available, preserving every
+    pattern currently filed in the live register.
+    """
+    if not isinstance(pattern, str):
+        return "pattern must be a string"
+    body = pattern[4:] if pattern.startswith("(?i)") else pattern
+    escaped = False
+    in_class = False
+    for i, char in enumerate(body):
+        if escaped:
+            if char.isdigit() or char in "gk":
+                return "backreferences are not allowed"
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if in_class:
+            if char == "]":
+                in_class = False
+            continue
+        if char == "[":
+            in_class = True
+            continue
+        if char in "*+{":
+            return "repetition operators (*, +, {m,n}) are not allowed"
+        if char == "?":
+            if i > 0 and body[i - 1] == "(" and i + 1 < len(body) and body[i + 1] == ":":
+                continue
+            return "question-mark quantifiers and regex extensions are not allowed"
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        return "pattern is not valid in the Python regex engine: %s" % exc
+    return None
+
+
 def check_constraints(constraints):
     forbid = constraints.get("forbid", [])
     strings = constraints.get("strings", [])
+    pattern_errors = [{"pattern": pat, "error": problem}
+                      for pat in forbid
+                      for problem in [constraint_pattern_problem(pat)] if problem]
+    unsafe = [row["pattern"] for row in pattern_errors]
     findings = []
     for s in strings:
-        hits = [pat for pat in forbid if re.search(pat, s)]
-        findings.append({"string": s, "conforms": not hits, "violated": hits})
-    return {"forbid": forbid, "checked": findings,
-            "all_conform": all(f["conforms"] for f in findings) if findings else None}
+        hits = [pat for pat in forbid if pat not in unsafe and re.search(pat, s)]
+        findings.append({"string": s, "conforms": not hits and not pattern_errors,
+                         "violated": hits, "errors": []})
+    return {"forbid": forbid, "checked": findings, "pattern_errors": pattern_errors,
+            "all_conform": (all(f["conforms"] for f in findings) and not pattern_errors)
+            if findings or pattern_errors else None}
 
 
 # ------------------------------------------------------------------ run one manifest
