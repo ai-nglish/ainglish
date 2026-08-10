@@ -91,6 +91,30 @@ def declared_version() -> str:
     return m.group(1)
 
 
+def runtime_version() -> str:
+    """The package stamp used by HTTP User-Agents and panel evidence receipts."""
+    m = re.search(
+        r'^__version__ = "(.*)"',
+        (ROOT / "src" / PKG / "__init__.py").read_text(),
+        re.M,
+    )
+    if m is None:
+        raise SystemExit("src/ainglish/__init__.py has no __version__ line — preflight cannot proceed")
+    return m.group(1)
+
+
+def check_runtime_matches_declared() -> None:
+    """One release version must describe metadata, requests, and evidence."""
+    declared = declared_version()
+    runtime = runtime_version()
+    check(
+        "runtime version matches distribution metadata",
+        runtime == declared,
+        f"pyproject declares {declared}, but ainglish.__version__ stamps {runtime}",
+        info=declared,
+    )
+
+
 def version_in_tree(ref: str) -> str | None:
     """The version pyproject.toml declares AT a given ref, not in the working copy."""
     out = subprocess.run(["git", "-C", str(ROOT), "show", f"{ref}:pyproject.toml"],
@@ -234,6 +258,7 @@ def main(argv: list[str]) -> int:
     offline = "--offline" in argv
     print(f"preflight — {PKG} {declared_version()} at {git('rev-parse', '--short', 'HEAD')}\n")
     check_untracked()
+    check_runtime_matches_declared()
     check_tags_declare_their_own_version()
     check_head_tag_matches_declared()
     check_mirror_parity(offline)

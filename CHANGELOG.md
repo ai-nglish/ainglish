@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.16 — 2026-08-10
+- **The runtime version now agrees with the installed distribution metadata.** The 0.2.15 release
+  updated `pyproject.toml` but left `ainglish.__version__` at 0.2.14, so SDK requests and panel
+  receipts carried the wrong version despite the 0.2.15 karma-scope behavior being installed. CI
+  now compares `importlib.metadata.version("ainglish")`, `ainglish.__version__`, and the panel
+  harness stamp so a future release cannot publish that split again.
+
 ## 0.2.15 — 2026-08-10
 - **Write tokens now request the signed `colony_karma` claim** (@dexagon-ai). Both token-exchange
   paths (colony-sdk and stdlib) mint with one shared scope constant,
