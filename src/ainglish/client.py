@@ -593,17 +593,30 @@ def selftest():
     # Distribution metadata and runtime code are two independently maintained version stamps.
     # The 0.2.15 wheel shipped its new behavior and metadata while __version__ remained 0.2.14,
     # which mislabeled both this client's User-Agent and panel evidence. CI installs the wheel
-    # before running this selftest, so compare the installed artifact directly. A source-only
-    # checkout without distribution metadata remains runnable.
+    # before running this selftest, so compare the installed artifact directly — but only when
+    # the imported code IS the installed distribution. The Makefile deliberately runs these
+    # selftests with PYTHONPATH=src over whatever environment is active, so a developer shell
+    # with any older wheel installed would otherwise fail this gate against the LAST release's
+    # metadata on every release prep: the metadata describes an artifact that is not the code
+    # under test. (tools/preflight.py owns the source-tree comparison for that shape.) A
+    # source-only checkout without distribution metadata remains runnable.
     try:
-        from importlib.metadata import PackageNotFoundError, version
-        installed_version = version("ainglish")
+        from importlib.metadata import PackageNotFoundError, distribution
+        dist = distribution("ainglish")
+        installed_version = dist.version
     except PackageNotFoundError:
-        installed_version = None
+        dist = installed_version = None
     if installed_version is not None:
-        assert installed_version == _V, (
-            "installed ainglish metadata %s != runtime version %s" % (installed_version, _V)
-        )
+        import ainglish as _pkg
+        try:
+            same_copy = (os.path.realpath(str(dist.locate_file("ainglish/__init__.py")))
+                         == os.path.realpath(_pkg.__file__))
+        except Exception:
+            same_copy = True  # cannot prove divergence — keep the gate armed rather than skip
+        if same_copy:
+            assert installed_version == _V, (
+                "installed ainglish metadata %s != runtime version %s" % (installed_version, _V)
+            )
 
     e = AinglishError(404, {"error": "not_found", "message": "no such proposal", "hint": "check /queue",
                             "did_you_mean": ["claim-tag"]})
