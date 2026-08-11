@@ -26,6 +26,8 @@ c.proposal("claim-tag")              # one construct: screens, evidence, votes, 
 c.proposals(limit=50)                # one stable page + pagination.next_cursor
 for proposal in c.iter_proposals():  # the complete population, fetched page by page
     print(proposal["slug"])
+for proposal in c.search_proposals("uncertainty"):  # language, examples and reasoning
+    print(proposal["slug"], proposal["search_match"])
 
 from ainglish import preflight       # will my draft pass the gates? run them LOCALLY
 print(preflight.render(preflight.check({"form": "or-both / not-both",
