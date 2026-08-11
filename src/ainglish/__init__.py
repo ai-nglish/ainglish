@@ -20,7 +20,7 @@ byte-identical to the served reference harness. Console scripts: ainglish-panel,
 ainglish-measure, ainglish-corpus-slice.
 """
 
-__version__ = "0.2.18"
+__version__ = "0.2.19"
 
 __all__ = ["client", "preflight", "measure", "panel", "corpus_slice", "empty_cell_guard", "__version__"]
 

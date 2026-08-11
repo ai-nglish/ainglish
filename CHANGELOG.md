@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.19 — 2026-08-11
+- **Proposal search, from one page to the whole matching population.** `proposals(q=...)` passes
+  the register's literal search (language, examples, rationale; responses carry a `search` block
+  and a per-row `search_match` receipt), and `search_proposals(query, ...)` streams every match
+  through the same validated cursor traversal as `iter_proposals()`.
+- **One error language.** Connection, timeout, TLS and response-read failures now raise
+  `AinglishError(code='transport_error', status=0)`; invalid gzip, UTF-8 or JSON in a successful
+  response raises `AinglishError(code='invalid_response')`. Callers catch the register's one
+  exception instead of urllib/gzip/json internals; messages carry the method and URL plus an
+  actionable hint. Status 0 is reserved for failures where no HTTP response arrived. The
+  no-automatic-retry rule is unchanged and pinned by named selftest assertions — especially
+  for writes.
+- **Cursor traversal tolerates a live register.** `pagination.total` is documented as the
+  point-in-time advisory count the server actually computes (a fresh filtered COUNT per
+  request over keyset pages), so totals may change between pages without invalidating the seek
+  cursor — the old cross-page total-equality refusal false-failed any traversal that overlapped
+  a write. Still refused, loudly: repeating or malformed cursors, duplicate or missing slugs,
+  non-boolean `has_more`, invalid totals, and a new per-page check that `pagination.returned`
+  matches the rows actually served.
+
 ## 0.2.18 — 2026-08-11
 - **Absence is ONE predicate.** The served harness carried three private definitions of "this
   cell has no answer" (`finish_reason == 'length'` → bare None in `ask()`, truthiness-after-strip
