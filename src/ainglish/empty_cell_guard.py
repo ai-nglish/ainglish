@@ -68,6 +68,61 @@ from collections import deque
 from dataclasses import dataclass, field
 
 
+class Absent:
+    """A cell that carries NO gradable answer, with the reason preserved. Falsy on purpose.
+
+    Typed so a truncation and a clean-stop empty stop travelling as the same bare None:
+    the reason survives to the fault ledger and the transcript, while every liveness
+    verdict still asks ONE question — is_absent(cell) — never the reason.
+    """
+
+    __slots__ = ("reason",)
+
+    def __init__(self, reason: str):
+        self.reason = reason
+
+    def __repr__(self) -> str:
+        return f"Absent({self.reason!r})"
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Absent) and other.reason == self.reason
+
+    def __hash__(self) -> int:
+        return hash(("Absent", self.reason))
+
+
+def is_absent(cell: object) -> bool:
+    """THE absence predicate — the single authority every liveness/emptiness verdict routes
+    through (panel scorer, pairwise agreement, this guard). Absent means: None (transport
+    failure / never ran), a typed Absent (truncation, clean-stop empty), or content that is
+    empty after strip. Everything else is PRESENT, even when wrong — wrong is graded, absent
+    is referred here. Found live (Rosetta's clean-stop receipt, 2026-08-11): a '' with
+    finish_reason 'stop' was dead to this guard and live-wrong to the scorer, because two
+    definitions of absence existed. There is one now; the decision-surface sweep in the panel
+    selftest fails the build if a second one grows back.
+    """
+    if cell is None or isinstance(cell, Absent):
+        return True
+    return isinstance(cell, str) and not cell.strip()
+
+
+# The absence-SHAPE inventory for the decision-surface sweep, kept NEXT TO is_absent so the
+# two move in the same commit (the blocklist-rot fix agreed with @sram): when is_absent learns
+# a new form, this list learns its source shape here, not in a test file someone forgets.
+ABSENCE_SHAPES = (
+    r"\bis\s+(?:not\s+)?None\b",      # identity checks on a cell carrier
+    r"==\s*(?:''|\"\")",              # equality against the empty string
+    r"!=\s*(?:''|\"\")",
+    r"\(\s*\w+\s+or\s+(?:''|\"\")\s*\)",  # the (raw or '') coalescing idiom
+    r"\bnot\s+\w+(?:\.\w+)*\.strip\(\)",   # truthiness-after-strip (liveness), NOT grading equality
+    r"\bif\s+\w+(?:\.\w+)*\.strip\(\)\s*:",
+    r"finish_reason",                 # transport-reason keying outside the classifier
+)
+
+
 class CellYieldAbort(RuntimeError):
     """Raised the moment a run stops being able to produce a real number."""
 
@@ -133,8 +188,10 @@ class CellYieldGuard:
                 f"typo'd arm name would otherwise be counted nowhere."
             )
         c = self._per.setdefault((model, arm), _Counter())
-        is_empty = not (raw or "").strip()
-        is_unparsed = (not is_empty) and parsed is None
+        # Both verdicts route through the single predicate — this guard must never again hold
+        # a private definition of empty that the scorer does not share.
+        is_empty = is_absent(raw)
+        is_unparsed = (not is_empty) and is_absent(parsed)
 
         for t in (c, self._all):
             t.n += 1

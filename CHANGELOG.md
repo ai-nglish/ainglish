@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2.18 — 2026-08-11
+- **Absence is ONE predicate.** The served harness carried three private definitions of "this
+  cell has no answer" (`finish_reason == 'length'` → bare None in `ask()`, truthiness-after-strip
+  in the yield guard, `is not None` in the scorer), and they disagreed on a clean-stop empty
+  (`''` + `finish_reason 'stop'`): dead to the guard, graded live-wrong by the scorer —
+  Rosetta's receipt against v0.2.15, acknowledged as a promise that ran ahead of the artifact.
+  Now: `empty_cell_guard.is_absent` is the single authority; `ask()` returns TYPED absence
+  (`Absent('truncated')` / `Absent('empty_stop')`) so reasons survive without a second liveness
+  computation; the scorer, pairwise agreement, calibration completeness, quartet completeness and
+  both `observe()` call sites route through it. The panel selftest carries the enforcement PAIR:
+  a mutation test (flip `is_absent`; BOTH consumers must move) and @sram's decision-surface
+  sweep (any line keying a cell carrier against an absence shape outside the predicate fails the
+  build; the shape inventory lives NEXT TO `is_absent` so they move in the same commit). The
+  clean-stop input is pinned as a regression fixture.
+- **Release preflight now catches a stale served pin.** `mirror_parity` proves self-consistency
+  (the redirect serves the tag it names) and stays green when the pin simply never advances;
+  the new check compares the pin's mirrored bytes against the DECLARED version's tag and fails
+  the release when they differ (the v0.2.15→v0.2.17 pin jump was harmless only because 0.2.16
+  changed no mirrored file — this makes that luck a checked invariant).
+
 ## 0.2.17 — 2026-08-11
 - **Proposal traversal no longer stops at an invisible first-page boundary.** `proposals()` accepts
   the register's opaque cursor and documents its pagination envelope; `proposal_pages()` yields

@@ -183,13 +183,13 @@ def reader_receipt(endpoint):
     out = {k: resolved[k] for k in ("name", "provider", "model", "precision", "api")
            if k in resolved and resolved[k] not in (None, "")}
     if resolved.get("base_url"):
-        parsed = urllib.parse.urlsplit(str(resolved["base_url"]))
-        host = parsed.hostname or ""
+        url_parts = urllib.parse.urlsplit(str(resolved["base_url"]))
+        host = url_parts.hostname or ""
         if ":" in host and not host.startswith("["):
             host = "[" + host + "]"
-        if parsed.port is not None:
-            host += ":" + str(parsed.port)
-        out["base_url"] = urllib.parse.urlunsplit((parsed.scheme, host, parsed.path, "", ""))
+        if url_parts.port is not None:
+            host += ":" + str(url_parts.port)
+        out["base_url"] = urllib.parse.urlunsplit((url_parts.scheme, host, url_parts.path, "", ""))
     out.update(bounds_for(endpoint))
     return out
 
@@ -230,6 +230,39 @@ def chat(endpoint, prompt):
     return choice["message"]["content"], choice.get("finish_reason") == "length"
 
 
+_ECG = None
+
+
+def absence_module():
+    """The guard module — the single home of Absent/is_absent — loaded once, path-adjacent, so
+    the packaged and single-file-download layouts resolve the SAME definition."""
+    global _ECG
+    if _ECG is None:
+        import importlib.util as _ilu
+        import os as _os
+        import sys as _sys
+        gp = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "empty_cell_guard.py")
+        spec = _ilu.spec_from_file_location("_ecg", gp)
+        mod = _ilu.module_from_spec(spec)
+        # sys.modules FIRST: @dataclass resolves sys.modules[cls.__module__].__dict__ during
+        # exec_module, so a module absent from the table dies with a bare
+        # "'NoneType' has no attribute '__dict__'".
+        _sys.modules["_ecg"] = mod
+        spec.loader.exec_module(mod)
+        _ECG = mod
+    return _ECG
+
+
+def is_absent(cell):
+    """Routing, not a second computation: delegates to THE predicate in empty_cell_guard."""
+    return absence_module().is_absent(cell)
+
+
+def Absent(reason):
+    """Constructor passthrough for the guard's typed absence."""
+    return absence_module().Absent(reason)
+
+
 def ask(endpoint, text, question, options):
     """Present one item arm and force a choice from the fixed options."""
     prompt = (f"Read this message written by one agent to another:\n\n---\n{text}\n---\n\n"
@@ -240,10 +273,16 @@ def ask(endpoint, text, question, options):
         # Hit the token bound before answering. Scoring that as a wrong answer is the empty-cell
         # failure one shape over, and strictly harder to see: an empty response at least LOOKS
         # broken, whereas a truncation returns a plausible non-empty fragment, so the cell reads
-        # as live and the yield guard never gets to weigh it. None is the dead-cell signal
-        # observe() already understands — a fault is referred to the guard, never graded.
-        return None
+        # as live and the yield guard never gets to weigh it. Typed absence — a fault is
+        # referred to the guard with its reason, never graded.
+        return Absent("truncated")
     out = out.strip().casefold()
+    if not out:
+        # A clean stop that said NOTHING ('' with finish_reason 'stop'). Before is_absent
+        # existed this fell through to the off-option return below as '' — dead to the yield
+        # guard, live-wrong to the scorer, simultaneously (Rosetta's receipt on the served
+        # v0.2.15). Absence is one question with one answer now.
+        return Absent("empty_stop")
     # The prompt requires one exact option, so grade that contract exactly. Substring matching
     # makes overlapping labels order-dependent: with ["yes", "no", "cannot tell"], the valid
     # answer "cannot tell" contains "no" and was therefore scored as "no". The served control
@@ -277,13 +316,14 @@ def score(rows, items):
     acc, ent = {}, {}
     for arm in ("english", "ainglish"):
         arm_rows = [r for r in rows if r[1] == arm]
-        # None is the harness-wide dead-cell signal: transport faults and token-bound truncations
-        # arrive here as absence, not as a model answer. The yield guard decides whether enough
-        # cells survived to emit; the scorer must then condition every statistic on those live
-        # cells. Turning None into the literal answer "none" quietly grades a wire failure wrong
-        # and also creates an entropy category that no reader selected.
-        live_rows = [r for r in arm_rows if r[3] is not None]
-        graded = [r for r in live_rows if key[r[0]].get("answer") is not None]
+        # Absence is the harness-wide dead-cell signal: transport faults, token-bound
+        # truncations and clean-stop empties all arrive as is_absent-true cells, never as model
+        # answers. The yield guard decides whether enough cells survived to emit; the scorer must
+        # then condition every statistic on those live cells — through the SAME predicate the
+        # guard uses, or the two disagree on what dead means (the clean-stop split, found live).
+        live_rows = [r for r in arm_rows if not is_absent(r[3])]
+        expected = {i: k.get("answer") for i, k in key.items()}
+        graded = [r for r in live_rows if expected[r[0]] is not None]
         acc[arm] = (sum(1 for r in graded if str(r[3]).lower() == str(key[r[0]]["answer"]).lower()) / len(graded)) if graded else None
         by_item = {}
         for r in live_rows:
@@ -307,8 +347,8 @@ def pairwise_agreement(rows):
     by_cell = {}
     for iid, arm, who, ans in rows:
         # Agreement is between reader answers. Two readers losing the same HTTP response did not
-        # agree on the item, and None == None must not manufacture perfect correlation.
-        if ans is None:
+        # agree on the item, and absent == absent must not manufacture perfect correlation.
+        if is_absent(ans):
             continue
         by_cell.setdefault((iid, arm), []).append(ans)
     same = total = 0
@@ -347,17 +387,7 @@ def bootstrap_delta(rows, items, metric, n=2000, seed=0):
 def load_cell_guard(arms):
     """The cell-yield guard, loaded fresh per run. Returns a guard or raises — callers refuse the
     whole run on failure (an unavailable guard is an unmeasured panel)."""
-    import importlib.util as _ilu
-    import os as _os
-    import sys as _sys
-    _gp = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "empty_cell_guard.py")
-    _spec = _ilu.spec_from_file_location("_ecg", _gp)
-    _ecg = _ilu.module_from_spec(_spec)
-    # sys.modules FIRST: @dataclass resolves sys.modules[cls.__module__].__dict__ during
-    # exec_module, so a module absent from the table dies with a bare
-    # "'NoneType' has no attribute '__dict__'".
-    _sys.modules["_ecg"] = _ecg
-    _spec.loader.exec_module(_ecg)
+    _ecg = absence_module()
     return _ecg, _ecg.CellYieldGuard(arms=arms)
 
 
@@ -515,7 +545,7 @@ def run_robustness(manifest, ask_fn=ask):
                             fault_total += 1
                             answer = None
                         try:
-                            guard.observe(ep["name"], cell, answer if answer is None else str(answer), answer)
+                            guard.observe(ep["name"], cell, None if is_absent(answer) else str(answer), answer)
                         except _ecg.CellYieldAbort as abort:
                             print(f"\n{abort}\nNo measurement emitted — a fault-produced "
                                   "degradation is worse than none, because it looks like a result.")
@@ -525,7 +555,7 @@ def run_robustness(manifest, ask_fn=ask):
 
     def acc(block, arm, cond, ids=None):
         key = {i["id"]: i for i in block}
-        cells = [r for r in rows if r[1] == arm and r[2] == cond and r[4] is not None
+        cells = [r for r in rows if r[1] == arm and r[2] == cond and not is_absent(r[4])
                  and r[0] in key and (ids is None or r[0] in ids)]
         if not cells:
             return None
@@ -545,7 +575,7 @@ def run_robustness(manifest, ask_fn=ask):
     for ep in panel:
         missing = [(item["id"], arm) for item in calib for arm in ("english", "ainglish")
                    if not any(r[0] == item["id"] and r[1] == arm and r[3] == ep["name"]
-                              and r[4] is not None for r in rows)]
+                              and not is_absent(r[4]) for r in rows)]
         if missing:
             print(f"REFUSING to run: reader {ep['name']!r} has no live calibration answer for "
                   f"{missing} — an uncalibrated reader cannot enter real scoring, because the "
@@ -585,7 +615,7 @@ def run_robustness(manifest, ask_fn=ask):
         if item_id in key_items:
             quartets.setdefault((item_id, reader), {})[(arm, cond)] = answer
     complete = {k: v for k, v in quartets.items()
-                if len(v) == 4 and all(a is not None for a in v.values())}
+                if len(v) == 4 and not any(is_absent(a) for a in v.values())}
 
     diffs = []
     floors = 0
@@ -874,7 +904,7 @@ def run_panel(manifest, ask_fn=ask):
                     per_arm[fault.reason] = per_arm.get(fault.reason, 0) + 1
                     answer = None
                 try:
-                    guard.observe(ep["name"], arm, answer if answer is None else str(answer), answer)
+                    guard.observe(ep["name"], arm, None if is_absent(answer) else str(answer), answer)
                 except _ecg.CellYieldAbort as abort:
                     print(f"\n{abort}\nNo measurement emitted — a fault-produced delta is worse "
                           "than no delta, because it looks like a result.")
@@ -1275,8 +1305,9 @@ def selftest():
              {"content": [{"text": "process-ran, and the reason is"}], "stop_reason": "max_tokens"}),
         ):
             _open = _capture(payload)
-            assert ask(entry, "text", "q?", ["process-ran", "cannot tell"]) is None, \
-                f"{label}: a bound-truncated read must be a dead cell, not a scored answer"
+            _cut = ask(entry, "text", "q?", ["process-ran", "cannot tell"])
+            assert is_absent(_cut) and getattr(_cut, "reason", None) == "truncated", \
+                f"{label}: a bound-truncated read must be a TYPED dead cell, not a scored answer (got {_cut!r})"
 
         # Option labels can overlap. "cannot tell" contains the shorter valid option "no", and
         # the old substring parser returned whichever option appeared first in the manifest.
@@ -1741,9 +1772,77 @@ def selftest():
     assert AINGLISH_OIDC_SCOPE == "openid profile colony:karma", \
         "one shared exchange scope; colony:karma is optional display, not a gate"
 
+    # ---- absence: ONE predicate, both consumers, no second computation (Rosetta's receipt) ----
+    _ecg_m = absence_module()
+
+    # (1) The pinned regression: '' with finish_reason 'stop' — the exact input the served
+    # v0.2.15 graded dead-by-guard and live-by-scorer SIMULTANEOUSLY. ask() must type it.
+    _open = _capture({"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]})
+    clean_stop = ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?", ["yes", "no"])
+    assert isinstance(clean_stop, _ecg_m.Absent) and clean_stop.reason == "empty_stop", \
+        f"a clean-stop empty must be TYPED absence, got {clean_stop!r}"
+    _open = _capture({"choices": [{"message": {"content": "truncat"}, "finish_reason": "length"}]})
+    cut = ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?", ["yes", "no"])
+    assert isinstance(cut, _ecg_m.Absent) and cut.reason == "truncated", \
+        "truncation and clean-stop must be DISTINGUISHABLE absences, not one bare None"
+    # Both consumers, one verdict: the guard counts it dead AND the scorer's live filter drops it.
+    _g = _ecg_m.CellYieldGuard(arms=("a",), min_cells=0) if "min_cells" in _ecg_m.CellYieldGuard.__dataclass_fields__ else _ecg_m.CellYieldGuard(arms=("a",))
+    _g.observe("m", "a", None if is_absent(clean_stop) else str(clean_stop), clean_stop)
+    assert _g._all.empty == 1, "the guard must count a clean-stop empty as dead"
+    _fixture_rows = [("i1", "english", "baseline", "m", clean_stop), ("i1", "english", "baseline", "m", "yes")]
+    _live = [r for r in _fixture_rows if not is_absent(r[4])]
+    assert len(_live) == 1, "the scorer-side filter must exclude the same cell the guard counted dead"
+
+    # (2) The mutation pair: flip is_absent and BOTH consumers must move — proving each routes
+    # through the single predicate instead of holding a private definition that happens to agree.
+    _real_is_absent = _ecg_m.is_absent
+    _ecg_m.is_absent = lambda cell: False  # the mutant: nothing is ever absent
+    try:
+        _gm = _ecg_m.CellYieldGuard(arms=("a",))
+        _gm.observe("m", "a", None, None)
+        _guard_moved = _gm._all.empty == 0
+        _scorer_moved = len([r for r in _fixture_rows if not is_absent(r[4])]) == 2
+    finally:
+        _ecg_m.is_absent = _real_is_absent
+    assert _guard_moved, "MUTATION NOT DETECTED: the guard does not route through is_absent"
+    assert _scorer_moved, "MUTATION NOT DETECTED: the scorer filter does not route through is_absent"
+
+    # (3) The decision-surface sweep (@sram's allowlist inversion): any code line that keys a
+    # CELL CARRIER against an absence shape, outside the single allowed computation, is a second
+    # absence definition growing back — the fifth patch wearing a shared name. The shape
+    # inventory lives NEXT TO is_absent in the guard (same-commit rule). finish_reason is
+    # standalone: keying on the transport reason ANYWHERE outside chat() is a violation whether
+    # or not a carrier shares the line, because chat() is the one classifier allowed to read it.
+    import re as _re
+    _carrier_re = _re.compile(r"\b(?:raw|cell|answer|ans|parsed)\b|r\[[34]\]")
+    _sweep_hits = []
+    for _fname in ("panel.py", "empty_cell_guard.py"):
+        _fn = ""
+        _in_tests = False
+        for _ln, _line in enumerate(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), _fname)).read().splitlines(), 1):
+            if _re.match(r"(?:def |class )", _line):
+                _fn = _line.strip()
+                # test scaffolding builds fixture cells on purpose; the sweep guards PRODUCTION
+                # verdict paths (everything before each file's selftest section).
+                _in_tests = _in_tests or _fn.startswith(("def selftest", "def _ok", "def _run", "def _stream"))
+            _code = _line.split("#", 1)[0]
+            if _in_tests or not _code.strip():
+                continue
+            if "finish_reason" in _code and not _fn.startswith(("def chat", "def is_absent")):
+                _sweep_hits.append(f"{_fname}:{_ln} in {_fn!r}: transport-reason keying outside chat(): {_code.strip()!r}")
+                continue
+            if _carrier_re.search(_code) and not _fn.startswith(("def is_absent",)):
+                for _shape in _ecg_m.ABSENCE_SHAPES:
+                    if _shape == "finish_reason":
+                        continue
+                    if _re.search(_shape, _code):
+                        _sweep_hits.append(f"{_fname}:{_ln} in {_fn!r}: {_code.strip()!r} matches {_shape!r}")
+    assert not _sweep_hits, "decision-surface violations (a second absence computation):\n  " + "\n  ".join(_sweep_hits)
+
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
-          "censors floors beside their uncensored twin.")
+          "censors floors beside their uncensored twin; absence is ONE predicate (typed, "
+          "mutation-verified, decision-surface swept).")
 
 
 DEMO_NOTE = """{

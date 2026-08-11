@@ -254,6 +254,59 @@ def check_index(offline: bool) -> None:
           info=f"latest {data['info']['version']}")
 
 
+def check_pin_not_stale(offline: bool) -> None:
+    """The served pin may trail the declared version ONLY while the mirrored bytes are identical.
+
+    mirror_parity proves the redirect serves the bytes of the tag it NAMES — self-consistency —
+    and stays green forever on a pin that simply never advances. Demonstrated live: the pin sat
+    at v0.2.15 through the 0.2.16 release (harmless — no mirrored file changed) and would have
+    sat just as green through a release that changed panel.py, serving replicators an older
+    instrument than the release notes describe. So: compare the PIN's bytes against the DECLARED
+    version's tag, per mirrored file. Identical → allowed lag, noted. Different → the release is
+    incomplete: bump the .htaccess pin, re-sync the symfony fixtures, deploy.
+    Compared tag-to-tag (never against the working tree) so ordinary commits between releases
+    cannot redden this; before the declared tag exists the check defers, loudly.
+    """
+    if offline:
+        notes.append("--offline: pin staleness not checked")
+        return
+    url = f"{REGISTER}/{MIRRORED[0]}"
+    try:
+        req = urllib.request.Request(url, method="HEAD")
+        resp = urllib.request.build_opener(_NoRedirect()).open(req, timeout=40)
+        loc = resp.headers.get("Location", "")
+    except urllib.error.HTTPError as e:
+        loc = e.headers.get("Location", "")
+    except (urllib.error.URLError, TimeoutError) as e:
+        notes.append(f"{url} unreachable ({e}) — pin staleness not checked")
+        return
+    m = re.search(r"/ai-nglish/ainglish/(v[^/]+)/", loc)
+    if not m:
+        notes.append(f"pin tag not extractable from {loc!r} — mirror_parity carries that failure")
+        return
+    pin = m.group(1)
+    declared_tag = f"v{declared_version()}"
+    if pin == declared_tag:
+        return
+    tags = subprocess.run(["git", "tag", "--list", declared_tag], cwd=ROOT,
+                          capture_output=True, text=True).stdout.strip()
+    if not tags:
+        notes.append(f"pin {pin} trails declared {declared_version()} but {declared_tag} is not "
+                     f"tagged yet — finish the release (tag, then bump the pin), then re-run")
+        return
+    for name in MIRRORED:
+        pinned = subprocess.run(["git", "show", f"{pin}:src/{PKG}/{name}"], cwd=ROOT,
+                                capture_output=True).stdout
+        released = subprocess.run(["git", "show", f"{declared_tag}:src/{PKG}/{name}"], cwd=ROOT,
+                                  capture_output=True).stdout
+        check(f"{name}: pin {pin} not stale vs {declared_tag}", pinned == released,
+              detail=f"{name} CHANGED between {pin} and {declared_tag} but the register still "
+                     f"redirects to {pin} — replicators fetch an older instrument than this "
+                     f"release describes. Bump public/.htaccess in ainglish-symfony, re-sync the "
+                     f"CI fixtures (git show {declared_tag}:src/{PKG}/{name}), and deploy.",
+              info=f"pin trails but bytes identical" if pinned == released else "")
+
+
 def main(argv: list[str]) -> int:
     offline = "--offline" in argv
     print(f"preflight — {PKG} {declared_version()} at {git('rev-parse', '--short', 'HEAD')}\n")
@@ -262,6 +315,7 @@ def main(argv: list[str]) -> int:
     check_tags_declare_their_own_version()
     check_head_tag_matches_declared()
     check_mirror_parity(offline)
+    check_pin_not_stale(offline)
     check_index(offline)
 
     if notes:
