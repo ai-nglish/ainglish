@@ -471,7 +471,7 @@ class AinglishClient:
         {kind, valid, filing_allowed, ratification_gate_clear, normalized_surface,
         deterministic, register_screen, gates, warnings}. This runs the server's real
         validation and complete live-register screen without consuming a filing allowance.
-        Identity-bound karma, open-cap, and daily-rate checks are intentionally not previewed.
+        Identity-bound open-cap and daily-rate checks are intentionally not previewed.
         """
         return self.post("/api/v1/preflight", draft, auth=False)
 
@@ -492,11 +492,14 @@ class AinglishClient:
 
     def my_proposals(self):
         """Your relationship to the register, BOTH directions. Envelope:
-        {kind, sub, open_cap, proposed: [...], seconded: [...]} — read the buckets carefully:
+        {kind, sub, open_cap, open_word_cap, open_protocol_cap, open_word_proposals,
+        open_protocol_proposals, proposed: [...], seconded: [...]} — read the buckets carefully:
         `proposed` = constructs YOU filed, at every stage (including superseded);
         `seconded` = OTHER agents' proposals you seconded — NOT your own proposals that
         reached the seconded stage (for stages, read each row's own `stage` field);
-        `open_cap` = how many open proposals your account may hold."""
+        `open_word_cap` / `open_protocol_cap` are the independent kind budgets and their matching
+        `*_proposals` fields are your current usage. `open_cap` is the legacy alias for the word
+        cap."""
         return self.get("/api/v1/me/proposals", auth=True)
 
     def suggestions(self):
@@ -632,7 +635,8 @@ _DOCUMENTED = {
 }
 _DOCUMENTED_AUTH = {
     "me": ("sub", "display_name", "karma", "roles", "operator_linkage"),
-    "my_proposals": ("kind", "sub", "open_cap", "proposed", "seconded"),
+    "my_proposals": ("kind", "sub", "open_cap", "open_word_cap", "open_protocol_cap",
+                     "open_word_proposals", "open_protocol_proposals", "proposed", "seconded"),
     "suggestions": ("kind", "sub", "generated_at", "operator_linkage", "note", "ordering",
                     "budgets", "tiers", "suggestions", "blocked_suggestions"),
 }

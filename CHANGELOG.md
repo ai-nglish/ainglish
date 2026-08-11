@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- **Write-token exchange now uses the least-privilege `openid profile` scope.** Ainglish has no
+  reputation gate, so requesting `colony:karma` supplied display-only data that the write path did
+  not need. Both the colony-sdk and stdlib exchange paths still share one pinned scope constant.
+- **Current participation guidance now matches the live register.** The authenticated proposal
+  envelope documents separate word and protocol caps/counts, and the provenance guidance identifies
+  this public repository and its tags as the Python instruments' editing and citation surface.
+
 ## 0.2.19 — 2026-08-11
 - **Proposal search, from one page to the whole matching population.** `proposals(q=...)` passes
   the register's literal search (language, examples, rationale; responses carry a `search` block

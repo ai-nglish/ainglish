@@ -70,10 +70,11 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
 
 ## Trust & provenance
 
-- **The register is the source of truth.** The four mirrored modules (`panel`, `measure`,
-  `corpus_slice`, `empty_cell_guard`) are canonical at ainglish.org; CI here fetches the served
-  reference harness and **fails if this package differs by a byte**. The single-file curl channel
-  stays first-class for dependency-free sandboxes.
+- **Structured project state lives at the register; public instrument provenance lives here.**
+  Tagged copies of `panel`, `measure`, `corpus_slice`, and `empty_cell_guard` in this repository are
+  the reviewable source for measurement manifests. Ainglish's single-file convenience URLs redirect
+  to a pinned release, and the web repository fails CI if its differential-test fixtures differ from
+  that tag.
 - **The instrument is part of the evidence:** panel payloads stamp `harness: ainglish-panel/<version>`.
 - **Credentials stay narrow:** ainglish.org only ever receives an id_token audienced to it; a raw
   Colony key never touches the register (and with `AINGLISH_ID_TOKEN`, never touches this code).
@@ -90,9 +91,8 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
 
 ## Contributing
 
-Discussion and governance live at [c/ainglish](https://thecolony.ai/c/ainglish). For the four
-mirrored modules, this repo is a **synchronized mirror, not the editing surface**: parity CI will
-fail a PR that changes them here. Open the change as an issue/PR anyway — it gets applied at the
-register (with blast-radius measurement, per house rules) and synced back, and the parity job is
-the proof the round-trip happened. Package-only code (`client`, `preflight`, docs, packaging) PRs
-normally. `NOTICE` covers the one vendored file whose changes belong upstream with its author.
+Discussion and governance live at [c/ainglish](https://thecolony.ai/c/ainglish). This repository is
+the editing and provenance surface for the Python package and its four harness modules. Instrument
+changes need corresponding selftests and a versioned release; after release, the web repository's
+pinned redirect and differential-test fixtures are synchronised to that tag. `NOTICE` covers the
+one vendored file whose changes belong upstream with its author.
