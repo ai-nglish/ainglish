@@ -253,24 +253,15 @@ def build(argv, totp=None):
 
 LIVE_WORD_STAGES = {"proposed", "seconded", "measured", "ratified", "tracked"}
 AINGLISH_PAGE_SIZE = 200
-AINGLISH_PAGE_CAP = 100000
 
 
 def ainglish_proposals():
-    """Enumerate proposals without allowing an ignored offset to masquerade as pagination."""
-    rows, seen, offset = [], set(), 0
-    while offset < AINGLISH_PAGE_CAP:
-        query = urllib.parse.urlencode({"limit": AINGLISH_PAGE_SIZE, "offset": offset})
-        page = json.loads(http(f"{AINGLISH}/api/v1/proposals?{query}")).get("proposals", [])
-        new = [row for row in page if row.get("slug") not in seen]
-        rows.extend(new)
-        seen.update(row.get("slug") for row in new)
-        if len(page) < AINGLISH_PAGE_SIZE:
-            return rows, False
-        if not new:
-            return rows, True
-        offset += AINGLISH_PAGE_SIZE
-    return rows, True
+    """Enumerate the complete register using the reference harness's cursor walker."""
+    try:
+        return measure.proposal_population(AINGLISH, page_limit=AINGLISH_PAGE_SIZE, fetch=http), False
+    except RuntimeError as exc:
+        print("proposal population incomplete: %s" % exc, file=sys.stderr)
+        return [], True
 
 
 def register_word_population(extra):
@@ -411,21 +402,26 @@ def selftest():
     assert cuts == [] and {r["id"] for r in got} == {"new-parent", "new-reply-old-thread"}
     assert receipt["general"] == {"parents_fetched": 2, "posts_in_window": 1, "comments_in_window": 1}
 
-    # Pagination either reaches the final short page or reports truncation. An endpoint that
-    # ignores offset must never make the first 200 rows look like a complete register.
+    # Pagination follows the server's opaque cursor beyond 200 rows. A stalled cursor must never
+    # make the first page look like a complete register.
     old_http = globals()["http"]
     first = [{"slug": f"p-{n}"} for n in range(AINGLISH_PAGE_SIZE)]
     def paginating_http(url, *args, **kwargs):
-        offset = int(urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("offset", [0])[0])
-        rows = first if offset == 0 else ([{"slug": "last"}] if offset == AINGLISH_PAGE_SIZE else [])
-        return json.dumps({"proposals": rows}).encode()
+        cursor = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query).get("cursor", [None])[0]
+        if cursor is None:
+            return json.dumps({"proposals": first, "pagination": {
+                "total": AINGLISH_PAGE_SIZE + 1, "has_more": True, "next_cursor": "opaque-next"}}).encode()
+        assert cursor == "opaque-next"
+        return json.dumps({"proposals": [{"slug": "last"}], "pagination": {
+            "total": AINGLISH_PAGE_SIZE + 1, "has_more": False, "next_cursor": None}}).encode()
     globals()["http"] = paginating_http
     try:
         proposals, cut = ainglish_proposals()
         assert len(proposals) == AINGLISH_PAGE_SIZE + 1 and not cut
-        globals()["http"] = lambda *a, **k: json.dumps({"proposals": first}).encode()
+        globals()["http"] = lambda *a, **k: json.dumps({"proposals": first, "pagination": {
+            "total": AINGLISH_PAGE_SIZE + 1, "has_more": True, "next_cursor": "same"}}).encode()
         proposals, cut = ainglish_proposals()
-        assert len(proposals) == AINGLISH_PAGE_SIZE and cut
+        assert proposals == [] and cut
     finally:
         globals()["http"] = old_http
 
