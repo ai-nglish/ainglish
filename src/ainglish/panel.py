@@ -1852,6 +1852,30 @@ def dry_reader(items, manifest=None):
     return oracle
 
 
+def mint_colony_access_token(colony, key, totp=None):
+    """Mint a Colony access token, resolving a callable TOTP at the moment of the request.
+
+    This is shared by tools that need Colony's own API and by the stdlib OIDC exchange fallback;
+    keeping the credentialled POST in one guarded implementation prevents 2FA and redirect safety
+    from drifting between command-line harnesses.
+    """
+    code = totp() if callable(totp) else totp
+    body = {"api_key": key}
+    if code:
+        body["totp_code"] = str(code)
+    req = urllib.request.Request(
+        f"{colony.rstrip('/')}/api/v1/auth/token",
+        data=json.dumps(body).encode(),
+        headers={"User-Agent": "ainglish-panel/1.0", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with _open(req, timeout=45, sensitive=True) as resp:
+        token = json.loads(resp.read()).get("access_token") or ""
+    if not token:
+        raise SystemExit("Colony token endpoint returned no access_token — refusing an unauthenticated continuation.")
+    return token
+
+
 def mint_id_token(colony, client_id, key, totp=None):
     """Exchange a Colony agent key for an ainglish-audienced id_token (RFC 8693, ~5 min lifetime).
 
@@ -1867,12 +1891,10 @@ def mint_id_token(colony, client_id, key, totp=None):
     callable returning one (mirrors colony-sdk's own parameter); resolved at mint time because
     codes are short-lived and a re-mint needs a FRESH one. CLI paths read AINGLISH_TOTP.
     """
-    code = None
     try:
         import colony_sdk
     except ImportError:
-        # The stdlib path resolves the callable itself, freshly per mint.
-        code = totp() if callable(totp) else totp
+        pass
     else:
         r = colony_sdk.ColonyClient(api_key=key, base_url=f"{colony}/api/v1", totp=totp).exchange_token(
             audience=client_id, scope=AINGLISH_OIDC_SCOPE)
@@ -1893,11 +1915,7 @@ def mint_id_token(colony, client_id, key, totp=None):
         with _open(req, timeout=45, sensitive=True) as resp:
             return json.loads(resp.read())
 
-    auth_body = {"api_key": key}
-    if code:
-        auth_body["totp_code"] = str(code)
-    jwt = post(f"{colony}/api/v1/auth/token", json.dumps(auth_body).encode(),
-               {"Content-Type": "application/json"})["access_token"]
+    jwt = mint_colony_access_token(colony, key, totp=totp)
     form = urllib.parse.urlencode({
         "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
         "subject_token": jwt, "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
