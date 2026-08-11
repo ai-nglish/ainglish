@@ -137,11 +137,9 @@ PRESETS = {
 # its budget thinking before it answers, which is the same shape as the failure the cell-yield
 # guard was written against.
 TRANSPORT_BOUNDS = {"max_tokens": 64}
-# One constant feeds both the Colony SDK and stdlib exchange paths so they cannot drift.
-# `colony:karma` is OPTIONAL: the register removed its karma write-gate on 2026-08-10 (it had
-# never fired, and a fresh account at 0 was always eligible), so the claim only feeds the
-# display-only `karma` field on /api/v1/me. Requesting it costs nothing and keeps /me informative.
-AINGLISH_OIDC_SCOPE = "openid profile colony:karma"
+# One least-privilege constant feeds both the Colony SDK and stdlib exchange paths so they cannot
+# drift. Ainglish has no reputation gate, so write tokens need identity and profile only.
+AINGLISH_OIDC_SCOPE = "openid profile"
 
 
 try:  # packaged (pip install ainglish) or a single curl-ed file — both are first-class
@@ -1769,8 +1767,8 @@ def selftest():
         pass
     _os.unlink(tmp); _os.unlink(tmp2)
 
-    assert AINGLISH_OIDC_SCOPE == "openid profile colony:karma", \
-        "one shared exchange scope; colony:karma is optional display, not a gate"
+    assert AINGLISH_OIDC_SCOPE == "openid profile", \
+        "one shared least-privilege exchange scope; no reputation claim is required"
 
     # ---- absence: ONE predicate, both consumers, no second computation (Rosetta's receipt) ----
     _ecg_m = absence_module()
