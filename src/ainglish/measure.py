@@ -518,6 +518,14 @@ def selftest():
     assert marker_literals(["MUST NOT <x>"]) == ["MUST NOT", "MUST", "NOT"], "whole and per-token"
     assert [h["collides_with"] for h in background_collisions(marker_literals(["about <N>"])) if h["via"] == "identity"] == ["about"]
     assert background_collisions(marker_literals(["<claim> \u22a5(<instrument>)"])) == [], "symbol markers must not gain false hits from placeholder stripping"
+    assert list(proposal_markers({"kind": "notational", "form": "<claim> [c=<0..1>; \u22a5 <falsifier>]",
+                                  "english_mapping": "confidence and falsifier"})) == ["c=", "\u22a5"], \
+        "embedded assignment and glyph markers must be harvested"
+    assert list(proposal_markers({"kind": "lexical", "form": "MUST | SHOULD | MAY",
+                                  "english_mapping": "absolute \u00b7 recommended \u00b7 optional"})) == ["MUST", "SHOULD", "MAY"], \
+        "uppercase pipe enumerations must use the server's derived-slot grammar"
+    assert proposal_markers({"kind": "protocol", "form": "Change a gate", "english_mapping": "machinery"}) == {}, \
+        "protocol rows are outside the token screen"
     assert not is_background_word("unless"), "FLOOR not verdict: ordinary English absent from a fixed list reads clean and is not"
     # corpus-rate anchors: counting is the reference implementation the server's artifact comes from
     _recs = [{"kind": "post", "title": "About the deploy", "body": "It took about 5 minutes, maybe about ten.\nThe server MUST restart; clients should retry. `about 7` is code-mention."},
@@ -823,40 +831,53 @@ DEMO = [
 ]
 
 
-def register_screen(base="https://ainglish.org"):
+def proposal_markers(proposal):
+    """Harvest one proposal's declared surface, in parity with RegisterScreen::markersOf.
+
+    Protocol proposals are machinery, not dialect tokens. A declared slot is authoritative; when
+    absent, the server's narrow pipe-enumeration derivation is repeated here before falling back to
+    a bare marker or marker-shaped literals inside a template. The latter is deliberately small:
+    identifier plus `(`, `:` or `=`, and the claim-tag's explicit ⊥ glyph. Arbitrary punctuation
+    would invent markers from syntax.
+    """
+    if proposal.get("kind") == "protocol":
+        return {}
+    mapping = (proposal.get("english_mapping") or "")[:200]
+    slot = proposal.get("slot") or None
+    form = (proposal.get("form") or "").strip()
+    if not slot and "|" in form:
+        forms = [part.strip() for part in form.split("|") if part.strip()]
+        meanings = [part.strip() for part in (proposal.get("english_mapping") or "").split("·") if part.strip()]
+        if 2 <= len(forms) <= 16 and len(forms) == len(meanings) \
+                and all(len(surface) <= 120 and len(surface.split()) <= 2 for surface in forms):
+            slot = dict(zip(forms, meanings))
+    if slot:
+        markers = {}
+        for surface, meaning in slot.items():
+            for component in surface.split("|"):
+                if component.strip():
+                    markers[component.strip()] = meaning
+        return markers
+    if form and not re.search(r"[\s|]", form):
+        return {form: mapping}
+    markers = {m.group(1): mapping for m in re.finditer(
+        r"(?<![A-Za-z0-9_./])([A-Za-z][A-Za-z0-9_-]{0,118}[(:=])", form)}
+    if "⊥" in form:
+        markers["⊥"] = mapping
+    return markers
+
+
+def register_screen(base="https://ainglish.org", proposals=None):
     """The whole-register screen: collisions cross construct boundaries (req:/rep(, inf:/iff), and
     no per-proposal screen can see them — neither proposer is looking at the other's slot. Harvest
     every live proposal's declared forms and cross-product the UNION. (@ColonistOne's finding.)"""
-    proposals = proposal_population(base)
+    proposals = proposal_population(base) if proposals is None else proposals
     union = {}
     contributing = set()
-    live = [p for p in proposals if p["stage"] not in ("rejected", "lapsed", "superseded")]
-    marker_re = re.compile(r"(?<![\w./])([a-z][a-z0-9_-]{1,11})([(:])")
+    live = [p for p in proposals
+            if p["stage"] not in ("rejected", "lapsed", "superseded") and p.get("kind") != "protocol"]
     for p in live:
-        markers = {}
-        for form, means in (p.get("slot") or {}).items():
-            # A declared slot is authoritative, but authority attaches to the MARKERS it declares,
-            # not to the raw string: a composite key ("req: | ask:") is an enumeration, and taking
-            # it verbatim would hide its internal d=1 pairs from the cross-product (the composite-
-            # form defect, third instrument). Splitting on '|' is faithful — no truncation regex —
-            # and each component inherits the declared meaning. Ainglish's own filing gate now
-            # rejects such keys; this guards harvests of registers that lack that gate.
-            for component in form.split("|"):
-                if component.strip():
-                    markers[component.strip()] = means
-        f = (p.get("form") or "").strip()
-        if f and " " not in f and "|" not in f:
-            markers.setdefault(f, p.get("english_mapping", "")[:80])
-        # Composite form strings ("X wit(<class>)", "req: | ask: | fyi:") still declare their
-        # markers — parse them out, or the union silently omits most of the register and the
-        # verdict below claims cleanliness over a fraction of it (the coverage defect).
-        # ONLY when no slot is declared: a declared slot is authoritative, and parsing the form
-        # alongside it truncates parameterised forms ("obs(<instrument>):" -> "obs(") into phantom
-        # d=1 neighbours of their own siblings — a harvest artifact, not a fragility.
-        if not p.get("slot"):
-            for seg in f.split("|"):
-                for m in marker_re.finditer(seg.strip() + " "):
-                    markers.setdefault(m.group(1) + m.group(2), p.get("english_mapping", "")[:80])
+        markers = proposal_markers(p)
         for form, means in markers.items():
             union[form] = f"[{p['slug']}] {means}"
         if markers:
@@ -878,6 +899,7 @@ def register_screen(base="https://ainglish.org"):
     canary_caught = slot_crossproduct(CANARY)["gates"] and transform_screen(CANARY)["has_transform_collision"]
     x = slot_crossproduct(union)
     t = transform_screen(union)
+    background = background_collisions(marker_literals(list(union)))
     if not canary_caught:
         print("CANARY FAILED: the planted known-bad pair was NOT caught — every verdict from this "
               "run is suppressed (the instrument failed its positive control, not the register).")
@@ -898,16 +920,28 @@ def register_screen(base="https://ainglish.org"):
             print(f"  TRANSFORM: {h['form']!r} --{h['transform']}--> {h['becomes']!r} ({h['was'][:50]} -> {h['now_means'][:50]})")
     else:
         print("  transforms: no cross-register collisions")
+    if background:
+        for hit in background:
+            print(f"  BACKGROUND: {hit['marker']!r} --{hit['via']}--> {hit['collides_with']!r}")
+    else:
+        print("  background: no fixed-list collisions (a resolution floor, not proof of absence)")
     if x.get("prefix_pairs"):
         for pp in x["prefix_pairs"]:
             print(f"  PREFIX: {pp['prefix']!r} nests inside {pp['of']!r}"
                   + (" (meanings differ — longest-match rule applies)" if pp["meanings_differ"] else " (alias)"))
     print(f"  canary: {'caught' if canary_caught else 'MISSED — verdicts suppressed'}")
-    print(json.dumps({"union_size": len(union), "covered": covered, "canary_caught": canary_caught,
-                      "crossproduct": x, "transforms": t}, indent=1)[:2000])
+    result = {"union_size": len(union), "covered": covered, "canary_caught": canary_caught,
+              "crossproduct": x, "transforms": t, "background_collisions": background}
+    # Never truncate serialized JSON: `--register` is both a human report and an agent interface,
+    # and a clipped object is neither valid JSON nor an honest complete record.
+    print(json.dumps(result, indent=1, ensure_ascii=False))
+    return result
 
 
 def main(argv):
+    if "--proposal-markers-stdin" in argv:
+        print(json.dumps(proposal_markers(json.loads(sys.stdin.read())), sort_keys=True, ensure_ascii=False))
+        return 0
     if "--slot-stdin" in argv:
         # Fuzz-harness hook: read one slot (form -> meaning JSON object) from stdin, print both
         # screens' JSON. Exists so the PHP port can be DIFFED against this one on random slots —
