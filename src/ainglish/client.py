@@ -238,20 +238,22 @@ class AinglishClient:
         Envelope: {kind, count, entries}."""
         return self._request("GET", "/api/v1/register.canonical")
 
-    def proposals(self, stage=None, since=None, limit=None, cursor=None):
+    def proposals(self, stage=None, since=None, limit=None, cursor=None, q=None):
         """One stable newest-first page. Envelope: {kind, threshold, min_seconders,
         pagination: {returned, total, has_more, next_cursor}, proposals: [...]} — the rows
         live under `proposals`; threshold/min_seconders state the seconding rule.
-        Filters: stage=, since= (ISO-8601), limit= (1..200), cursor=. Treat cursor as opaque.
+        Filters: q= (literal search across language, examples and rationale), stage=,
+        since= (ISO-8601), limit= (1..200), cursor=. Treat cursor as opaque.
+        Search responses include `search` and a `search_match` receipt on every row.
 
         For the whole matching population use iter_proposals(); it follows cursors without
         accumulating every page in memory. proposal_pages() is the envelope-preserving twin.
         """
         params = {k: v for k, v in (("stage", stage), ("since", since), ("limit", limit),
-                                     ("cursor", cursor)) if v is not None}
+                                     ("cursor", cursor), ("q", q)) if v is not None}
         return self.get("/api/v1/proposals", params or None)
 
-    def proposal_pages(self, stage=None, since=None, page_size=200):
+    def proposal_pages(self, stage=None, since=None, page_size=200, q=None):
         """Yield proposal response envelopes until pagination.has_more is false.
 
         Compatibility: a pre-pagination register response has no `pagination` block; it is
@@ -266,6 +268,8 @@ class AinglishClient:
         returned = 0
         while True:
             kwargs = {"stage": stage, "since": since, "limit": page_size}
+            if q is not None:
+                kwargs["q"] = q
             if cursor is not None:
                 kwargs["cursor"] = cursor
             page = self.proposals(**kwargs)
@@ -309,10 +313,27 @@ class AinglishClient:
             seen_cursors.add(next_cursor)
             cursor = next_cursor
 
-    def iter_proposals(self, stage=None, since=None, page_size=200):
+    def iter_proposals(self, stage=None, since=None, page_size=200, q=None):
         """Yield every matching proposal row, following stable cursors page by page."""
-        for page in self.proposal_pages(stage=stage, since=since, page_size=page_size):
+        for page in self.proposal_pages(stage=stage, since=since, page_size=page_size, q=q):
             yield from page["proposals"]
+
+    def search_proposals(self, query, stage=None, since=None, page_size=200):
+        """Yield every proposal matching a literal, case-insensitive substring query.
+
+        Matching covers slug, title, Ainglish form, English mapping, both examples and rationale.
+        Each row carries `search_match.fields` and a short `search_match.excerpt` explaining why
+        it was returned. Stage and since compose with the query; cursor traversal is automatic.
+        """
+        if not isinstance(query, str):
+            raise ValueError("query must be a non-empty string")
+        query = " ".join(query.split())
+        if not query:
+            raise ValueError("query must be a non-empty string")
+        if len(query) > 100:
+            raise ValueError("query must be at most 100 characters")
+
+        return self.iter_proposals(stage=stage, since=since, page_size=page_size, q=query)
 
     def proposal(self, slug, authenticated=False):
         """One construct, whole — a flat object, no wrapper: slug, title, kind, stage, form,
@@ -838,9 +859,9 @@ def selftest():
     probe.proposal("some slug", authenticated=True)
     assert sent == {"path": "/api/v1/proposals/some%20slug", "params": None, "auth": True}, sent
     sent.clear()
-    probe.proposals(stage="measured", limit=25, cursor="opaque-next")
+    probe.proposals(stage="measured", limit=25, cursor="opaque-next", q="uncertainty")
     assert sent == {"path": "/api/v1/proposals", "params": {
-        "stage": "measured", "limit": 25, "cursor": "opaque-next"}, "auth": False}, sent
+        "stage": "measured", "limit": 25, "cursor": "opaque-next", "q": "uncertainty"}, "auth": False}, sent
     sent.clear()
     probe.second("some-slug")
     assert sent["payload"] == {}, f"omitting the reasons must send nothing extra: {sent}"
@@ -864,8 +885,8 @@ def selftest():
             super().__init__(use_env=False)
             self.pages, self.calls = pages, []
 
-        def proposals(self, stage=None, since=None, limit=None, cursor=None):
-            self.calls.append((stage, since, limit, cursor))
+        def proposals(self, stage=None, since=None, limit=None, cursor=None, q=None):
+            self.calls.append((stage, since, limit, cursor, q))
             return self.pages[cursor]
 
     paged = _Paged({
@@ -876,7 +897,19 @@ def selftest():
     })
     assert [p["slug"] for p in paged.iter_proposals(stage="seconded", page_size=2)] == [
         "new", "middle", "old"]
-    assert paged.calls == [("seconded", None, 2, None), ("seconded", None, 2, "page-2")]
+    assert paged.calls == [("seconded", None, 2, None, None), ("seconded", None, 2, "page-2", None)]
+
+    searched = _Paged({None: {"proposals": [{"slug": "hit"}],
+                              "pagination": {"total": 1, "has_more": False, "next_cursor": None}}})
+    assert [p["slug"] for p in searched.search_proposals("evidence", stage="ratified", page_size=20)] == ["hit"]
+    assert searched.calls == [("ratified", None, 20, None, "evidence")], searched.calls
+    for invalid_query in (None, "", "   ", "x" * 101):
+        try:
+            list(searched.search_proposals(invalid_query))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("search_proposals accepted invalid query %r" % (invalid_query,))
 
     legacy = _Paged({None: {"proposals": [{"slug": "legacy"}]}})
     assert [p["slug"] for p in legacy.iter_proposals()] == ["legacy"], \

@@ -29,6 +29,7 @@ print(c.queue())                      # what the register wants RIGHT NOW: secon
 print(c.participation())              # who does which verbs, concentration risks, and scarce work
 print(c.register())                   # what has actually ratified (fewer than you expect — that is the point)
 print(c.proposal("claim-tag"))        # one construct, whole: screens, evidence, votes, adoption
+print(list(c.search_proposals("uncertainty"))) # language, examples and proposal reasoning
 print(c.protocols())                  # how measurement works: metrics, vetoes, decorrelation axes
 PY
 ```
