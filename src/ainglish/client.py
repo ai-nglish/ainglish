@@ -261,7 +261,9 @@ class AinglishClient:
         if not isinstance(page_size, int) or isinstance(page_size, bool) or not 1 <= page_size <= 200:
             raise ValueError("page_size must be an integer from 1 to 200")
         cursor = None
-        seen = set()
+        seen_cursors, seen_slugs = set(), set()
+        expected_total = None
+        returned = 0
         while True:
             kwargs = {"stage": stage, "since": since, "limit": page_size}
             if cursor is not None:
@@ -270,20 +272,41 @@ class AinglishClient:
             if not isinstance(page, dict) or not isinstance(page.get("proposals"), list):
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "proposal page lost its proposals list"})
-            yield page
             pagination = page.get("pagination")
             if pagination is None:  # compatibility with a server predating cursor pages
+                yield page
                 return
             if not isinstance(pagination, dict):
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "proposal page returned a non-object pagination block"})
+            total = pagination.get("total")
+            if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "proposal pagination returned an invalid total"})
+            if expected_total is None:
+                expected_total = total
+            elif total != expected_total:
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "proposal pagination total changed during traversal"})
+            for row in page["proposals"]:
+                slug = row.get("slug") if isinstance(row, dict) else None
+                if not isinstance(slug, str) or not slug or slug in seen_slugs:
+                    raise AinglishError(502, {"error": "invalid_pagination",
+                                              "message": "proposal pagination repeated or lost a stable slug"})
+                seen_slugs.add(slug)
+            returned += len(page["proposals"])
+            yield page
             if pagination.get("has_more") is not True:
+                if returned != expected_total:
+                    raise AinglishError(502, {"error": "invalid_pagination",
+                                              "message": "proposal pagination ended at %d of advertised %d rows"
+                                                         % (returned, expected_total)})
                 return
             next_cursor = pagination.get("next_cursor")
-            if not isinstance(next_cursor, str) or not next_cursor or next_cursor in seen:
+            if not isinstance(next_cursor, str) or not next_cursor or next_cursor in seen_cursors:
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "proposal pagination said has_more but did not advance next_cursor"})
-            seen.add(next_cursor)
+            seen_cursors.add(next_cursor)
             cursor = next_cursor
 
     def iter_proposals(self, stage=None, since=None, page_size=200):
@@ -535,7 +558,7 @@ _DOCUMENTED = {
     "register": ("kind", "version", "count", "entries"),
     "register_release": ("kind", "version", "digest", "canonical_url", "entries"),
     "register_canonical": ("kind", "count", "entries"),
-    "proposals": ("kind", "threshold", "min_seconders", "proposals"),
+    "proposals": ("kind", "threshold", "min_seconders", "proposals", "pagination"),
     "protocols": ("kind", "replication_threshold", "metrics"),
     "changelog": ("kind", "entry_hash_recipe", "register_digest_recipe", "verify", "events"),
     "anchors": ("kind", "how_to_verify", "anchors"),
@@ -562,11 +585,6 @@ _DOCUMENTED_PROPOSAL = ("slug", "title", "kind", "stage", "form", "english_mappi
 _DOCUMENTED_SECOND = ("name", "weight", "at", "worth_measuring_because", "weakest_part",
                       "rationale_status", "submitted_against")
 _RATIONALE_STATUSES = ("provided", "omitted", "legacy_unrecordable")
-# The register's own documented ceiling on ?limit= (openapi.json: maximum 200). Named because at
-# 200 rows the population stops being the whole population and the failure message below must stop
-# claiming it is — a cap that silently changes what a claim means is how "verified" comes to mean
-# "verified the first 200".
-_PROPOSALS_LIMIT_MAX = 200
 # How many subjects to try before giving up. A candidate only fails transiently inside the
 # amendment race described below, so needing more than a few means something real is wrong — but
 # the number is PRINTED on failure, because an unstated cap turns "nothing is inspectable" into a
@@ -597,10 +615,9 @@ def _smoke_proposal(c):
     skips: a silent skip reports "docs verified" having verified nothing, which is the same shape
     as a green suite that never loaded the guard — the incident this mechanism exists for.
     """
-    population = c.proposals(limit=_PROPOSALS_LIMIT_MAX)["proposals"]
-    truncated = len(population) >= _PROPOSALS_LIMIT_MAX
+    population = list(c.iter_proposals(page_size=200))
     candidates = [p for p in population if (p.get("seconds_count") or 0) > 0]
-    scope = "first %d rows" % len(population) if truncated else "all %d rows" % len(population)
+    scope = "all %d rows" % len(population)
     assert candidates, (
         "no proposal in the register carries a second (%s), so the seconds[] contract cannot be "
         "checked here. This is not evidence the docs are wrong." % scope)
@@ -853,9 +870,9 @@ def selftest():
 
     paged = _Paged({
         None: {"proposals": [{"slug": "new"}, {"slug": "middle"}],
-               "pagination": {"has_more": True, "next_cursor": "page-2"}},
+               "pagination": {"total": 3, "has_more": True, "next_cursor": "page-2"}},
         "page-2": {"proposals": [{"slug": "old"}],
-                   "pagination": {"has_more": False, "next_cursor": None}},
+                   "pagination": {"total": 3, "has_more": False, "next_cursor": None}},
     })
     assert [p["slug"] for p in paged.iter_proposals(stage="seconded", page_size=2)] == [
         "new", "middle", "old"]
@@ -866,14 +883,33 @@ def selftest():
         "a pre-pagination server is one compatibility page, not an error"
 
     looping = _Paged({
-        None: {"proposals": [], "pagination": {"has_more": True, "next_cursor": "same"}},
-        "same": {"proposals": [], "pagination": {"has_more": True, "next_cursor": "same"}},
+        None: {"proposals": [], "pagination": {"total": 1, "has_more": True, "next_cursor": "same"}},
+        "same": {"proposals": [], "pagination": {"total": 1, "has_more": True, "next_cursor": "same"}},
     })
     try:
         list(looping.iter_proposals())
         raise AssertionError("a repeating cursor must refuse instead of looping")
     except AinglishError as err:
         assert err.error == "invalid_pagination" and "advance" in err.message
+    incomplete = _Paged({None: {"proposals": [{"slug": "only"}],
+                                "pagination": {"total": 2, "has_more": False,
+                                               "next_cursor": None}}})
+    try:
+        list(incomplete.iter_proposals())
+        raise AssertionError("a short terminal page must not satisfy an advertised population")
+    except AinglishError as err:
+        assert err.error == "invalid_pagination" and "advertised" in err.message
+    overlapping = _Paged({
+        None: {"proposals": [{"slug": "same"}],
+               "pagination": {"total": 2, "has_more": True, "next_cursor": "overlap"}},
+        "overlap": {"proposals": [{"slug": "same"}],
+                    "pagination": {"total": 2, "has_more": False, "next_cursor": None}},
+    })
+    try:
+        list(overlapping.iter_proposals())
+        raise AssertionError("overlapping pages must not count one proposal twice")
+    except AinglishError as err:
+        assert err.error == "invalid_pagination" and "stable slug" in err.message
     for invalid_size in (0, 201, True, "20"):
         try:
             list(paged.iter_proposals(page_size=invalid_size))
@@ -906,7 +942,13 @@ def selftest():
 
         def proposals(self, stage=None, since=None, limit=None, cursor=None):
             assert stage is None, "selection must not filter on mutable workflow state"
-            return {"proposals": self._rows}
+            if cursor == "page-2":
+                return {"proposals": self._rows[200:],
+                        "pagination": {"total": len(self._rows), "has_more": False, "next_cursor": None}}
+            return {"proposals": self._rows[:200], "pagination": {
+                "total": len(self._rows),
+                "has_more": len(self._rows) > 200,
+                "next_cursor": "page-2" if len(self._rows) > 200 else None}}
 
         def proposal(self, slug):
             self.reads.append(slug)
@@ -923,6 +965,12 @@ def selftest():
     # A register with nothing seconded anywhere is a legitimate state, not drift — and the message
     # must not blame the docs for it.
     _fails_with(_Fake([_row("a", count=0)], {}), "not evidence the docs are wrong", "empty population")
+
+    # A qualifying subject beyond the old one-request ceiling must still be selected. The first
+    # 200 deliberately carry no seconds, so this passes only if _smoke_proposal walks page two.
+    beyond_ceiling = [_row("empty-%03d" % n, count=0) for n in range(200)] + [_row("page-two")]
+    assert _smoke_proposal(_Fake(
+        beyond_ceiling, {"page-two": _detail("page-two", [dict(_GOOD_SECOND)])})) == 2
 
     # The race: the list names a predecessor, the detail correctly serves no seconds because a
     # surface-only amendment moved them. Following superseded_by must find them and PASS.

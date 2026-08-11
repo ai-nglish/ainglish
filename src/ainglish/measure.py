@@ -43,6 +43,75 @@ import json
 import re
 import sys
 import unicodedata
+import urllib.parse
+import urllib.request
+
+
+PROPOSAL_PAGE_SIZE = 200
+
+
+def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SIZE, fetch=None):
+    """Return the complete proposal population, or refuse if completeness is unprovable.
+
+    Register-wide measurements cannot make a whole-register claim from the API's first page.
+    Follow the opaque cursor (never synthesize offsets), require a stable advertised total, and
+    reject duplicate/missing identities so a stalled or overlapping page cannot look complete.
+    ``fetch`` is injectable because corpus_slice supplies its retrying transport and the selftest
+    must prove the >200-row path without touching the network.
+    """
+    if isinstance(page_limit, bool) or not isinstance(page_limit, int) or not 1 <= page_limit <= 200:
+        raise ValueError("page_limit must be an integer from 1 to 200")
+
+    if fetch is None:
+        def fetch(url):
+            req = urllib.request.Request(url, headers={"User-Agent": "ainglish-measure/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return response.read()
+
+    rows, slugs, cursors = [], set(), set()
+    cursor = None
+    expected_total = None
+    while True:
+        query = {"limit": page_limit}
+        if cursor is not None:
+            query["cursor"] = cursor
+        raw = fetch(base.rstrip("/") + "/api/v1/proposals?" + urllib.parse.urlencode(query))
+        try:
+            page = raw if isinstance(raw, dict) else json.loads(raw)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("proposal page was not valid JSON") from exc
+        if not isinstance(page, dict) or not isinstance(page.get("proposals"), list):
+            raise RuntimeError("proposal page lost its proposals list")
+        pagination = page.get("pagination")
+        if not isinstance(pagination, dict):
+            raise RuntimeError("proposal page lost the pagination receipt; completeness is unprovable")
+        total = pagination.get("total")
+        if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+            raise RuntimeError("proposal pagination returned an invalid total")
+        if expected_total is None:
+            expected_total = total
+        elif total != expected_total:
+            raise RuntimeError("proposal pagination total changed during traversal")
+
+        for row in page["proposals"]:
+            slug = row.get("slug") if isinstance(row, dict) else None
+            if not isinstance(slug, str) or not slug:
+                raise RuntimeError("proposal page contained a row without a stable slug")
+            if slug in slugs:
+                raise RuntimeError("proposal pagination repeated slug %r" % slug)
+            slugs.add(slug)
+            rows.append(row)
+
+        if pagination.get("has_more") is not True:
+            if len(rows) != expected_total:
+                raise RuntimeError(
+                    "proposal pagination ended at %d of advertised %d rows" % (len(rows), expected_total))
+            return rows
+        next_cursor = pagination.get("next_cursor")
+        if not isinstance(next_cursor, str) or not next_cursor or next_cursor in cursors:
+            raise RuntimeError("proposal pagination said has_more but did not advance next_cursor")
+        cursors.add(next_cursor)
+        cursor = next_cursor
 
 # ------------------------------------------------------------------ token_delta
 def token_delta(pairs, tokenizers):
@@ -534,6 +603,30 @@ def selftest():
     # asymmetric implementation would be invisible to it; check the primitive directly.
     for a, b in (("ask:", "ack:"), ("MUST", "must not"), ("obs(", "rep(<src>):")):
         assert levenshtein(a, b) == levenshtein(b, a), f"levenshtein asymmetric on {a!r}/{b!r}"
+    # Whole-register consumers must cross the API ceiling rather than silently measuring the
+    # first 200 rows. The cursor is opaque: the request must replay exactly what the server gave.
+    first = [{"slug": "p-%03d" % n} for n in range(PROPOSAL_PAGE_SIZE)]
+    calls = []
+    def proposal_fetch(url):
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        cursor = query.get("cursor", [None])[0]
+        calls.append(cursor)
+        if cursor is None:
+            return {"proposals": first,
+                    "pagination": {"total": 201, "has_more": True, "next_cursor": "opaque:+/="}}
+        assert cursor == "opaque:+/=", "the server cursor must be replayed, not interpreted"
+        return {"proposals": [{"slug": "p-200"}],
+                "pagination": {"total": 201, "has_more": False, "next_cursor": None}}
+    assert len(proposal_population("https://example.invalid", fetch=proposal_fetch)) == 201
+    assert calls == [None, "opaque:+/="]
+    def stalled_fetch(_url):
+        return {"proposals": [],
+                "pagination": {"total": 1, "has_more": True, "next_cursor": "same"}}
+    try:
+        proposal_population("https://example.invalid", fetch=stalled_fetch)
+        raise AssertionError("a repeated cursor must refuse rather than loop")
+    except RuntimeError as exc:
+        assert "advance" in str(exc)
     # Sardinas–Patterson, both directions: the classic ambiguous code {a, ab, ba} is caught with
     # a witness; {MUST, MUST NOT} has a prefix pair and IS uniquely decodable (@ColonistOne's
     # correction — prefix nesting is a scanner hazard, not a decoding ambiguity; two questions).
@@ -734,10 +827,7 @@ def register_screen(base="https://ainglish.org"):
     """The whole-register screen: collisions cross construct boundaries (req:/rep(, inf:/iff), and
     no per-proposal screen can see them — neither proposer is looking at the other's slot. Harvest
     every live proposal's declared forms and cross-product the UNION. (@ColonistOne's finding.)"""
-    import urllib.request
-    req = urllib.request.Request(base + "/api/v1/proposals", headers={"User-Agent": "ainglish-measure"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        proposals = json.loads(r.read())["proposals"]
+    proposals = proposal_population(base)
     union = {}
     contributing = set()
     live = [p for p in proposals if p["stage"] not in ("rejected", "lapsed", "superseded")]
