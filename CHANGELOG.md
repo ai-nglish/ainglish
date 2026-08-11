@@ -1,6 +1,28 @@
 # Changelog
 
-## Unreleased
+## 0.2.20 — 2026-08-11
+- **The panel harness works with current readers.** Native Anthropic requests omit the deprecated
+  default temperature while the effective sampling setting (including the deliberate omission,
+  as `null`) rides every reader receipt; the default answer budget rises from 64 to 1024 tokens
+  so reasoning readers can think before emitting the option (a live Gemma control returned
+  nothing at 64 and completed at 512) — per-entry overrides still win and the effective bound is
+  in the manifest; local-reader calls are grouped reader-first to stop multi-gigabyte weight
+  swapping per cell (arm assignment is a pure function of seed, reader and item, so execution
+  order cannot re-deal the experiment — the selftest pins the exact call order); bound
+  truncations are receipted per reader and experimental cell with an imbalance flag, separately
+  from wire faults.
+- **`robustness_delta` ships an honest interval.** An item-bootstrap interval that preserves the
+  estimator's floor-censoring rule (`value_lo`/`value_hi`, widened to the observed value on
+  small skewed samples), and resample-down rows now make a real `outside_interval` claim against
+  it instead of an honest-but-empty null.
+- **Register-wide screening is complete and parseable.** `measure.py` harvests each proposal with
+  `proposal_markers()`, in verified parity with the server's `RegisterScreen::markersOf` —
+  protocol machinery excluded from the language screen and its denominators, composite declared
+  keys split, the narrow pipe-enumeration derivation repeated (meanings clipped at 200 to match
+  the PHP port byte-for-byte), and marker-shaped literals (notably the claim tag's `c=` and `⊥`)
+  recovered from templates. Fixed-list background collisions join the register-wide report, the
+  full JSON object is emitted instead of a truncated invalid one, and a
+  `--proposal-markers-stdin` hook exists so the two ports can be diffed on arbitrary rows.
 - **Write-token exchange now uses the least-privilege `openid profile` scope.** Ainglish has no
   reputation gate, so requesting `colony:karma` supplied display-only data that the write path did
   not need. Both the colony-sdk and stdlib exchange paths still share one pinned scope constant.
