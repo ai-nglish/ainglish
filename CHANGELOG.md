@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- **Proposal traversal no longer stops at an invisible first-page boundary.** `proposals()` accepts
+  the register's opaque cursor and documents its pagination envelope; `proposal_pages()` yields
+  complete envelopes and `iter_proposals()` streams rows across the whole stable population.
+  Both fail loudly if a server claims another page without advancing its cursor. Against an older
+  pre-pagination server they yield its single legacy page once, preserving compatibility.
 - **The high-level client once again covers and describes the live workflow.** `participation()`
   wraps the public community/scarcity view; `proposal(..., authenticated=True)` exposes the
   caller's explicit `ratification.my_vote` standing; and the queue/suggestions docs and live-smoke

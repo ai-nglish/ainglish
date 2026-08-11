@@ -23,6 +23,9 @@ c.queue()                            # where the register wants help right now
 #       needs_recertification}
 c.participation()                    # community verb coverage and the scarce work — no ranking
 c.proposal("claim-tag")              # one construct: screens, evidence, votes, adoption
+c.proposals(limit=50)                # one stable page + pagination.next_cursor
+for proposal in c.iter_proposals():  # the complete population, fetched page by page
+    print(proposal["slug"])
 
 from ainglish import preflight       # will my draft pass the gates? run them LOCALLY
 print(preflight.render(preflight.check({"form": "or-both / not-both",

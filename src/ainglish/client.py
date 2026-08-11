@@ -238,12 +238,58 @@ class AinglishClient:
         Envelope: {kind, count, entries}."""
         return self._request("GET", "/api/v1/register.canonical")
 
-    def proposals(self, stage=None, since=None, limit=None):
-        """Everything in flight. Envelope: {kind, threshold, min_seconders, proposals: [...]} —
-        the rows live under `proposals`; threshold/min_seconders state the seconding rule.
-        Filters: stage=, since= (ISO-8601), limit=."""
-        params = {k: v for k, v in (("stage", stage), ("since", since), ("limit", limit)) if v is not None}
+    def proposals(self, stage=None, since=None, limit=None, cursor=None):
+        """One stable newest-first page. Envelope: {kind, threshold, min_seconders,
+        pagination: {returned, total, has_more, next_cursor}, proposals: [...]} — the rows
+        live under `proposals`; threshold/min_seconders state the seconding rule.
+        Filters: stage=, since= (ISO-8601), limit= (1..200), cursor=. Treat cursor as opaque.
+
+        For the whole matching population use iter_proposals(); it follows cursors without
+        accumulating every page in memory. proposal_pages() is the envelope-preserving twin.
+        """
+        params = {k: v for k, v in (("stage", stage), ("since", since), ("limit", limit),
+                                     ("cursor", cursor)) if v is not None}
         return self.get("/api/v1/proposals", params or None)
+
+    def proposal_pages(self, stage=None, since=None, page_size=200):
+        """Yield proposal response envelopes until pagination.has_more is false.
+
+        Compatibility: a pre-pagination register response has no `pagination` block; it is
+        yielded once and iteration stops. A malformed or repeating cursor raises AinglishError
+        instead of looping or silently returning a partial population.
+        """
+        if not isinstance(page_size, int) or isinstance(page_size, bool) or not 1 <= page_size <= 200:
+            raise ValueError("page_size must be an integer from 1 to 200")
+        cursor = None
+        seen = set()
+        while True:
+            kwargs = {"stage": stage, "since": since, "limit": page_size}
+            if cursor is not None:
+                kwargs["cursor"] = cursor
+            page = self.proposals(**kwargs)
+            if not isinstance(page, dict) or not isinstance(page.get("proposals"), list):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "proposal page lost its proposals list"})
+            yield page
+            pagination = page.get("pagination")
+            if pagination is None:  # compatibility with a server predating cursor pages
+                return
+            if not isinstance(pagination, dict):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "proposal page returned a non-object pagination block"})
+            if pagination.get("has_more") is not True:
+                return
+            next_cursor = pagination.get("next_cursor")
+            if not isinstance(next_cursor, str) or not next_cursor or next_cursor in seen:
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "proposal pagination said has_more but did not advance next_cursor"})
+            seen.add(next_cursor)
+            cursor = next_cursor
+
+    def iter_proposals(self, stage=None, since=None, page_size=200):
+        """Yield every matching proposal row, following stable cursors page by page."""
+        for page in self.proposal_pages(stage=stage, since=since, page_size=page_size):
+            yield from page["proposals"]
 
     def proposal(self, slug, authenticated=False):
         """One construct, whole — a flat object, no wrapper: slug, title, kind, stage, form,
@@ -775,6 +821,10 @@ def selftest():
     probe.proposal("some slug", authenticated=True)
     assert sent == {"path": "/api/v1/proposals/some%20slug", "params": None, "auth": True}, sent
     sent.clear()
+    probe.proposals(stage="measured", limit=25, cursor="opaque-next")
+    assert sent == {"path": "/api/v1/proposals", "params": {
+        "stage": "measured", "limit": 25, "cursor": "opaque-next"}, "auth": False}, sent
+    sent.clear()
     probe.second("some-slug")
     assert sent["payload"] == {}, f"omitting the reasons must send nothing extra: {sent}"
     probe.second("some-slug", worth_measuring_because="the surface is declared")
@@ -790,6 +840,46 @@ def selftest():
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
+
+    # --- stable page traversal, including every failure that could otherwise loop silently -----
+    class _Paged(AinglishClient):
+        def __init__(self, pages):
+            super().__init__(use_env=False)
+            self.pages, self.calls = pages, []
+
+        def proposals(self, stage=None, since=None, limit=None, cursor=None):
+            self.calls.append((stage, since, limit, cursor))
+            return self.pages[cursor]
+
+    paged = _Paged({
+        None: {"proposals": [{"slug": "new"}, {"slug": "middle"}],
+               "pagination": {"has_more": True, "next_cursor": "page-2"}},
+        "page-2": {"proposals": [{"slug": "old"}],
+                   "pagination": {"has_more": False, "next_cursor": None}},
+    })
+    assert [p["slug"] for p in paged.iter_proposals(stage="seconded", page_size=2)] == [
+        "new", "middle", "old"]
+    assert paged.calls == [("seconded", None, 2, None), ("seconded", None, 2, "page-2")]
+
+    legacy = _Paged({None: {"proposals": [{"slug": "legacy"}]}})
+    assert [p["slug"] for p in legacy.iter_proposals()] == ["legacy"], \
+        "a pre-pagination server is one compatibility page, not an error"
+
+    looping = _Paged({
+        None: {"proposals": [], "pagination": {"has_more": True, "next_cursor": "same"}},
+        "same": {"proposals": [], "pagination": {"has_more": True, "next_cursor": "same"}},
+    })
+    try:
+        list(looping.iter_proposals())
+        raise AssertionError("a repeating cursor must refuse instead of looping")
+    except AinglishError as err:
+        assert err.error == "invalid_pagination" and "advance" in err.message
+    for invalid_size in (0, 201, True, "20"):
+        try:
+            list(paged.iter_proposals(page_size=invalid_size))
+            raise AssertionError("invalid page size %r must refuse" % (invalid_size,))
+        except ValueError:
+            pass
 
     # --- _smoke_proposal's SELECTION logic, offline ---------------------------------------------
     # The cases that matter here are the ones the live register cannot be made to exhibit on
@@ -814,7 +904,7 @@ def selftest():
             super().__init__(use_env=False)
             self._rows, self._details, self.reads = rows, details, []
 
-        def proposals(self, stage=None, since=None, limit=None):
+        def proposals(self, stage=None, since=None, limit=None, cursor=None):
             assert stage is None, "selection must not filter on mutable workflow state"
             return {"proposals": self._rows}
 
@@ -867,7 +957,7 @@ def selftest():
     assert _smoke_proposal(nulls) == 2, "present-and-null is the commonest valid row and must pass"
 
     print("client selftest OK: envelope, exp parsing, env pickup, refusals carrying their fixes, "
-          "second() carrying its rationale, drift-guard subject selection.")
+          "second() carrying its rationale, cursor traversal, drift-guard subject selection.")
 
 
 if __name__ == "__main__":
