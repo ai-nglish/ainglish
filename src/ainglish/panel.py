@@ -24,7 +24,9 @@ POST /api/v1/proposals/{slug}/measurements — with the methodology enforced by 
 
 Adapters: a panel entry is {"name", "provider", "model", "precision"?} — providers: openai,
 anthropic (native /v1/messages), openrouter, groq, ollama — or set {"base_url", "api", "api_key_env"}
-explicitly for anything else OpenAI-compatible (vllm, llama.cpp, any gateway). temperature=0. Pure
+explicitly for anything else OpenAI-compatible (vllm, llama.cpp, any gateway). Sampling settings
+are provider-aware and ride in the receipt: OpenAI-compatible readers default to temperature=0;
+native Anthropic omits the deprecated parameter unless the manifest explicitly supplies one. Pure
 stdlib. A panelist whose key env is unset refuses at startup rather than silently 401-ing mid-run.
 "precision" labels flow into per_member results, so a panel disagreement is a diagnosis (WHICH
 precision diverged), and into the manifest spec (name@precision) so replications re-run the same pool.
@@ -132,11 +134,12 @@ PRESETS = {
 # openai-compatible branch never did, so a reader's answer budget depended on which transport it
 # happened to sit behind: an instrument setting that no manifest declared and no receipt recorded.
 # Naming the bounds in one place and asserting parity in the selftest is what stops that recurring.
-# They are DECLARED rather than hardcoded because the right budget is not universal — 64 tokens is
-# ample for "answer with exactly one of these options" and fatal for a reasoning model that spends
-# its budget thinking before it answers, which is the same shape as the failure the cell-yield
-# guard was written against.
-TRANSPORT_BOUNDS = {"max_tokens": 64}
+# They are DECLARED rather than buried in a request builder because the right budget is not
+# universal. 64 tokens was ample for a direct classifier and fatal for a reasoning reader that
+# spends its budget thinking before it emits the fixed option: a live Gemma control returned no
+# visible answer at 64 and completed at 512. Default to enough headroom for current reasoning
+# readers; an operator can lower it per entry, and the effective value rides in the receipt.
+TRANSPORT_BOUNDS = {"max_tokens": 1024}
 # One least-privilege constant feeds both the Colony SDK and stdlib exchange paths so they cannot
 # drift. Ainglish has no reputation gate, so write tokens need identity and profile only.
 AINGLISH_OIDC_SCOPE = "openid profile"
@@ -168,6 +171,30 @@ def bounds_for(endpoint):
     return {k: endpoint.get(k, default) for k, default in TRANSPORT_BOUNDS.items()}
 
 
+def temperature_for(endpoint):
+    """Effective sampling temperature, or None when the parameter is deliberately omitted.
+
+    Current Anthropic models reject the formerly hardcoded temperature=0 as deprecated. Omission
+    is not silent: None is retained in every reader receipt, so a rerun knows the provider default
+    was the instrument setting. An explicit endpoint value (including explicit None) always wins.
+    """
+    if "temperature" in endpoint:
+        value = endpoint["temperature"]
+    else:
+        api = endpoint.get("api", PRESETS.get(endpoint.get("provider", ""), {}).get("api", "openai"))
+        value = None if api == "anthropic" else 0
+    if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                              or not 0 <= value <= 2):
+        raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: temperature must be null "
+                         "(omit it) or a number from 0 through 2.")
+    return value
+
+
+def transport_settings(endpoint):
+    """Every answer-affecting transport setting, in the shape stamped into the manifest."""
+    return {**bounds_for(endpoint), "temperature": temperature_for(endpoint)}
+
+
 def reader_receipt(endpoint):
     """Re-runnable, non-secret reader configuration for the content-addressed spec.
 
@@ -188,7 +215,7 @@ def reader_receipt(endpoint):
         if url_parts.port is not None:
             host += ":" + str(url_parts.port)
         out["base_url"] = urllib.parse.urlunsplit((url_parts.scheme, host, url_parts.path, "", ""))
-    out.update(bounds_for(endpoint))
+    out.update(transport_settings(endpoint))
     return out
 
 
@@ -206,8 +233,10 @@ def chat(endpoint, prompt):
         raise SystemExit(f"panel entry {ep.get('name', '?')!r}: {ep['api_key_env']} is not set. "
                          "Refusing to run a panelist that would silently 401 — export the key or drop the member.")
     bounds = bounds_for(endpoint)
+    temperature = temperature_for(endpoint)
+    sampling = {} if temperature is None else {"temperature": temperature}
     if ep.get("api", "openai") == "anthropic":
-        body = {"model": ep["model"], "temperature": 0, **bounds,
+        body = {"model": ep["model"], **sampling, **bounds,
                 "messages": [{"role": "user", "content": prompt}]}
         headers = {"Content-Type": "application/json", "User-Agent": "ainglish-panel",
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
@@ -216,7 +245,7 @@ def chat(endpoint, prompt):
         data = _fetch(req)
         return ("".join(b.get("text", "") for b in data.get("content", [])),
                 data.get("stop_reason") == "max_tokens")
-    body = {"model": ep["model"], "temperature": 0, **bounds,
+    body = {"model": ep["model"], **sampling, **bounds,
             "messages": [{"role": "user", "content": prompt}]}
     headers = {"Content-Type": "application/json", "User-Agent": "ainglish-panel"}
     if key:
@@ -291,6 +320,24 @@ def ask(endpoint, text, question, options):
     if out in exact:
         return exact[out]
     return out[:40]  # off-option answer counts as wrong and inflates entropy — as it should
+
+
+def note_truncation(store, reader, cell, answer):
+    """Record bound truncation separately from transport faults and other typed dead cells."""
+    if is_absent(answer) and getattr(answer, "reason", None) == "truncated":
+        per_cell = store.setdefault(reader, {})
+        per_cell[cell] = per_cell.get(cell, 0) + 1
+
+
+def truncation_receipt(store, cells):
+    """Auditable counts by reader and experimental cell; no threshold or hidden correction."""
+    by_cell = {cell: sum(per.get(cell, 0) for per in store.values()) for cell in cells}
+    return {
+        "total": sum(by_cell.values()),
+        "per_reader_cell": store,
+        "by_cell": by_cell,
+        "imbalanced_across_cells": len(set(by_cell.values())) > 1,
+    }
 
 
 # ------------------------------------------------------------------ assignment & scoring
@@ -379,6 +426,26 @@ def bootstrap_delta(rows, items, metric, n=2000, seed=0):
         return None, None
     deltas.sort()
     return deltas[int(0.025 * len(deltas))], deltas[int(0.975 * len(deltas))]
+
+
+def bootstrap_censored_mean(item_diffs, n=2000, seed=0):
+    """Bootstrap the robustness estimator over ITEMS, preserving its floor-censoring rule.
+
+    Each element is (differential_pp, floored). A draw containing only floored items has no
+    censored estimator and contributes no invented zero. The run itself already requires at least
+    one survivor, so a non-empty interval is expected for every emit-capable input.
+    """
+    rng = random.Random(seed)
+    estimates = []
+    for _ in range(n):
+        sample = [rng.choice(item_diffs) for _ in item_diffs]
+        survivors = [value for value, floored in sample if not floored]
+        if survivors:
+            estimates.append(sum(survivors) / len(survivors))
+    if not estimates:
+        return None, None
+    estimates.sort()
+    return estimates[int(0.025 * len(estimates))], estimates[int(0.975 * len(estimates))]
 
 
 # ------------------------------------------------------------------ the run
@@ -524,17 +591,21 @@ def run_robustness(manifest, ask_fn=ask):
 
     rows = []          # (item_id, arm, condition, panelist, answer)
     faults = {}
+    truncations = {}
     fault_total = 0
 
     def buy(block, conds):
         """Ask every (item, arm, condition, reader) cell in block; False on guard abort."""
         nonlocal fault_total
-        for item in block:
-            for arm in ("english", "ainglish"):
-                for cond in conds:
-                    text = item[arm] if cond == "baseline" else corrupted_text[(item["id"], arm)]
-                    cell = f"{arm}_{cond}"
-                    for ep in panel:
+        # Reader outermost keeps a local roster resident instead of swapping multi-gigabyte
+        # models on every cell. Baseline still precedes corrupted within every (reader,item,arm),
+        # which is the execution-order constraint the instrument declares.
+        for ep in panel:
+            for item in block:
+                for arm in ("english", "ainglish"):
+                    for cond in conds:
+                        text = item[arm] if cond == "baseline" else corrupted_text[(item["id"], arm)]
+                        cell = f"{arm}_{cond}"
                         try:
                             answer = ask_fn(ep, text, item["question"], item["options"])
                         except TransportFault as fault:
@@ -542,6 +613,7 @@ def run_robustness(manifest, ask_fn=ask):
                             per[fault.reason] = per.get(fault.reason, 0) + 1
                             fault_total += 1
                             answer = None
+                        note_truncation(truncations, ep["name"], cell, answer)
                         try:
                             guard.observe(ep["name"], cell, None if is_absent(answer) else str(answer), answer)
                         except _ecg.CellYieldAbort as abort:
@@ -656,9 +728,15 @@ def run_robustness(manifest, ask_fn=ask):
         return None
     value_uncensored = round(sum(d for d, _ in diffs) / len(diffs), 2)
     value = round(sum(survivors) / len(survivors), 2)
+    lo, hi = bootstrap_censored_mean(diffs, seed=seed)
+    # Percentile intervals can exclude the observed statistic on small, skewed samples. Widening
+    # to the observed value is conservative and also honours the API's interval contract.
+    lo = min(value, lo) if lo is not None else value
+    hi = max(value, hi) if hi is not None else value
 
-    # resample-down on the CENSORED value (the figure selection could be steering). No interval
-    # is computed for robustness, so outside_interval is honestly null, never a hardcoded pass.
+    # Resample-down on the CENSORED value (the figure selection could be steering). Compare each
+    # actual thinning with the item-bootstrap interval above; a value outside what the full run
+    # claimed is a visible selection warning, not a hardcoded pass.
     # A row is emitted only when thinning actually HAPPENED, and kept_fraction is the ACTUAL
     # fraction retained — at three live items the old rows claimed 0.75/0.50 while both kept 2/3,
     # and at two items both "thinnings" kept 100% and tested nothing (@dexagon-ai, review 3).
@@ -679,7 +757,7 @@ def run_robustness(manifest, ask_fn=ask):
         sval = round(sum(ssurv) / len(ssurv), 2)
         resample.append({"kept_fraction": actual, "items": keep, "value": sval,
                          "sign_flipped": (sval < 0) != (value < 0) and value != 0,
-                         "outside_interval": None})
+                         "outside_interval": sval < lo or sval > hi})
 
     spec = {k: manifest[k] for k in ("construct", "metric", "seed") if k in manifest}
     spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
@@ -711,8 +789,12 @@ def run_robustness(manifest, ask_fn=ask):
                           "note": "one span-preserving event per cell, absolute not proportional, "
                                   "seeded per (seed,item,arm); no-op corruptions refuse pre-spend; "
                                   "chance floor computed per item from its own option count"}
-    spec["transport"] = {_labelled(p_): bounds_for(p_) for p_ in panel}
+    spec["transport"] = {_labelled(p_): transport_settings(p_) for p_ in panel}
     spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
+    spec["transport_truncations"] = truncation_receipt(
+        truncations,
+        ("english_baseline", "english_corrupted", "ainglish_baseline", "ainglish_corrupted"),
+    )
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
     spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, calibration-gated-first, per-item chance floors, COMPLETE-QUARTET scoring, censored value beside its uncensored twin" + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
@@ -746,6 +828,8 @@ def run_robustness(manifest, ask_fn=ask):
     measurement = {
         "metric": "robustness_delta",
         "value": value,
+        "value_lo": round(lo, 2),
+        "value_hi": round(hi, 2),
         "value_uncensored": value_uncensored,
         "floor_cells": floors,
         "resample_down": resample,
@@ -848,7 +932,8 @@ def run_panel(manifest, ask_fn=ask):
 
     # Cell-yield guard (@ColonistOne, vendored verbatim from claim-audit/empty_cell_guard.py —
     # his code, his thresholds, his 19 assertions). It exists because a reasoning model returning
-    # 64 EMPTY cells leave no scored denominator at all; without a fail-closed guard, partial and
+    # A reasoning reader can spend its whole answer bound before emitting any option; without a
+    # fail-closed guard, partial and
     # asymmetric survival can still yield a publishable-looking delta manufactured by a formatting
     # failure. His own first
     # version pooled the arms and checked a prefix only; the costly case is ASYMMETRIC — one arm
@@ -879,6 +964,7 @@ def run_panel(manifest, ask_fn=ask):
     # weighs a dead cell; what it cannot know is WHY, and it is @ColonistOne's file vendored
     # verbatim, so the cause is recorded out here rather than by editing his guard.
     faults = {}
+    truncations = {}
 
     def run_items(subset):
         """Ask every panelist every item in subset. Rows, or None if the guard aborted.
@@ -888,8 +974,10 @@ def run_panel(manifest, ask_fn=ask):
         optional.
         """
         out = []
-        for item in subset:
-            for ep in panel:
+        # Reader outermost prevents local-model weight thrash. Arm assignment is a pure function
+        # of (seed, reader, item), so changing execution order cannot re-deal the experiment.
+        for ep in panel:
+            for item in subset:
                 arm = arm_for(seed, ep["name"], item["id"])
                 try:
                     answer = ask_fn(ep, item[arm], item["question"], item["options"])
@@ -901,6 +989,7 @@ def run_panel(manifest, ask_fn=ask):
                     per_arm = faults.setdefault(ep["name"], {}).setdefault(arm, {})
                     per_arm[fault.reason] = per_arm.get(fault.reason, 0) + 1
                     answer = None
+                note_truncation(truncations, ep["name"], arm, answer)
                 try:
                     guard.observe(ep["name"], arm, None if is_absent(answer) else str(answer), answer)
                 except _ecg.CellYieldAbort as abort:
@@ -920,8 +1009,9 @@ def run_panel(manifest, ask_fn=ask):
     # The tradeoff, stated because this is a design change and not only a saving: calibration is
     # no longer interleaved with the real items, so a reader carrying cross-call state (provider
     # prompt caching, a warm KV cache) meets the two blocks under slightly different conditions.
-    # For the stateless temperature-0 completions this harness makes, that is the cheaper of the
-    # two risks — and unlike the old ordering it is a risk you can see in the manifest.
+    # For the stateless single-turn completions this harness makes, that is the cheaper of the two
+    # risks — and unlike the old ordering it is a risk you can see in the manifest, alongside the
+    # provider-aware sampling setting each reader actually used.
     calib_rows = run_items(calib)
     if calib_rows is None:
         return None
@@ -1087,10 +1177,10 @@ def run_panel(manifest, ask_fn=ask):
     # The INSTRUMENT is part of the evidence: a replication that can't name which harness
     # version produced a number can't reproduce the number's failure modes.
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
-    # An answer budget IS an instrument setting: the same reader at max_tokens 64 and at 4096 are
+    # An answer budget IS an instrument setting: the same reader at max_tokens 1024 and at 4096 are
     # two instruments if it thinks before answering. Recorded per member so a replication runs the
     # bound rather than inferring it — and so a bound that differs across members is visible.
-    spec["transport"] = {labelled(p_): bounds_for(p_) for p_ in panel}
+    spec["transport"] = {labelled(p_): transport_settings(p_) for p_ in panel}
     # Cells lost to the wire, per (model, arm, reason) — the same granularity the guard reports
     # dead_rate at, plus the cause it cannot see. EMITTED EVEN AT ZERO, on purpose: a field whose
     # absence has a direction cannot be optional, and this one's absence reads as "no faults" when
@@ -1098,6 +1188,7 @@ def run_panel(manifest, ask_fn=ask):
     # a retried cell got two draws at the same question, and a delta over re-drawn cells is not
     # the delta the manifest describes.
     spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
+    spec["transport_truncations"] = truncation_receipt(truncations, ("english", "ainglish"))
     spec["protocol"] = "panel.py counterbalanced-arms + planted-effect calibration gate" + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
     measurement = {
@@ -1286,6 +1377,21 @@ def selftest():
             for label, body in bodies.items():
                 assert body.get(bound) == default, \
                     f"{label} request body dropped the declared bound {bound!r}"
+        assert bodies["openai-compatible"]["temperature"] == 0, \
+            "OpenAI-compatible direct classifiers retain deterministic sampling by default"
+        assert "temperature" not in bodies["anthropic"], \
+            "native Anthropic must omit the parameter current models reject as deprecated"
+        assert reader_receipt({"name": "a", "provider": "anthropic", "model": "m"})["temperature"] is None, \
+            "omission is still explicit in the re-runnable reader receipt"
+
+        _open = _capture(_ok_anthropic)
+        chat({"name": "a", "provider": "anthropic", "model": "m", "temperature": 0.4}, "hi")
+        assert sent["body"]["temperature"] == 0.4, "an explicit Anthropic sampling setting must win"
+        try:
+            temperature_for({"name": "bad", "provider": "ollama", "temperature": True})
+            raise AssertionError("boolean temperature was accepted as numeric")
+        except SystemExit:
+            pass
 
         # "Declared" is decoration unless the declared value reaches the wire.
         _open = _capture(_ok_openai)
@@ -1406,6 +1512,21 @@ def selftest():
         "inline bytes must survive beside their digest so another party can rerun them"
     assert all("api_key_env" not in r for r in m["manifest"]["readers"]), \
         "reproducible reader configuration must never carry credential locations"
+    assert m["manifest"]["transport_truncations"] == {
+        "total": 0, "per_reader_cell": {},
+        "by_cell": {"english": 0, "ainglish": 0},
+        "imbalanced_across_cells": False,
+    }, "a clean run must state zero bound truncations"
+    order = []
+
+    def ordered_reader(ep, text, q, options):
+        order.append(ep["name"])
+        return tag_reliant(ep, text, q, options)
+
+    assert run_panel(good, ask_fn=ordered_reader) is not None
+    assert order == (["reader-a"] * 4 + ["reader-b"] * 4
+                     + ["reader-a"] * 8 + ["reader-b"] * 8), \
+        "calibration and real blocks must each group calls by reader, never swap local models per item"
     original_hash = "a" * 64
     m_rep = run_panel(dict(good, replicates_hash=original_hash), ask_fn=tag_reliant)
     assert m_rep["replicates_hash"] == original_hash, \
@@ -1453,13 +1574,43 @@ def selftest():
         "PERCENTAGE POINTS on the wire: full-scale ainglish break vs english survival is -100 pp, not -1"
     assert rm["value"] != rm["value_uncensored"], \
         "the floored item is excluded from value but present in value_uncensored — censoring is visible"
+    assert rm["value_lo"] <= rm["value"] <= rm["value_hi"], \
+        "robustness must ship an honest item-bootstrap interval accepted by the API contract"
     assert "yield_report" in rm, "the four-cell yield guard's report rides the payload"
     assert rm["manifest"]["calibration"]["items_sha256"], \
         "the gate is part of the experiment's identity — it must be inside the hashed receipt"
-    assert all(r["outside_interval"] is None for r in rm["resample_down"]), \
-        "no interval is computed, so outside_interval must be null, never a hardcoded pass"
+    assert all(isinstance(r["outside_interval"], bool) for r in rm["resample_down"] if r["value"] is not None), \
+        "actual robustness thinnings must be compared with the emitted interval"
     assert corrupt("alpha beta gamma", "k1", "drop_token") == corrupt("alpha beta gamma", "k1", "drop_token")
     assert corrupt("ab", "k", "corrupt_char") in ("xb", "ax")
+    assert bootstrap_censored_mean([(-100.0, False), (100.0, False)], seed=3)[0] <= 0.0 \
+        <= bootstrap_censored_mean([(-100.0, False), (100.0, False)], seed=3)[1]
+
+    r_order = []
+
+    def ordered_robustness_reader(ep, text, question, options):
+        r_order.append(ep["name"])
+        return r_answers[text]
+
+    assert run_panel(dict(r_good), ask_fn=ordered_robustness_reader) is not None
+    assert r_order == (["reader-a"] * 2 + ["reader-b"] * 2
+                       + ["reader-a"] * 16 + ["reader-b"] * 16), \
+        "robustness must keep each reader resident while preserving baseline-before-corrupted"
+
+    truncated_text = corrupt(
+        r_items[0]["ainglish"], f"{r_seed}:{r_items[0]['id']}:ainglish", "drop_token")
+
+    def one_bound_truncation(ep, text, question, options):
+        if ep["name"] == "reader-a" and text == truncated_text:
+            return Absent("truncated")
+        return r_answers[text]
+
+    r_truncated = run_panel(dict(r_good), ask_fn=one_bound_truncation)
+    assert r_truncated is not None, "one typed truncation below the guard threshold may emit"
+    tr = r_truncated["manifest"]["transport_truncations"]
+    assert tr["total"] == 1 and tr["by_cell"]["ainglish_corrupted"] == 1, tr
+    assert tr["imbalanced_across_cells"] is True, \
+        "condition-correlated truncation must be visible in the receipt, never only a dead-cell total"
 
     # a changed calibration set is a DIFFERENT EXPERIMENT: the receipts must differ
     other_calib = [dict(r_calib[0], id="rc9", english="the moon is unrelated to any build")]
