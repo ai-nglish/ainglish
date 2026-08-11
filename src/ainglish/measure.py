@@ -847,7 +847,7 @@ def proposal_markers(proposal):
     form = (proposal.get("form") or "").strip()
     if not slot and "|" in form:
         forms = [part.strip() for part in form.split("|") if part.strip()]
-        meanings = [part.strip() for part in (proposal.get("english_mapping") or "").split("·") if part.strip()]
+        meanings = [part.strip()[:200] for part in (proposal.get("english_mapping") or "").split("·") if part.strip()]
         if 2 <= len(forms) <= 16 and len(forms) == len(meanings) \
                 and all(len(surface) <= 120 and len(surface.split()) <= 2 for surface in forms):
             slot = dict(zip(forms, meanings))
