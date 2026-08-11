@@ -38,12 +38,14 @@ negative about data that is actually there.
 """
 import base64
 import gzip
+import http.client
 import json
 import os
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 
 try:
     from ainglish import __version__ as _V
@@ -84,7 +86,9 @@ def _open(req, timeout, sensitive=False):
 class AinglishError(Exception):
     """The register's one error envelope, as one exception.
 
-    Fields: status (HTTP), error (machine code), message, hint, did_you_mean (list).
+    Fields: status (HTTP, or 0 when no HTTP response arrived), error (machine code), message,
+    hint, did_you_mean (list). Transport failures use `transport_error`; unreadable successful
+    responses use `invalid_response` — neither leaks urllib/gzip/json exception types to callers.
     str() renders all of it — the envelope was designed to be actionable, so show it.
     """
 
@@ -172,6 +176,34 @@ class AinglishClient:
             body = gzip.decompress(body)
         return body
 
+    def _response_body(self, resp, method, url, status=502):
+        """Read/decompress one response, preserving the one-exception client contract."""
+        try:
+            return self._decode(resp)
+        except (gzip.BadGzipFile, EOFError, zlib.error) as exc:
+            raise AinglishError(status, {
+                "error": "invalid_response",
+                "message": "%s %s returned an invalid gzip body: %s" % (method, url, exc),
+                "hint": "retry the read; if it persists, report the response encoding to the Ainglish project",
+            }) from None
+        except (OSError, http.client.HTTPException) as exc:
+            raise AinglishError(0, {
+                "error": "transport_error",
+                "message": "%s %s failed while reading the response: %s" % (method, url, exc),
+                "hint": "check connectivity and the configured base_url; writes are never retried automatically",
+            }) from None
+
+    @staticmethod
+    def _response_json(body, method, url):
+        try:
+            return json.loads(body) if body else {}
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise AinglishError(502, {
+                "error": "invalid_response",
+                "message": "%s %s returned a non-JSON response: %s" % (method, url, exc),
+                "hint": "retry the read; if it persists, report the endpoint and response format to the Ainglish project",
+            }) from None
+
     def _request(self, method, path, payload=None, params=None, auth=False, _retried=False):
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
         headers = {"User-Agent": "ainglish-python/%s" % _V, "Accept": "application/json",
@@ -190,10 +222,10 @@ class AinglishClient:
                 # authenticated request sensitive so a redirect cannot replay either its bearer
                 # or (on 307/308) its body to another host. Public reads retain ordinary redirects.
                 with _open(req, timeout=self.timeout, sensitive=auth) as r:
-                    body = self._decode(r)
-                return json.loads(body) if body else {}
+                    body = self._response_body(r, method, url)
+                return self._response_json(body, method, url)
             except urllib.error.HTTPError as e:
-                body = self._decode(e)
+                body = self._response_body(e, method, url, status=e.code)
                 if method == "GET" and e.code in self.TRANSIENT and attempt < 2:
                     time.sleep(0.5 + attempt)  # 0.5s, then 1.5s — enough for a blip, not a wait
                     continue
@@ -205,6 +237,12 @@ class AinglishClient:
                     self._token = ""  # server disagrees the token is fresh — believe it, re-mint once
                     return self._request(method, path, payload, params, auth, _retried=True)
                 raise AinglishError(e.code, envelope) from None
+            except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as e:
+                raise AinglishError(0, {
+                    "error": "transport_error",
+                    "message": "%s %s could not reach the register: %s" % (method, url, e),
+                    "hint": "check connectivity and the configured base_url; writes are never retried automatically",
+                }) from None
 
     def get(self, path, params=None, auth=False):
         """Escape hatch: GET any path (e.g. '/corpus/reference-rates.json'). Methods below are sugar."""
@@ -828,6 +866,63 @@ def selftest():
     assert AinglishClient._decode(resp) == raw, "gzip bodies must decode through _decode"
     resp2 = types.SimpleNamespace(read=lambda: raw, headers={})
     assert AinglishClient._decode(resp2) == raw, "plain bodies pass through untouched"
+    # Every failure after request construction stays inside the public AinglishError contract:
+    # callers should never need to know whether urllib, gzip, or json happened underneath.
+    class _Response:
+        def __init__(self, body, headers=None):
+            self.body, self.headers = body, headers or {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self):
+            return self.body
+
+    global _open
+    real_open = _open
+    transport_calls = []
+    try:
+        def offline(req, timeout, sensitive=False):
+            transport_calls.append(req.full_url)
+            raise urllib.error.URLError("offline probe")
+
+        _open = offline
+        try:
+            AinglishClient(base_url="https://offline.invalid", use_env=False).health()
+            raise AssertionError("network failures must use the AinglishError contract")
+        except AinglishError as err:
+            assert err.status == 0 and err.error == "transport_error", err
+            assert "GET https://offline.invalid/api/v1/health" in err.message, err.message
+        assert len(transport_calls) == 1, "transport failures are not implicit retry authority"
+
+        response_calls = []
+
+        def invalid_json(req, timeout, sensitive=False):
+            response_calls.append(req.full_url)
+            return _Response(b"not json")
+
+        _open = invalid_json
+        try:
+            AinglishClient(use_env=False)._request("POST", "/probe", payload={}, auth=False)
+            raise AssertionError("a successful HTTP status with a non-JSON body must refuse")
+        except AinglishError as err:
+            assert err.status == 502 and err.error == "invalid_response", err
+            assert "POST https://ainglish.org/probe" in err.message, err.message
+        assert len(response_calls) == 1, "a malformed write response must never trigger a retry"
+
+        _open = lambda req, timeout, sensitive=False: _Response(
+            b"not gzip", {"Content-Encoding": "gzip"})
+        try:
+            AinglishClient(use_env=False).health()
+            raise AssertionError("invalid gzip must use the AinglishError contract")
+        except AinglishError as err:
+            assert err.status == 502 and err.error == "invalid_response", err
+            assert "gzip" in err.message, err.message
+    finally:
+        _open = real_open
     # write methods must never appear retryable: the transient tuple is GET-only by code path,
     # and this pin exists so a refactor that widens it has to delete a named assertion
     assert AinglishClient.TRANSIENT == (500, 502, 503, 524)
