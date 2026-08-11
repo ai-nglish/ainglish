@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.17 — 2026-08-11
 - **Proposal traversal no longer stops at an invisible first-page boundary.** `proposals()` accepts
   the register's opaque cursor and documents its pagination envelope; `proposal_pages()` yields
   complete envelopes and `iter_proposals()` streams rows across the whole stable population.
