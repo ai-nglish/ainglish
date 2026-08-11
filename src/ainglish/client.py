@@ -283,6 +283,8 @@ class AinglishClient:
         Filters: q= (literal search across language, examples and rationale), stage=,
         since= (ISO-8601), limit= (1..200), cursor=. Treat cursor as opaque.
         Search responses include `search` and a `search_match` receipt on every row.
+        `pagination.total` is an advisory count at that request instant; it can change between
+        pages as the live register changes without invalidating the seek cursor.
 
         For the whole matching population use iter_proposals(); it follows cursors without
         accumulating every page in memory. proposal_pages() is the envelope-preserving twin.
@@ -296,14 +298,14 @@ class AinglishClient:
 
         Compatibility: a pre-pagination register response has no `pagination` block; it is
         yielded once and iteration stops. A malformed or repeating cursor raises AinglishError
-        instead of looping or silently returning a partial population.
+        instead of looping or silently repeating rows. `pagination.total` is a point-in-time
+        advisory count: proposals can be filed or change stage between pages, while the seek
+        cursor remains safe, so traversal never requires totals from separate requests to match.
         """
         if not isinstance(page_size, int) or isinstance(page_size, bool) or not 1 <= page_size <= 200:
             raise ValueError("page_size must be an integer from 1 to 200")
         cursor = None
         seen_cursors, seen_slugs = set(), set()
-        expected_total = None
-        returned = 0
         while True:
             kwargs = {"stage": stage, "since": since, "limit": page_size}
             if q is not None:
@@ -325,24 +327,24 @@ class AinglishClient:
             if isinstance(total, bool) or not isinstance(total, int) or total < 0:
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "proposal pagination returned an invalid total"})
-            if expected_total is None:
-                expected_total = total
-            elif total != expected_total:
+            has_more = pagination.get("has_more")
+            if not isinstance(has_more, bool):
                 raise AinglishError(502, {"error": "invalid_pagination",
-                                          "message": "proposal pagination total changed during traversal"})
+                                          "message": "proposal pagination returned a non-boolean has_more"})
+            page_returned = pagination.get("returned")
+            if page_returned is not None and (
+                    isinstance(page_returned, bool) or not isinstance(page_returned, int)
+                    or page_returned != len(page["proposals"])):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "proposal pagination returned count does not match its rows"})
             for row in page["proposals"]:
                 slug = row.get("slug") if isinstance(row, dict) else None
                 if not isinstance(slug, str) or not slug or slug in seen_slugs:
                     raise AinglishError(502, {"error": "invalid_pagination",
                                               "message": "proposal pagination repeated or lost a stable slug"})
                 seen_slugs.add(slug)
-            returned += len(page["proposals"])
             yield page
-            if pagination.get("has_more") is not True:
-                if returned != expected_total:
-                    raise AinglishError(502, {"error": "invalid_pagination",
-                                              "message": "proposal pagination ended at %d of advertised %d rows"
-                                                         % (returned, expected_total)})
+            if not has_more:
                 return
             next_cursor = pagination.get("next_cursor")
             if not isinstance(next_cursor, str) or not next_cursor or next_cursor in seen_cursors:
@@ -1019,14 +1021,34 @@ def selftest():
         raise AssertionError("a repeating cursor must refuse instead of looping")
     except AinglishError as err:
         assert err.error == "invalid_pagination" and "advance" in err.message
-    incomplete = _Paged({None: {"proposals": [{"slug": "only"}],
-                                "pagination": {"total": 2, "has_more": False,
-                                               "next_cursor": None}}})
+    moving = _Paged({
+        None: {"proposals": [{"slug": "older-a"}],
+               "pagination": {"returned": 1, "total": 2, "has_more": True,
+                              "next_cursor": "moving-page-2"}},
+        "moving-page-2": {"proposals": [{"slug": "older-b"}],
+                          # A newer matching proposal arrived after page one. It raises the live
+                          # total but sits before the seek boundary, so it cannot corrupt the
+                          # remaining older-page traversal.
+                          "pagination": {"returned": 1, "total": 3, "has_more": False,
+                                         "next_cursor": None}},
+    })
+    assert [p["slug"] for p in moving.iter_proposals(page_size=1)] == ["older-a", "older-b"], \
+        "a changing advisory total must not reject an otherwise stable seek traversal"
+
+    advisory = _Paged({None: {"proposals": [{"slug": "only"}],
+                              "pagination": {"total": 2, "has_more": False,
+                                             "next_cursor": None}}})
+    assert [p["slug"] for p in advisory.iter_proposals()] == ["only"], \
+        "the page cursor, not a separately recomputed total, defines traversal completion"
+
+    bad_returned = _Paged({None: {"proposals": [{"slug": "only"}],
+                                   "pagination": {"returned": 2, "total": 2,
+                                                  "has_more": False, "next_cursor": None}}})
     try:
-        list(incomplete.iter_proposals())
-        raise AssertionError("a short terminal page must not satisfy an advertised population")
+        list(bad_returned.iter_proposals())
+        raise AssertionError("a page's returned count must describe the rows actually served")
     except AinglishError as err:
-        assert err.error == "invalid_pagination" and "advertised" in err.message
+        assert err.error == "invalid_pagination" and "returned count" in err.message
     overlapping = _Paged({
         None: {"proposals": [{"slug": "same"}],
                "pagination": {"total": 2, "has_more": True, "next_cursor": "overlap"}},
