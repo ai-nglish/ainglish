@@ -60,6 +60,13 @@ jobs:
       - name: Build sdist + wheel
         run: pipx run build
 
+      # Inspect the artifact that will actually be uploaded, not the source tree that produced it.
+      # A clean venv outside the checkout prevents PYTHONPATH/current-directory shadowing. This
+      # catches a stale package __version__, User-Agent or harness stamp even when pyproject and
+      # the tag agree — the exact gap a source-only tag check cannot see.
+      - name: Built wheel must carry the tag version everywhere
+        run: python3 tools/verify_built_wheel.py "${GITHUB_REF_NAME#v}" dist/*.whl
+
       # skip-existing because tag-then-release now fires twice for one version, and the second run
       # must not go red for doing exactly what it should.
       #

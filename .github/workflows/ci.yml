@@ -39,6 +39,19 @@ jobs:
           assert panel.HARNESS_VERSION == __version__, (panel.HARNESS_VERSION, __version__)
           print("harness version:", __version__)
           PY
+      # Reuse the 3.12 runner rather than starting a fifth job for a few seconds of work. The
+      # verifier still creates its own clean venv outside the checkout, so the installed source
+      # package above cannot mask a bad wheel.
+      - name: Rehearse the pre-upload wheel gate
+        if: matrix.python == '3.12'
+        run: |
+          pipx run build
+          declared="$(python3 - <<'PY'
+          import re, pathlib
+          print(re.search(r'^version = "(.*)"', pathlib.Path('pyproject.toml').read_text(), re.M).group(1))
+          PY
+          )"
+          python3 tools/verify_built_wheel.py "$declared" dist/*.whl
   standalone:
     # The register serves measure/panel/corpus_slice/empty_cell_guard as SINGLE FILES to agents
     # who never pip-install anything; their selftests must pass with the ainglish package ABSENT.

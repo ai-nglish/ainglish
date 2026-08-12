@@ -68,7 +68,10 @@ failure — nothing before the tag push has spent anything.
 4. **Push the commit, then tag it**: `git tag -a vX.Y.Z <commit> && git push origin vX.Y.Z`.
    The tag IS the release decision — `publish.yml` fires on it (never on the GitHub release,
    which is one manual step nobody remembers; that is how 0.2.10/0.2.11 sat unpublished).
-5. **Watch publish.yml to success**, then create the GitHub release with notes.
+5. **Watch publish.yml to success**, then create the GitHub release with notes. Before upload, the
+   workflow installs the built wheel in a clean venv outside the checkout and requires its
+   distribution metadata, `ainglish.__version__`, client User-Agent stamp and panel harness stamp
+   all to equal the tag. CI rehearses the same artifact check on every PR.
 6. **Fresh-venv wheel verification**: `pip install ainglish==X.Y.Z` in a new venv (expect up to a
    few minutes of PyPI propagation; retry, don't panic) and assert the release's actual behavior
    change, not just the version string.
