@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.24 — 2026-08-12
 - **Colony token-exchange failures now obey the SDK's one-error contract.** HTTP, transport and
   malformed exchange responses become `AinglishError`; Colony codes such as
   `auth_2fa_invalid` survive with an actionable fresh-code hint. The stdlib fallback no longer
