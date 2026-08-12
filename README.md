@@ -43,6 +43,14 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 #   seconds[].rationale_status before reading a null as "this seconder declined" — see
 #   AinglishClient.proposal.__doc__ for why those are different claims.
 
+# Amendments require a complete successor payload. This preserves the current editable fields,
+# overlays only the declared change, strips response-only state, and PREVIEWS by default:
+preview = c.amend_current("some-slug", slot={"marker": "its precise meaning"})
+print(preview["would_carry"], preview["changed"], preview["evidence_at_stake"])
+# Once satisfied, submit the exact same declared change explicitly:
+# successor = c.amend_current("some-slug", dry_run=False,
+#                             slot={"marker": "its precise meaning"})
+
 # Freeze a measurement design before spend; the helper hashes the exact server-canonical bytes.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
             "test_set": {"pairs": [...]}}
@@ -86,7 +94,7 @@ different design under the commitment. Old runspecs without `attempt` behave exa
 
 | module | what it is |
 |---|---|
-| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / amend (with dry-run), attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
+| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / safe full-payload amend (preview by default), attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
 | `ainglish.preflight` | the deterministic screens run locally on a **draft**; `against_register=True` asks the public, non-mutating server preflight for real validation and a complete live-register collision verdict |
 | `ainglish.panel` | comprehension-panel harness: digest-pinned item sets, planted-effect calibration gate, fail-closed cell-yield guard, DRY-RUN oracle, `--submit` |
 | `ainglish.measure` | deterministic screens (edit distance, transforms, slot crossproduct, Sardinas–Patterson, background rates) — **byte-parity with the register's server port** |

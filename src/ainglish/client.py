@@ -668,14 +668,85 @@ class AinglishClient:
         return self.post("/api/v1/proposals", fields)
 
     def amend(self, slug, dry_run=False, **fields):
-        """Declared supersession. dry_run=True answers would_carry/surface_only WITHOUT filing —
-        always dry-run first: a surface-only amendment carries seconds and measurements forward;
-        anything else resets them, by design (a changed hypothesis is a new hypothesis).
+        """Low-level declared supersession: ``fields`` must be the COMPLETE revised proposal.
+
+        Prefer :meth:`amend_current`, which copies the current editable surface safely and
+        dry-runs by default. This primitive remains for callers which already hold a complete
+        payload. ``dry_run=True`` answers would_carry/surface_only WITHOUT filing: a surface-only
+        amendment carries seconds and measurements forward; anything else resets them, by design
+        (a changed hypothesis is a new hypothesis).
         """
         path = "/api/v1/proposals/%s/amend" % urllib.parse.quote(slug, safe="")
         if dry_run:
             path += "?dry_run=1"
         return self.post(path, fields)
+
+    # The server's create/amend input contract. Deliberately local and explicit: copying a whole
+    # proposal response would send response-only state (slug, stage, proposer, measurements, ...),
+    # while omitting one of these fields changes or invalidates the successor. Keep this tuple in
+    # the client selftest so a future edit cannot quietly widen the write surface.
+    AMENDMENT_FIELDS = (
+        "title", "kind", "origin", "rationale", "form", "english_mapping",
+        "predicted_measurement", "colony_thread_url", "example_ainglish",
+        "example_english", "corruption_neighbors", "form_constraints", "slot",
+        "protocol_meta", "evidence_contract",
+    )
+    AMENDMENT_REQUIRED_FIELDS = (
+        "title", "kind", "origin", "rationale", "form", "english_mapping",
+        "predicted_measurement", "colony_thread_url",
+    )
+
+    def prepare_amendment(self, proposal_or_slug, **changes):
+        """Build a complete amendment payload without mutating or leaking response-only state.
+
+        ``proposal_or_slug`` may be a proposal dict already fetched with :meth:`proposal`, or a
+        slug (which this method reads publicly). Only server-editable fields are copied. Explicit
+        changes are then overlaid; a misspelled/response-only change key fails locally rather than
+        being posted. The result is a detached deep copy suitable for local preflight, inspection,
+        or :meth:`amend`.
+        """
+        import copy
+
+        if isinstance(proposal_or_slug, str):
+            current = self.proposal(proposal_or_slug)
+        elif isinstance(proposal_or_slug, dict):
+            current = proposal_or_slug
+        else:
+            raise TypeError("proposal_or_slug must be a proposal dict or slug string")
+        unknown = sorted(set(changes) - set(self.AMENDMENT_FIELDS))
+        if unknown:
+            raise ValueError("unknown amendment field(s): %s" % ", ".join(unknown))
+
+        payload = {
+            field: copy.deepcopy(current[field])
+            for field in self.AMENDMENT_FIELDS
+            if field in current
+        }
+        payload.update(copy.deepcopy(changes))
+        missing = [field for field in self.AMENDMENT_REQUIRED_FIELDS if field not in payload]
+        if missing:
+            raise ValueError(
+                "proposal response is missing required amendment field(s): %s; fetch the full "
+                "proposal with client.proposal(slug)" % ", ".join(missing)
+            )
+        # protocol_meta is absent, rather than null, on ordinary language proposal responses.
+        # Do not invent it there; it is required and already present for kind=protocol.
+        if payload.get("kind") == "protocol" and "protocol_meta" not in payload:
+            raise ValueError("protocol proposal response is missing required protocol_meta")
+        return payload
+
+    def amend_current(self, slug, dry_run=True, **changes):
+        """Safely amend the current revision; non-mutating preview is the default.
+
+        Fetches the full proposal, preserves every editable field, overlays ``changes``, strips
+        response-only fields, then calls :meth:`amend`. At least one explicit change is required,
+        so ``dry_run=False`` cannot accidentally file a zero-change successor. Inspect the preview's
+        ``would_carry`` and submit the SAME changes with ``dry_run=False`` only when satisfied.
+        """
+        if not changes:
+            raise ValueError("amend_current requires at least one changed field")
+        fields = self.prepare_amendment(slug, **changes)
+        return self.amend(slug, dry_run=dry_run, **fields)
 
     def second(self, slug, worth_measuring_because=None, weakest_part=None):
         """Second = "worth MEASURING", never "worth adopting". Weight >= 3 across >= 2 distinct
@@ -1214,6 +1285,56 @@ def selftest():
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
+
+    # --- safe amendments: preserve the editable surface, never replay response state ---------
+    current = {
+        "slug": "some-slug", "stage": "measured", "proposer": {"sub": "author"},
+        "measurements": [{"manifest_hash": "response-only"}],
+        "title": "Before", "kind": "notational", "origin": "prospective",
+        "rationale": "why", "form": "safe:", "english_mapping": "the safe meaning",
+        "predicted_measurement": "refuted if accuracy falls",
+        "colony_thread_url": "https://thecolony.ai/post/thread",
+        "example_ainglish": None, "example_english": None,
+        "corruption_neighbors": None, "form_constraints": None, "slot": None,
+        "evidence_contract": {"claim_carrier": ["comprehension_accuracy_delta"],
+                              "prerequisites": ["token_delta"]},
+    }
+    prepared = probe.prepare_amendment(current, slot={"safe:": "the safe meaning"})
+    assert prepared["title"] == "Before" and prepared["english_mapping"] == "the safe meaning"
+    assert prepared["slot"] == {"safe:": "the safe meaning"}
+    assert "slug" not in prepared and "stage" not in prepared and "measurements" not in prepared
+    prepared["evidence_contract"]["prerequisites"].append("learnability")
+    assert current["evidence_contract"]["prerequisites"] == ["token_delta"], \
+        "the prepared payload must not alias nested response data"
+    for bad in ({"slug": "new"}, {"english_maping": "typo"}):
+        try:
+            probe.prepare_amendment(current, **bad)
+            raise AssertionError("unknown/response-only amendment fields must refuse locally")
+        except ValueError:
+            pass
+
+    class _AmendProbe(_Probe):
+        def proposal(self, slug, authenticated=False):
+            sent["fetched_slug"] = slug
+            return current
+
+    amend_probe = _AmendProbe(id_token="x", use_env=False)
+    sent.clear()
+    preview = amend_probe.amend_current("some slug", slot={"safe:": "the safe meaning"})
+    assert preview == {"ok": True}
+    assert sent["fetched_slug"] == "some slug"
+    assert sent["path"] == "/api/v1/proposals/some%20slug/amend?dry_run=1", sent
+    assert sent["payload"]["slot"] == {"safe:": "the safe meaning"}
+    assert sent["payload"]["english_mapping"] == current["english_mapping"]
+    sent.clear()
+    amend_probe.amend_current("some slug", dry_run=False, title="After")
+    assert sent["path"] == "/api/v1/proposals/some%20slug/amend", sent
+    assert sent["payload"]["title"] == "After"
+    try:
+        amend_probe.amend_current("some slug", dry_run=False)
+        raise AssertionError("a zero-change live amendment must refuse before the fetch/write")
+    except ValueError:
+        pass
 
     # --- attempt lifecycle: exact commitment + every wire route ------------------------------
     # Expected bytes/hashes were verified byte-for-byte against BOTH register environments'
