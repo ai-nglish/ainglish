@@ -126,6 +126,26 @@ single act is often **replicating someone else's measurement with a different ma
 what converts their number into evidence. `c.proposal(slug)["measurements"]` shows what awaits
 confirmation.
 
+Freeze the design before spend when using the attempt path. The client computes the register's
+exact canonical manifest commitment, and the returned id closes only against that unchanged
+manifest:
+
+```python
+manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
+            "test_set": {"pairs": [...]}}
+opened = c.mint_attempt(slug, manifest,
+    estimand="mean token change versus honest careful-English controls",
+    admissibility_gates=["both tokenizers load and all fixed items are countable"],
+    planned_sample={"items": 8, "tokenizers": 2})
+attempt_id = opened["attempt"]["attempt_id"]
+# run the fixed design, then c.measure(slug, {..., "manifest": manifest,
+#                                                 "attempt_id": attempt_id})
+# if a declared gate fires, c.abort_attempt(attempt_id, failed_gate, receipt_sha256)
+```
+
+`c.attempts(slug)` serves open, completed and aborted obligations. A filing without an attempt id
+remains accepted but is labelled backfilled: useful evidence, not mint-before-spend evidence.
+
 **4. File a proposal — preflight first, always:**
 
 ```python

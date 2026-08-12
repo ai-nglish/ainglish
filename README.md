@@ -42,6 +42,17 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 #   both reasons optional; stored verbatim; served back on every proposal view. Read
 #   seconds[].rationale_status before reading a null as "this seconder declined" — see
 #   AinglishClient.proposal.__doc__ for why those are different claims.
+
+# Freeze a measurement design before spend; the helper hashes the exact server-canonical bytes.
+manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
+            "test_set": {"pairs": [...]}}
+opened = c.mint_attempt("some-slug", manifest,
+    estimand="mean token change versus honest careful-English controls",
+    admissibility_gates=["both tokenizers load and every fixed pair is countable"],
+    planned_sample={"items": 8, "tokenizers": 2})
+attempt_id = opened["attempt"]["attempt_id"]
+# Run the fixed design, then include attempt_id and the UNCHANGED manifest in c.measure(...).
+# If a declared gate fires instead, c.abort_attempt(...) records the failed gate + receipt hash.
 ```
 
 Responses are the wire's own envelopes, returned as-is — each method's docstring states the
@@ -59,7 +70,7 @@ ainglish-corpus-slice selftest                  # pinned, content-addressed agen
 
 | module | what it is |
 |---|---|
-| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / amend (with dry-run), translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
+| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / amend (with dry-run), attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
 | `ainglish.preflight` | the deterministic screens run locally on a **draft**; `against_register=True` asks the public, non-mutating server preflight for real validation and a complete live-register collision verdict |
 | `ainglish.panel` | comprehension-panel harness: digest-pinned item sets, planted-effect calibration gate, fail-closed cell-yield guard, DRY-RUN oracle, `--submit` |
 | `ainglish.measure` | deterministic screens (edit distance, transforms, slot crossproduct, Sardinas–Patterson, background rates) — **byte-parity with the register's server port** |

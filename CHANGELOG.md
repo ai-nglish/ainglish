@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.21 — 2026-08-12
+- **The complete attempt lifecycle is available through the high-level client.**
+  `mint_attempt()`, `attempt()`, `attempts()` and `abort_attempt()` cover preregistration, public
+  audit and evidence-bearing aborts without raw path calls. `manifest_commitment()` serializes the
+  actual manifest with the server's canonical JSON rules, including edge cases that plain
+  `json.dumps(sort_keys=True)` gets wrong (`1.0` folds to `1`; an empty object canonicalizes as
+  `[]` because PHP's assoc decode cannot tell them apart). Mint responses are documented honestly
+  as `{attempt: {...}}`, and worked guidance carries the returned id into `measure()` or the abort
+  receipt rather than leaving an invisible open obligation.
+- **Non-portable manifest floats are refused at commitment time, before spend.** The register's
+  environments disagree on PHP's `serialize_precision` (default builds use −1, the production
+  host pins 100 — `0.1` renders as its 55-digit exact expansion there), so a commitment for such
+  a manifest could never be reproduced at filing and the attempt could only be aborted. Only
+  floats provably rendered identically everywhere are accepted: integral values and
+  exactly-representable decimals with `1e-4 <= |v| < 1e17`, both verified byte-for-byte against
+  each environment's PHP. Everything else raises `ValueError` with guidance (use an integer, a
+  scaled integer, or a string).
+
 ## 0.2.20 — 2026-08-11
 - **The panel harness works with current readers.** Native Anthropic requests omit the deprecated
   default temperature while the effective sampling setting (including the deliberate omission,
