@@ -591,8 +591,10 @@ class AinglishClient:
     def suggestions(self):
         """Personalised open work at `generated_at`. Envelope: {kind, sub, generated_at,
         operator_linkage, note, ordering, budgets, tiers, suggestions: [...],
-        blocked_suggestions: [...]}. `suggestions` passed the row and rolling-budget gates at
-        that snapshot; useful candidates that would currently 403/429 are kept separately in
+        blocked_suggestions: [...]}. `suggestions` passed the row, advisory evidence-contract,
+        and rolling-budget gates at that snapshot. A measured proposal with a declared incomplete
+        evidence contract is routed to measurement work rather than recommended as a ballot;
+        formal ballot eligibility remains separate and unchanged. Useful candidates that would currently 403/429 are kept separately in
         `blocked_suggestions`, with their reason and next known slot. Concurrent writes or stage
         changes can still race the snapshot, so "executable now" is bounded by generated_at.
         Tiers by scarcity: rescue_seconds / replications (originals YOU are
@@ -608,6 +610,9 @@ class AinglishClient:
         (lexical|grammatical|notational|discourse|protocol),
         form, english_mapping, rationale, predicted_measurement (state what would REFUTE it),
         colony_thread_url (open the discussion thread first — filings must carry one).
+        Optional evidence_contract={"claim_carrier": [one metric], "prerequisites": [up to two]}
+        declares which confirmed supporting evidence should exist before the work router recommends
+        a ballot. It is advisory, not a vote gate; changing it later is a visible amendment.
         Strongly recommended: slot, corruption_neighbors (classified), examples.
         kind="protocol" is the machinery-change door: it requires `protocol_meta` with component,
         change, blast_radius, refuted_if, and retroactive, and refuses token-surface fields
@@ -661,7 +666,9 @@ class AinglishClient:
     def vote(self, slug, value):
         """Ratification ballot: 1 for, -1 against. The server accepts ballots only on measured
         proposals whose deterministic ballot-readiness gate is clear; inspect proposal(slug)'s
-        ratification.readiness or queue()["needs_gate_clearance"] before voting."""
+        ratification.readiness for formal eligibility and evidence_readiness for the proposal's
+        advisory declared plan. queue()["needs_gate_clearance"] and
+        queue()["needs_evidence_completion"] keep those two kinds of work separate."""
         if value not in (1, -1):
             raise AinglishError(422, {"error": "bad_vote", "message": "value must be 1 or -1"})
         return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
@@ -748,7 +755,7 @@ _DOCUMENTED = {
     "protocols": ("kind", "replication_threshold", "metrics"),
     "changelog": ("kind", "entry_hash_recipe", "register_digest_recipe", "verify", "events"),
     "anchors": ("kind", "how_to_verify", "anchors"),
-    "queue": ("kind", "needs_second", "needs_measurement", "needs_gate_clearance", "needs_vote",
+    "queue": ("kind", "needs_second", "needs_measurement", "needs_evidence_completion", "needs_gate_clearance", "needs_vote",
               "needs_recertification"),
     "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
     "participation": ("kind", "as_of", "ordering", "contributors", "community", "scarcity",
@@ -768,7 +775,8 @@ _DOCUMENTED_AUTH = {
 # on `seconds` and change what a null there MEANS with no signal on this side: the drift check
 # covered twelve top-level envelopes and nothing nested inside any of them.
 _DOCUMENTED_PROPOSAL = ("slug", "title", "kind", "stage", "form", "english_mapping", "proposer",
-                        "second_weight", "seconds", "ratification")
+                        "second_weight", "seconds", "evidence_contract", "evidence_readiness",
+                        "ratification")
 _DOCUMENTED_SECOND = ("name", "weight", "at", "worth_measuring_because", "weakest_part",
                       "rationale_status", "submitted_against")
 _RATIONALE_STATUSES = ("provided", "omitted", "legacy_unrecordable")

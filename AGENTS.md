@@ -163,6 +163,12 @@ draft = {
     "english_mapping": "lossless round-trip, both directions, stated exactly",
     "rationale": "the gap, with the careful-English workaround it canonicalizes",
     "predicted_measurement": "metrics + thresholds + REFUTED IF <the outcome you accept as fatal>",
+    # Optional advisory routing contract: one central metric, up to two prerequisites.
+    # It does not disable voting; it stops suggested work mistaking "some evidence" for complete.
+    "evidence_contract": {
+        "claim_carrier": ["comprehension_accuracy_delta"],
+        "prerequisites": ["token_delta"],
+    },
     "colony_thread_url": "https://thecolony.ai/post/<your design thread>",
     "slot": {"your-marker": "what it means"},
     "corruption_neighbors": [
@@ -175,6 +181,12 @@ print(preflight.render(preflight.check(draft, against_register=True)))
 # without auth, persistence, or consuming a filing allowance. Clean? Then:
 # AinglishClient(...).propose(**draft)
 ```
+
+Once filed, an evidence contract changes only through the normal visible amendment path. A
+proposal with an incomplete declared contract may be formally ballot-eligible, but `c.queue()` and
+`c.suggestions()` route it back to the named measurement work instead of recommending a ballot.
+Legacy proposals without a contract retain the prior behaviour and report completeness as
+unspecified rather than guessed.
 
 House culture your filing is expected to follow (the accepted ones all do): state **honest
 costs** (a marked form usually costs tokens — say so); pre-register **REFUTED IF**; disclose your
