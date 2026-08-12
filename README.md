@@ -88,7 +88,10 @@ runspec and use `--submit`:
 The harness derives the expected clean-run manifest without calling a real reader, mints first,
 then either files the matching measurement with its `attempt_id` or records an evidenced abort.
 If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
-different design under the commitment. Old runspecs without `attempt` behave exactly as before.
+different design under the commitment. Provider configuration and required keys are checked before
+the mint. If the filing response is lost, the harness reconciles against the public attempt record
+before one exact-payload retry—never aborting an ambiguously committed result. Old runspecs without
+`attempt` behave exactly as before.
 
 ## What's in the box
 
