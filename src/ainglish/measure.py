@@ -51,11 +51,12 @@ PROPOSAL_PAGE_SIZE = 200
 
 
 def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SIZE, fetch=None):
-    """Return the complete proposal population, or refuse if completeness is unprovable.
+    """Return every proposal exposed by one stable-cursor traversal.
 
     Register-wide measurements cannot make a whole-register claim from the API's first page.
-    Follow the opaque cursor (never synthesize offsets), require a stable advertised total, and
-    reject duplicate/missing identities so a stalled or overlapping page cannot look complete.
+    Follow the opaque cursor (never synthesize offsets) and reject duplicate/missing identities so
+    a stalled or overlapping page cannot look complete. ``pagination.total`` is advisory at each
+    request: a live filing may change it between pages without invalidating the seek cursor.
     ``fetch`` is injectable because corpus_slice supplies its retrying transport and the selftest
     must prove the >200-row path without touching the network.
     """
@@ -70,7 +71,6 @@ def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SI
 
     rows, slugs, cursors = [], set(), set()
     cursor = None
-    expected_total = None
     while True:
         query = {"limit": page_limit}
         if cursor is not None:
@@ -88,10 +88,14 @@ def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SI
         total = pagination.get("total")
         if isinstance(total, bool) or not isinstance(total, int) or total < 0:
             raise RuntimeError("proposal pagination returned an invalid total")
-        if expected_total is None:
-            expected_total = total
-        elif total != expected_total:
-            raise RuntimeError("proposal pagination total changed during traversal")
+        has_more = pagination.get("has_more")
+        if not isinstance(has_more, bool):
+            raise RuntimeError("proposal pagination returned a non-boolean has_more")
+        returned = pagination.get("returned")
+        if returned is not None and (
+                isinstance(returned, bool) or not isinstance(returned, int)
+                or returned != len(page["proposals"])):
+            raise RuntimeError("proposal pagination returned count does not match its rows")
 
         for row in page["proposals"]:
             slug = row.get("slug") if isinstance(row, dict) else None
@@ -102,10 +106,7 @@ def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SI
             slugs.add(slug)
             rows.append(row)
 
-        if pagination.get("has_more") is not True:
-            if len(rows) != expected_total:
-                raise RuntimeError(
-                    "proposal pagination ended at %d of advertised %d rows" % (len(rows), expected_total))
+        if not has_more:
             return rows
         next_cursor = pagination.get("next_cursor")
         if not isinstance(next_cursor, str) or not next_cursor or next_cursor in cursors:
@@ -621,10 +622,14 @@ def selftest():
         calls.append(cursor)
         if cursor is None:
             return {"proposals": first,
-                    "pagination": {"total": 201, "has_more": True, "next_cursor": "opaque:+/="}}
+                    "pagination": {"returned": 200, "total": 201, "has_more": True,
+                                   "next_cursor": "opaque:+/="}}
         assert cursor == "opaque:+/=", "the server cursor must be replayed, not interpreted"
         return {"proposals": [{"slug": "p-200"}],
-                "pagination": {"total": 201, "has_more": False, "next_cursor": None}}
+                # A concurrent filing sorts before the seek boundary. It changes the point-in-time
+                # total but cannot invalidate or expand the already-issued cursor traversal.
+                "pagination": {"returned": 1, "total": 202, "has_more": False,
+                               "next_cursor": None}}
     assert len(proposal_population("https://example.invalid", fetch=proposal_fetch)) == 201
     assert calls == [None, "opaque:+/="]
     def stalled_fetch(_url):
