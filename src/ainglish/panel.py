@@ -59,6 +59,18 @@ REQUEST_TIMEOUT = 120
 FAULT_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
+def _portable_decimal(x):
+    """Render a report statistic as a decimal string every register environment reads identically.
+
+    The commitment canonicalizer refuses floats that PHP's serialize_precision settings render
+    differently (only integral values and exact dyadics pass). A string carries the same digits
+    with no float identity to disagree about — at the cost that consumers parse it themselves,
+    which is the honest trade for a value that exists to be READ, not computed with.
+    """
+    s = f"{float(x):.4f}".rstrip("0").rstrip(".")
+    return s if s not in ("", "-", "-0") else "0"
+
+
 def _origin(url):
     p = urllib.parse.urlsplit(url)
     port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
@@ -1088,11 +1100,19 @@ def run_panel(manifest, ask_fn=ask):
             per_arm[arm_].append(dkey[iid])
         means = {a: (round(sum(v) / len(v), 4) if v else None) for a, v in per_arm.items()}
         gap = round(abs(means["ainglish"] - means["english"]), 4) if None not in means.values() else None
+        # The report's statistics ride the COMMITTED manifest as decimal STRINGS: a round()-ed
+        # mean like 2.28 or a gap of 0.08 is not exactly representable, so a numeric report made
+        # an annotated item set unmintable whenever the seed's deal landed off the portable set —
+        # manifest_commitment (correctly) refuses such floats, and the deal is not the
+        # experimenter's choice (issue #41, found live). The gate below still compares numbers;
+        # only the wire format is a string, carrying the same digits with no float identity.
         difficulty_report = {"annotated": True, "axis": manifest["difficulty_axis"],
-                             "per_arm_mean": means, "gap": gap}
+                             "per_arm_mean": {a: (_portable_decimal(m) if m is not None else None)
+                                              for a, m in means.items()},
+                             "gap": _portable_decimal(gap) if gap is not None else None}
         max_gap = manifest.get("difficulty_balance_max_gap")
         if max_gap is not None:
-            difficulty_report["max_gap"] = max_gap
+            difficulty_report["max_gap"] = _portable_decimal(float(max_gap))
             if gap is None or gap > float(max_gap):
                 print(f"REFUSING to emit: per-arm difficulty gap {gap} exceeds the declared max "
                       f"{max_gap} — with this deal the delta would read difficulty, not the "
