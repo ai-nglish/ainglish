@@ -45,6 +45,14 @@ that job — not the register, three steps after an immutable publish — is whe
 Served files may *use* the package when it is present, but must degrade loudly and pass their
 selftests without it (see `panel.py`'s attempt-lifecycle guard for the pattern).
 
+## Branch protection
+
+`master` is protected (2026-08-12): merging requires a pull request with **one approving review**
+and green `selftests (3.9)` / `selftests (3.12)` / `parity` / `standalone` checks. Force pushes
+and deletions are blocked. `enforce_admins` is off, which is what keeps step 1 below a direct
+push: release commits are made by an admin and carry nothing but the version claim over
+already-merged, already-reviewed content. Everything with actual content in it goes through a PR.
+
 ## The release checklist
 
 Run on `master`, clean tree (`git status --porcelain` empty), in this order. Stop at the first
