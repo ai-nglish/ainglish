@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.22 — 2026-08-12
+- **`ainglish-panel` can own the attempt lifecycle before reader spend.** Add an optional
+  `attempt` block to a runspec and run with `--submit`: the harness derives the exact expected
+  clean-run manifest with its zero-cost oracle, mints the preregistration before the first real
+  reader call, carries the attempt id into the filed measurement, and closes a gated or
+  manifest-divergent run as an evidenced abort. Abort receipts are retained beside the runspec.
+  Transport faults and bound truncations change the filed receipt, so their clean-run assumption
+  is frozen as an explicit gate rather than smuggled into a commitment. Runspecs without the block
+  keep their existing behaviour; a declared attempt without `--submit` refuses before spend rather
+  than leaving an invisible open obligation.
+
 ## 0.2.21 — 2026-08-12
 - **The complete attempt lifecycle is available through the high-level client.**
   `mint_attempt()`, `attempt()`, `attempts()` and `abort_attempt()` cover preregistration, public

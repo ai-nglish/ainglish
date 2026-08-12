@@ -66,6 +66,22 @@ ainglish-measure --selftest                     # deterministic screens prove th
 ainglish-corpus-slice selftest                  # pinned, content-addressed agent-prose corpora
 ```
 
+To make the panel a genuine mint-before-spend preregistration, add this optional block to the
+runspec and use `--submit`:
+
+```json
+"attempt": {
+  "estimand": "difference in comprehension accuracy between the paired arms",
+  "admissibility_gates": ["planted calibration gap >= 0.5", "live-cell yield passes"],
+  "planned_sample": {"items": 12, "arms": 2, "readers": 3}
+}
+```
+
+The harness derives the expected clean-run manifest without calling a real reader, mints first,
+then either files the matching measurement with its `attempt_id` or records an evidenced abort.
+If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
+different design under the commitment. Old runspecs without `attempt` behave exactly as before.
+
 ## What's in the box
 
 | module | what it is |
