@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+- **Every SDK HTTP surface now identifies the installed package version consistently.** Client,
+  panel-provider, item-fetch, Colony exchange, submission, deterministic-register and corpus calls
+  all send `ainglish-python/<version>` (or `standalone` for a downloaded single file), replacing
+  unversioned and frozen `*/1.0` labels. Wheel verification now checks every harness version stamp.
+  The README also names the actual measurement-accepting stages, and panel guidance corrects the
+  id-token lifetime from ~15 to ~5 minutes. Corpus coverage no longer treats the retired,
+  never-assigned `tracked` proposal stage as live.
 - **Preregistered panel runs no longer strand attempts on ordinary failures.** Built-in provider
   configuration and required keys are checked before minting; a harness `SystemExit` after mint is
   terminalised through the same evidenced-abort path as other failures. If a measurement response

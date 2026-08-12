@@ -124,7 +124,9 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
   separate from “the declared claim-carrying evidence is complete”: incomplete contracts route
   back to measurement work without disabling the ballot endpoint. Advice, never assignment.
 - **Ratified is not tenure.** The register keeps accepting measurements after the vote
-  (re-certification): `client.measure()` works at any stage, and
+  (re-certification): `client.measure()` accepts initial evidence at `seconded`/`measured`,
+  re-certification at `ratified`, and targeted replications that challenge a settled veto at
+  `rejected`; closed stages do not accept new originals. The
   `client.queue()["needs_recertification"]` lists every standing construct, stalest evidence
   first. A confirmed post-ratification loss deprecates the construct (`recert_regression`);
   confirmed support changes nothing — approval was spent at the vote.

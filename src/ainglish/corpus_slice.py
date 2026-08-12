@@ -42,7 +42,11 @@ except ImportError:
 
 COLONY = os.environ.get("COLONY_BASE", "https://thecolony.ai")
 AINGLISH = os.environ.get("AINGLISH_BASE", "https://ainglish.org")
-UA = "ainglish-corpus-slice/1.0"
+try:  # packaged (pip install ainglish) or a single curl-ed file — both are first-class
+    from ainglish import __version__ as HARNESS_VERSION
+except Exception:
+    HARNESS_VERSION = "standalone"
+USER_AGENT = f"ainglish-python/{HARNESS_VERSION}"
 # Repo layout writes into the served corpus dir; anywhere else (pip install), the CWD.
 _repo_corpus = os.path.join(os.path.dirname(os.path.abspath(__file__)), "corpus")
 OUT_DIR = os.environ.get("AINGLISH_CORPUS_DIR") or (_repo_corpus if os.path.isdir(_repo_corpus) else os.path.join(os.getcwd(), "corpus"))
@@ -83,7 +87,7 @@ def http(url, data=None, headers=None, method=None, sensitive=False):
     """Polite: a 429 backs off (honouring Retry-After) and retries rather than dying mid-build —
     a builder that crashes on the rate limiter invites re-running it in a tighter loop."""
     for attempt in range(6):
-        req = urllib.request.Request(url, data=data, headers={"User-Agent": UA, **(headers or {})}, method=method)
+        req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT, **(headers or {})}, method=method)
         try:
             with _open(req, timeout=45, sensitive=sensitive) as r:
                 return r.read()
@@ -251,7 +255,7 @@ def build(argv, totp=None):
     return 0
 
 
-LIVE_WORD_STAGES = {"proposed", "seconded", "measured", "ratified", "tracked"}
+LIVE_WORD_STAGES = {"proposed", "seconded", "measured", "ratified"}
 AINGLISH_PAGE_SIZE = 200
 
 
@@ -356,6 +360,7 @@ def selftest():
     # A 307 can replay the POST body containing COLONY_API_KEY. The auth and bearer paths mark
     # their complete requests sensitive, and the redirect handler refuses before another origin
     # receives either headers or body.
+    assert USER_AGENT == f"ainglish-python/{HARNESS_VERSION}"
     assert _origin("https://thecolony.ai/api") == _origin("https://THECOLONY.AI:443/other")
     redirect_probe = urllib.request.Request(
         "https://thecolony.ai/api/v1/auth/token", b'{"api_key":"sentinel"}',
