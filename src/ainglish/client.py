@@ -230,7 +230,52 @@ class AinglishClient:
             return self._token
         if self._key:
             from ainglish.panel import mint_id_token  # one exchange implementation, not two
-            self._token = mint_id_token(self.colony_base, AUDIENCE, self._key, totp=self._totp)
+            try:
+                self._token = mint_id_token(self.colony_base, AUDIENCE, self._key, totp=self._totp)
+            except AinglishError:
+                raise
+            except urllib.error.HTTPError as exc:
+                # Colony's errors are `{detail:{code,message}}`, not Ainglish envelopes. Preserve
+                # that machine code across the SDK boundary instead of leaking urllib's HTTPError.
+                try:
+                    payload = json.loads(exc.read())
+                except Exception:
+                    payload = {}
+                detail = payload.get("detail") if isinstance(payload, dict) else None
+                detail = detail if isinstance(detail, dict) else {}
+                code = detail.get("code") or (payload.get("error") if isinstance(payload, dict) else None)
+                message = detail.get("message") or (payload.get("message") if isinstance(payload, dict) else None)
+                code = str(code or "auth_exchange_failed").lower()
+                message = str(message or "Colony refused the credential exchange.")
+                hint = "check the Colony API key and retry"
+                if code in ("auth_2fa_required", "auth_2fa_invalid"):
+                    hint = ("pass totp= as a zero-argument callable returning a fresh six-digit code; "
+                            "TOTP codes rotate every 30 seconds, so do not cache one across token re-mints")
+                raise AinglishError(exc.code, {
+                    "error": code, "message": message, "hint": hint,
+                }) from None
+            except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+                raise AinglishError(0, {
+                    "error": "auth_transport_error",
+                    "message": "could not reach Colony while minting an Ainglish credential: %s" % exc,
+                    "hint": "check connectivity and colony_base, then retry; no request was sent to Ainglish",
+                }) from None
+            except (SystemExit, RuntimeError, KeyError, TypeError, ValueError) as exc:
+                raise AinglishError(502, {
+                    "error": "auth_invalid_response",
+                    "message": "Colony's credential exchange returned an unusable response: %s" % exc,
+                    "hint": "retry once; if it persists, report Colony/Ainglish SDK contract drift",
+                }) from None
+            except Exception as exc:
+                # colony-sdk owns its exception hierarchy. Keep that optional dependency behind the
+                # same public contract even when a new SDK version introduces a new error class.
+                status = getattr(exc, "status_code", 502)
+                status = status if isinstance(status, int) else 502
+                raise AinglishError(status, {
+                    "error": "auth_exchange_failed",
+                    "message": "Colony credential exchange failed: %s" % exc,
+                    "hint": "check the API key/TOTP and retry; if it persists, report the Colony SDK error",
+                }) from None
             return self._token
         if self._token:
             raise AinglishError(401, {"error": "token_expired",
@@ -1065,8 +1110,68 @@ def selftest():
         assert AinglishClient(use_env=False)._totp is None
     finally:
         os.environ.pop("AINGLISH_TOTP", None) if old_totp is None else os.environ.__setitem__("AINGLISH_TOTP", old_totp)
-    # gzip decode: roundtrip through the same helper the transport uses
+    # Credential exchange is part of the client's public transport boundary. Colony failures must
+    # arrive as AinglishError — never urllib internals, SystemExit, or stdout that corrupts a JSON
+    # consumer. Exercise the real import seam because _bearer deliberately reuses panel.py's minter.
+    import io
+    import contextlib
+    import sys
     import types
+    from ainglish import panel as _panel
+    real_mint = _panel.mint_id_token
+    try:
+        def _http_2fa(*args, **kwargs):
+            raise urllib.error.HTTPError(
+                "https://thecolony.ai/api/v1/auth/token", 401, "Unauthorized", {},
+                io.BytesIO(b'{"detail":{"message":"Invalid 2FA code.","code":"AUTH_2FA_INVALID"}}'))
+        _panel.mint_id_token = _http_2fa
+        try:
+            AinglishClient(colony_api_key="key", use_env=False)._bearer()
+            raise AssertionError("Colony 401 leaked or was accepted")
+        except AinglishError as err:
+            assert err.status == 401 and err.error == "auth_2fa_invalid" and "callable" in err.hint, str(err)
+
+        def _bad_shape(*args, **kwargs):
+            raise SystemExit("no id_token")
+        _panel.mint_id_token = _bad_shape
+        try:
+            AinglishClient(colony_api_key="key", use_env=False)._bearer()
+            raise AssertionError("SystemExit escaped the library boundary")
+        except AinglishError as err:
+            assert err.status == 502 and err.error == "auth_invalid_response", str(err)
+
+        def _offline(*args, **kwargs):
+            raise urllib.error.URLError("offline")
+        _panel.mint_id_token = _offline
+        try:
+            AinglishClient(colony_api_key="key", use_env=False)._bearer()
+            raise AssertionError("URLError escaped the library boundary")
+        except AinglishError as err:
+            assert err.status == 0 and err.error == "auth_transport_error", str(err)
+    finally:
+        _panel.mint_id_token = real_mint
+
+    # The reusable minter itself is silent on success; provenance belongs in explicit receipts,
+    # not unsolicited stdout. A fake colony-sdk exercises the preferred path without a network.
+    _missing = object()
+    old_colony_sdk = sys.modules.get("colony_sdk", _missing)
+    fake_colony_sdk = types.SimpleNamespace(
+        __version__="test",
+        ColonyClient=lambda **kwargs: types.SimpleNamespace(
+            exchange_token=lambda **kwargs: {"id_token": "header.payload.signature"}),
+    )
+    try:
+        sys.modules["colony_sdk"] = fake_colony_sdk
+        captured_stdout = io.StringIO()
+        with contextlib.redirect_stdout(captured_stdout):
+            assert _panel.mint_id_token("https://thecolony.ai", "aud", "key") == "header.payload.signature"
+        assert captured_stdout.getvalue() == "", "credential minting must not write to stdout"
+    finally:
+        if old_colony_sdk is _missing:
+            sys.modules.pop("colony_sdk", None)
+        else:
+            sys.modules["colony_sdk"] = old_colony_sdk
+    # gzip decode: roundtrip through the same helper the transport uses
     raw = json.dumps({"kind": "x"}).encode()
     packed = gzip.compress(raw)
     resp = types.SimpleNamespace(read=lambda: packed, headers={"Content-Encoding": "gzip"})

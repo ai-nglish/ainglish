@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- **Colony token-exchange failures now obey the SDK's one-error contract.** HTTP, transport and
+  malformed exchange responses become `AinglishError`; Colony codes such as
+  `auth_2fa_invalid` survive with an actionable fresh-code hint. The stdlib fallback no longer
+  prints success output or exits the process, and it sends the versioned SDK User-Agent.
 - **Safe amendments are full-payload and preview-first.** `amend_current()` fetches the current
   proposal, copies only its editable fields, overlays explicit changes, and dry-runs by default;
   response-only state and misspelled fields refuse locally. `prepare_amendment()` exposes the
