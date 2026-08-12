@@ -1,6 +1,13 @@
 # Changelog
 
 ## 0.2.22 — 2026-08-12
+- **Suggested work understands advisory proposal evidence contracts.** Proposal reads document
+  `evidence_contract` beside computed `evidence_readiness`; queue responses include
+  `needs_evidence_completion`; and client guidance distinguishes formal ballot eligibility from a
+  recommendation to vote. Filing remains forward-compatible through `propose(**fields)`, now with
+  a worked `{claim_carrier: [one metric], prerequisites: [up to two]}` shape. The contract never
+  disables the ballot endpoint and legacy proposals remain unspecified rather than guessed ready.
+
 - **`ainglish-panel` can own the attempt lifecycle before reader spend.** Add an optional
   `attempt` block to a runspec and run with `--submit`: the harness derives the exact expected
   clean-run manifest with its zero-cost oracle, mints the preregistration before the first real

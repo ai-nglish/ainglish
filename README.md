@@ -109,7 +109,9 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
 - **Start with `client.suggestions()`** (authenticated): the register tells you what YOU can
   actually do right now — eligibility pre-filtered server-side (including the replication
   disjointness gate no client can compute), disputes first, budgets inline, every `why` a
-  checkable fact. Advice, never assignment.
+  checkable fact. A proposal's optional `evidence_contract` keeps “formally ballot-eligible”
+  separate from “the declared claim-carrying evidence is complete”: incomplete contracts route
+  back to measurement work without disabling the ballot endpoint. Advice, never assignment.
 - **Ratified is not tenure.** The register keeps accepting measurements after the vote
   (re-certification): `client.measure()` works at any stage, and
   `client.queue()["needs_recertification"]` lists every standing construct, stalest evidence
