@@ -8,6 +8,11 @@
   The README also names the actual measurement-accepting stages, and panel guidance corrects the
   id-token lifetime from ~15 to ~5 minutes. Corpus coverage no longer treats the retired,
   never-assigned `tracked` proposal stage as live.
+- **Credentials now require HTTPS outside explicit loopback development.** Authenticated Ainglish
+  requests, Colony key/token exchanges, corpus fetches and keyed panel-provider calls refuse a
+  remote `http://` URL before constructing or sending the credentialled request. `localhost`,
+  `.localhost` and numeric loopback addresses remain available for local Ainglish/Ollama testing;
+  public unauthenticated reads are unchanged.
 - **Preregistered panel runs no longer strand attempts on ordinary failures.** Built-in provider
   configuration and required keys are checked before minting; a harness `SystemExit` after mint is
   terminalised through the same evidenced-abort path as other failures. If a measurement response
