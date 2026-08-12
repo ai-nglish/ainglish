@@ -1990,6 +1990,16 @@ def selftest():
     assert not _sweep_hits, "decision-surface violations (a second absence computation):\n  " + "\n  ".join(_sweep_hits)
 
     # ---- attempt lifecycle: the mint must precede the FIRST real reader cell -----------------
+    # This file is also SERVED standalone by the register, where ainglish.client does not exist.
+    # The attempt path itself already refuses cleanly without the package (see main); the
+    # selftest mirrors that split: settings validation runs everywhere, the client-dependent
+    # lifecycle section runs only where the package is importable (the SDK checkout and CI).
+    try:
+        from ainglish.client import manifest_commitment as _selftest_commitment  # noqa: F401
+        _attempt_client_available = True
+    except ImportError:
+        _attempt_client_available = False
+
     class _AttemptProbe:
         def __init__(self, events):
             self.events = events
@@ -2013,48 +2023,57 @@ def selftest():
         "admissibility_gates": ["planted calibration gap >= 0.5"],
         "planned_sample": {"items": len(items), "readers": len(good["panel"]), "arms": 2},
     }}
-    events = []
 
-    def tracked_reader(ep, text, q, options):
-        events.append(("reader", ep["name"]))
-        return tag_reliant(ep, text, q, options)
+    if _attempt_client_available:
+        events = []
 
-    attempted = _run_preregistered_panel(good, attempt_spec, tracked_reader,
-                                         _AttemptProbe(events))
-    assert attempted is not None and attempted["attempt_id"] == "selftest-attempt"
-    assert events[0][0] == "mint" and events[1][0] == "reader", \
-        "the attempt must exist before the first real reader call"
-    assert events[-1][0] == "measure" and not any(e[0] == "abort" for e in events), \
-        "a clean matching manifest must complete through measurement, not abort"
-    assert events[0][1] == attempted["manifest"], \
-        "the exact preregistered manifest, not a lookalike, must ride in the measurement"
-    assert _HARNESS_ATTEMPT_GATES[1] in events[0][2]["admissibility_gates"], \
-        "the clean-transport assumption must be an explicit gate"
+        def tracked_reader(ep, text, q, options):
+            events.append(("reader", ep["name"]))
+            return tag_reliant(ep, text, q, options)
 
-    failed_events = []
-    failed_probe = _AttemptProbe(failed_events)
-    assert _run_preregistered_panel(bad, attempt_spec, coinflip, failed_probe) is None
-    assert failed_events[0][0] == "mint" and failed_events[-1][0] == "abort", \
-        "a gated run must close its visible obligation as aborted"
-    assert not any(e[0] == "measure" for e in failed_events), \
-        "an aborted attempt must never file a measurement"
+        attempted = _run_preregistered_panel(good, attempt_spec, tracked_reader,
+                                             _AttemptProbe(events))
+        assert attempted is not None and attempted["attempt_id"] == "selftest-attempt"
+        assert events[0][0] == "mint" and events[1][0] == "reader", \
+            "the attempt must exist before the first real reader call"
+        assert events[-1][0] == "measure" and not any(e[0] == "abort" for e in events), \
+            "a clean matching manifest must complete through measurement, not abort"
+        assert events[0][1] == attempted["manifest"], \
+            "the exact preregistered manifest, not a lookalike, must ride in the measurement"
+        assert _HARNESS_ATTEMPT_GATES[1] in events[0][2]["admissibility_gates"], \
+            "the clean-transport assumption must be an explicit gate"
 
-    divergent_events = []
-    divergent_probe = _AttemptProbe(divergent_events)
-    divergent_calls = {"n": 0}
+        failed_events = []
+        failed_probe = _AttemptProbe(failed_events)
+        assert _run_preregistered_panel(bad, attempt_spec, coinflip, failed_probe) is None
+        assert failed_events[0][0] == "mint" and failed_events[-1][0] == "abort", \
+            "a gated run must close its visible obligation as aborted"
+        assert not any(e[0] == "measure" for e in failed_events), \
+            "an aborted attempt must never file a measurement"
 
-    def prereg_fault_once(ep, text, q, options):
-        divergent_calls["n"] += 1
-        if divergent_calls["n"] == 9:  # eight calibration cells, then first real cell
-            raise TransportFault("timeout")
-        return tag_reliant(ep, text, q, options)
+        divergent_events = []
+        divergent_probe = _AttemptProbe(divergent_events)
+        divergent_calls = {"n": 0}
 
-    assert _run_preregistered_panel(good, attempt_spec, prereg_fault_once,
-                                    divergent_probe) is None
-    assert divergent_events[-1][0] == "abort"
-    assert "diverged" in divergent_events[-1][1]["failed_gate"], \
-        "an observed transport receipt must abort, not alter the preregistered manifest"
-    assert not any(e[0] == "measure" for e in divergent_events)
+        def prereg_fault_once(ep, text, q, options):
+            divergent_calls["n"] += 1
+            if divergent_calls["n"] == 9:  # eight calibration cells, then first real cell
+                raise TransportFault("timeout")
+            return tag_reliant(ep, text, q, options)
+
+        assert _run_preregistered_panel(good, attempt_spec, prereg_fault_once,
+                                        divergent_probe) is None
+        assert divergent_events[-1][0] == "abort"
+        assert "diverged" in divergent_events[-1][1]["failed_gate"], \
+            "an observed transport receipt must abort, not alter the preregistered manifest"
+        assert not any(e[0] == "measure" for e in divergent_events)
+        attempt_summary = "attempts mint before reader spend and close on success/refusal"
+    else:
+        print("selftest note: attempt-lifecycle section SKIPPED — standalone file, no "
+              "ainglish.client available; the attempt path itself refuses cleanly without the "
+              "package, and the lifecycle assertions run in the packaged checkout and CI.")
+        attempt_summary = ("attempt settings still validate standalone (lifecycle assertions "
+                           "ran in the packaged checkout)")
     try:
         _attempt_settings({**attempt_spec["attempt"], "mystery": True})
         raise AssertionError("an unknown attempt setting was silently ignored")
@@ -2063,9 +2082,8 @@ def selftest():
 
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
-          "censors floors beside their uncensored twin; attempts mint before reader spend and "
-          "close on success/refusal; absence is ONE predicate (typed, mutation-verified, "
-          "decision-surface swept).")
+          "censors floors beside their uncensored twin; " + attempt_summary + "; absence is ONE "
+          "predicate (typed, mutation-verified, decision-surface swept).")
 
 
 DEMO_NOTE = """{

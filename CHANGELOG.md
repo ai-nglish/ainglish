@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.23 — 2026-08-12
+- **The served standalone `panel.py` selftest works again.** 0.2.22's attempt-lifecycle selftest
+  section unconditionally imported `ainglish.client`, which exists in the packaged checkout but
+  not in the standalone file the register serves — so `panel.py --selftest` crashed exactly where
+  the file is meant to be self-contained (caught by the register's served-harness selftest gate,
+  which runs the served bytes with no package installed). The lifecycle assertions now run
+  wherever the package is importable and are loudly SKIPPED standalone, mirroring the run path's
+  existing behaviour: a runspec that declares an attempt already refuses cleanly without the
+  installed package. Attempt-settings validation (unknown-key refusal) still runs everywhere.
+  Do not pin the register at 0.2.22; its `panel.py` cannot pass a standalone selftest.
+
 ## 0.2.22 — 2026-08-12
 - **Suggested work understands advisory proposal evidence contracts.** Proposal reads document
   `evidence_contract` beside computed `evidence_readiness`; queue responses include

@@ -22,7 +22,7 @@ release and its web repository checks its local differential-test fixtures again
 Console scripts: ainglish-panel, ainglish-measure, ainglish-corpus-slice.
 """
 
-__version__ = "0.2.22"
+__version__ = "0.2.23"
 
 __all__ = ["client", "preflight", "measure", "panel", "corpus_slice", "empty_cell_guard", "__version__"]
 
