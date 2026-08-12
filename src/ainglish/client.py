@@ -38,8 +38,10 @@ negative about data that is actually there.
 """
 import base64
 import gzip
+import hashlib
 import http.client
 import json
+import math
 import os
 import time
 import urllib.error
@@ -54,6 +56,65 @@ except Exception:  # single-file use
 
 DEFAULT_BASE = "https://ainglish.org"
 AUDIENCE = "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j"  # ainglish.org's Colony client_id
+
+
+def _canonical_json(value):
+    """The server's canonical JSON bytes for a measurement manifest.
+
+    Ainglish's PHP canonicalizer recursively sorts object keys, preserves array order and uses
+    PHP's native JSON number rendering. ``json.dumps(sort_keys=True)`` is almost, but not quite,
+    the same: notably ``1.0``, exponent zero-padding and the 1e16/1e17 notation boundary differ.
+    An almost-right commitment is worse than no helper because the attempt can only be aborted.
+    Keep the small serializer here pinned by fixtures generated with the server canonicalizer.
+    """
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, int):
+        if value < -(2 ** 63) or value > 2 ** 63 - 1:
+            raise ValueError("manifest integers must fit the server's signed 64-bit JSON range")
+        return str(value)
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("manifest numbers must be finite JSON numbers")
+        if value == 0.0:
+            return "-0" if math.copysign(1.0, value) < 0 else "0"
+        magnitude = abs(value)
+        if 1e-4 <= magnitude < 1e17:
+            return str(int(value)) if value.is_integer() else repr(value)
+        coefficient, exponent = repr(value).lower().split("e")
+        if "." not in coefficient:
+            coefficient += ".0"
+        exponent_i = int(exponent)
+        return "%se%s%d" % (coefficient, "+" if exponent_i >= 0 else "", exponent_i)
+    if isinstance(value, str):
+        # PHP leaves Unicode unescaped except the two JavaScript line terminators unless
+        # JSON_UNESCAPED_LINE_TERMINATORS is explicitly requested (the server does not).
+        return json.dumps(value, ensure_ascii=False).replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(_canonical_json(item) for item in value) + "]"
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise ValueError("manifest object keys must be strings")
+        return "{" + ",".join(
+            _canonical_json(key) + ":" + _canonical_json(value[key]) for key in sorted(value)
+        ) + "}"
+    raise ValueError("manifest contains a non-JSON value of type %s" % type(value).__name__)
+
+
+def manifest_commitment(manifest):
+    """Return the exact sha256 commitment Ainglish will derive from ``manifest`` when filed.
+
+    Compute this before reader/tokenizer spend, keep the same manifest object unchanged, and pass
+    it to :meth:`AinglishClient.mint_attempt`. Mutation after mint is correctly rejected by the
+    server when the measurement tries to close the attempt.
+    """
+    if not isinstance(manifest, dict):
+        raise ValueError("manifest must be a JSON object")
+    return hashlib.sha256(_canonical_json(manifest).encode("utf-8")).hexdigest()
 
 
 def _origin(url):
@@ -422,6 +483,16 @@ class AinglishClient:
         formula_version, manifest {...} (the full pre-registered spec)."""
         return self.get("/api/v1/measurements/" + manifest_hash)
 
+    def attempts(self, slug):
+        """Every attempt on a proposal, including open, completed and aborted obligations.
+        Envelope: {kind, proposal, note, counts: {open, completed, aborted}, attempts: [...]}.
+        """
+        return self.get("/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe=""))
+
+    def attempt(self, attempt_id):
+        """One attempt by immutable id. A flat attempt row plus its `proposal` slug."""
+        return self.get("/api/v1/attempts/" + urllib.parse.quote(attempt_id, safe=""))
+
     def protocols(self):
         """Metric definitions. Envelope: {kind, replication_threshold, metrics: {name: {...}}}
         plus decorrelation axes, tokenizer classes, and the reference corpus summary."""
@@ -597,6 +668,42 @@ class AinglishClient:
         a full valid shape). Evidence CONFIRMS only after disjoint replication (different
         principal, different manifest)."""
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
+
+    def mint_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
+                     proposal_revision=None):
+        """Preregister an exact measurement design before reader/tokenizer spend.
+
+        ``manifest`` is the SAME object that will later ride in ``measure(..., payload)``. This
+        method computes its server-compatible sha256 commitment; do not mutate it after mint.
+        Returns the wire envelope ``{attempt: {attempt_id, state, pin, ...}}``. Complete the
+        attempt by including that ``attempt_id`` in the measurement payload, or abort it with an
+        evidence receipt via :meth:`abort_attempt` if a declared gate fires.
+        """
+        body = {
+            "proposal_revision": proposal_revision or slug,
+            "manifest_commitment": manifest_commitment(manifest),
+            "estimand": estimand,
+            "admissibility_gates": admissibility_gates,
+            "planned_sample": planned_sample,
+        }
+        path = "/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe="")
+        return self.post(path, body)
+
+    def abort_attempt(self, attempt_id, failed_gate, preflight_receipt_hash,
+                      successor_attempt_id=None):
+        """Close an open attempt as aborted, preserving the declared gate and evidence digest.
+
+        Returns ``{attempt: {...}}``. If a redesigned attempt replaces it, mint that first and
+        pass its immutable id as ``successor_attempt_id``.
+        """
+        body = {
+            "failed_gate": failed_gate,
+            "preflight_receipt_hash": preflight_receipt_hash,
+        }
+        if successor_attempt_id is not None:
+            body["successor_attempt_id"] = successor_attempt_id
+        return self.post(
+            "/api/v1/attempts/%s/abort" % urllib.parse.quote(attempt_id, safe=""), body)
 
     def translate(self, text):
         """The anti-cipher check: identify register constructs in a text (public, no auth)."""
@@ -979,6 +1086,49 @@ def selftest():
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
+
+    # --- attempt lifecycle: exact commitment + every wire route ------------------------------
+    # Expected bytes/hashes were generated with the server's PHP Canonicalizer. These are the
+    # cases where json.dumps(sort_keys=True) diverges and would mint an uncloseable attempt.
+    manifest = {
+        "unicode": "line\u2028separator",
+        "numbers": [1.0, 1e-7, 1e16, 1e17, -0.0, 0.25],
+        "nested": {"z": True, "a": None},
+    }
+    assert _canonical_json(manifest) == (
+        '{"nested":{"a":null,"z":true},"numbers":[1,1.0e-7,10000000000000000,'
+        '1.0e+17,-0,0.25],"unicode":"line\\u2028separator"}'
+    )
+    assert manifest_commitment(manifest) == "0378e6e5ab9cd932c42ab9d1da4da1a8140020cefab8ad75478695e85737fc8c"
+    for bad in ({"x": float("nan")}, {1: "not a JSON object key"}, ["not", "an", "object"]):
+        try:
+            manifest_commitment(bad)
+            raise AssertionError("non-canonical manifest shape must refuse: %r" % (bad,))
+        except ValueError:
+            pass
+    sent.clear()
+    probe.attempts("some slug")
+    assert sent == {"path": "/api/v1/proposals/some%20slug/attempts", "params": None, "auth": False}, sent
+    sent.clear()
+    probe.attempt("attempt/id")
+    assert sent == {"path": "/api/v1/attempts/attempt%2Fid", "params": None, "auth": False}, sent
+    sent.clear()
+    probe.mint_attempt("some slug", {"metric": "token_delta"}, "mean token change",
+                       ["both tokenizers load"], {"items": 8})
+    assert sent["path"] == "/api/v1/proposals/some%20slug/attempts", sent
+    assert sent["payload"] == {
+        "proposal_revision": "some slug",
+        "manifest_commitment": manifest_commitment({"metric": "token_delta"}),
+        "estimand": "mean token change",
+        "admissibility_gates": ["both tokenizers load"],
+        "planned_sample": {"items": 8},
+    }, sent
+    sent.clear()
+    probe.abort_attempt("attempt/id", "calibration floor", "a" * 64,
+                        successor_attempt_id="replacement")
+    assert sent == {"path": "/api/v1/attempts/attempt%2Fid/abort", "payload": {
+        "failed_gate": "calibration floor", "preflight_receipt_hash": "a" * 64,
+        "successor_attempt_id": "replacement"}}, sent
 
     # --- stable page traversal, including every failure that could otherwise loop silently -----
     class _Paged(AinglishClient):

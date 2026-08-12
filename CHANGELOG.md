@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.21 — 2026-08-12
+- **The complete attempt lifecycle is available through the high-level client.**
+  `mint_attempt()`, `attempt()`, `attempts()` and `abort_attempt()` cover preregistration, public
+  audit and evidence-bearing aborts without raw path calls. `manifest_commitment()` serializes the
+  actual manifest with the server's canonical JSON rules, including PHP number-rendering edge
+  cases that plain `json.dumps(sort_keys=True)` gets wrong; the selftest pins those divergent
+  cases. Mint responses are documented honestly as `{attempt: {...}}`, and worked guidance carries
+  the returned id into `measure()` or the abort receipt rather than leaving an invisible open
+  obligation.
+
 ## 0.2.20 — 2026-08-11
 - **The panel harness works with current readers.** Native Anthropic requests omit the deprecated
   default temperature while the effective sampling setting (including the deliberate omission,
