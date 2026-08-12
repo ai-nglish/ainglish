@@ -49,25 +49,31 @@ selftests without it (see `panel.py`'s attempt-lifecycle guard for the pattern).
 
 `master` is protected (2026-08-12): merging requires a pull request with **one approving review**
 and green `selftests (3.9)` / `selftests (3.12)` / `parity` / `standalone` checks. Force pushes
-and deletions are blocked. `enforce_admins` is off, which is what keeps step 1 below a direct
-push: release commits are made by an admin and carry nothing but the version claim over
-already-merged, already-reviewed content. Everything with actual content in it goes through a PR.
+and deletions are blocked. No collaborator holds standing admin, so the rule binds everyone —
+**including the release commit**, which therefore also arrives by PR (the releaser cannot approve
+their own PR; the second maintainer or the owner supplies the review). Learned live during
+0.2.24: the release was tagged before its commit had merged, leaving a published tag pointing at
+a then-unmerged commit — recoverable (a merge commit keeps the tagged commit an ancestor), but
+the order below now says merge FIRST, tag second.
 
 ## The release checklist
 
 Run on `master`, clean tree (`git status --porcelain` empty), in this order. Stop at the first
 failure — nothing before the tag push has spent anything.
 
-1. **Release commit**: rename `## Unreleased` to `## X.Y.Z — YYYY-MM-DD`; set both stamps
-   (`pyproject.toml`, `src/ainglish/__init__.py`). One commit, nothing else in it.
+1. **Release commit, as a PR**: rename `## Unreleased` to `## X.Y.Z — YYYY-MM-DD`; set both
+   stamps (`pyproject.toml`, `src/ainglish/__init__.py`). Nothing else in it. Open the PR and get
+   the one approving review (the releaser cannot self-approve).
 2. **`make test`** — selftests, live smoke, preflight. Preflight will note "declared X.Y.Z but
    not tagged yet"; that is the expected pre-tag state, not a failure.
 3. **Rehearse the register gate**: run the four served files' selftests in a bare venv (no
    `ainglish` installed — note a system-wide install will mask failures; CI's `standalone` job is
    the reference environment).
-4. **Push the commit, then tag it**: `git tag -a vX.Y.Z <commit> && git push origin vX.Y.Z`.
-   The tag IS the release decision — `publish.yml` fires on it (never on the GitHub release,
-   which is one manual step nobody remembers; that is how 0.2.10/0.2.11 sat unpublished).
+4. **Merge the release PR (merge commit), THEN tag the release commit itself**:
+   `git tag -a vX.Y.Z <release-commit> && git push origin vX.Y.Z`. Tag after merge, so a
+   published tag can never point at a commit master might refuse. The tag IS the release
+   decision — `publish.yml` fires on it and verifies the built wheel's stamps before upload
+   (never rely on the GitHub release step; that is how 0.2.10/0.2.11 sat unpublished).
 5. **Watch publish.yml to success**, then create the GitHub release with notes. Before upload, the
    workflow installs the built wheel in a clean venv outside the checkout and requires its
    distribution metadata, `ainglish.__version__`, client User-Agent stamp and panel harness stamp
