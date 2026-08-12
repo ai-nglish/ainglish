@@ -41,6 +41,7 @@ import decimal
 import gzip
 import hashlib
 import http.client
+import ipaddress
 import json
 import math
 import os
@@ -138,6 +139,25 @@ def _origin(url):
     return p.scheme.lower(), (p.hostname or "").lower(), port
 
 
+def _require_secure_credential_url(url, purpose):
+    """Refuse cleartext credential transport, except to an explicit loopback endpoint."""
+    p = urllib.parse.urlsplit(url)
+    if p.scheme.lower() == "https":
+        return
+    host = (p.hostname or "").lower().rstrip(".")
+    loopback = host == "localhost" or host.endswith(".localhost")
+    if host:
+        try:
+            loopback = loopback or ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            pass
+    if p.scheme.lower() == "http" and loopback:
+        return
+    raise ValueError(
+        "%s would send credentials to %r without HTTPS; use https://, or an explicit "
+        "localhost/loopback URL for local development" % (purpose, url))
+
+
 class _SensitiveRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Keep credentials on their declared origin, including across 307/308 body replays."""
 
@@ -229,6 +249,13 @@ class AinglishClient:
         if self._token and _jwt_exp(self._token) - time.time() > 30:
             return self._token
         if self._key:
+            try:
+                _require_secure_credential_url(self.colony_base, "Colony token exchange")
+            except ValueError as exc:
+                raise AinglishError(0, {
+                    "error": "insecure_transport", "message": str(exc),
+                    "hint": "correct colony_base before retrying; the Colony API key was not sent",
+                }) from None
             from ainglish.panel import mint_id_token  # one exchange implementation, not two
             try:
                 self._token = mint_id_token(self.colony_base, AUDIENCE, self._key, totp=self._totp)
@@ -335,6 +362,13 @@ class AinglishClient:
             data = json.dumps(payload).encode()
             headers["Content-Type"] = "application/json"
         if auth:
+            try:
+                _require_secure_credential_url(self.base, "Ainglish authenticated request")
+            except ValueError as exc:
+                raise AinglishError(0, {
+                    "error": "insecure_transport", "message": str(exc),
+                    "hint": "correct base_url before retrying; the bearer token was not sent",
+                }) from None
             headers["Authorization"] = "Bearer " + self._bearer()
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         for attempt in range(3):
@@ -1058,6 +1092,25 @@ def selftest():
     assert _jwt_exp(fake) == 1234
     assert _jwt_exp("garbage") == 0, "unreadable tokens must read as EXPIRED, not eternal"
     assert _origin("https://ainglish.org/x") == _origin("https://AINGLISH.ORG:443/y")
+    for safe in ("https://example.test/api", "http://localhost:8920/api",
+                 "http://127.0.0.1:8920/api", "http://[::1]:8920/api"):
+        _require_secure_credential_url(safe, "selftest")
+    for unsafe in ("http://example.test/api", "ftp://localhost/key", "relative/path"):
+        try:
+            _require_secure_credential_url(unsafe, "selftest")
+            raise AssertionError("credential URL must refuse: %s" % unsafe)
+        except ValueError:
+            pass
+    try:
+        AinglishClient(id_token="unparsed", base_url="http://example.test", use_env=False).get("/private", auth=True)
+        raise AssertionError("an authenticated cleartext register request must refuse before token handling")
+    except AinglishError as err:
+        assert err.error == "insecure_transport" and "was not sent" in err.hint, str(err)
+    try:
+        AinglishClient(colony_api_key="sentinel", colony_base="http://example.test", use_env=False)._bearer()
+        raise AssertionError("a cleartext Colony exchange must refuse before sending the API key")
+    except AinglishError as err:
+        assert err.error == "insecure_transport" and "was not sent" in err.hint, str(err)
     redirect_probe = urllib.request.Request(
         "https://ainglish.org/api/v1/me", headers={"Authorization": "Bearer sentinel"})
     redirect_probe._ainglish_sensitive = True
