@@ -1995,6 +1995,7 @@ def selftest():
     # selftest mirrors that split: settings validation runs everywhere, the client-dependent
     # lifecycle section runs only where the package is importable (the SDK checkout and CI).
     try:
+        from ainglish.client import AinglishError as _SelftestAinglishError  # noqa: F401
         from ainglish.client import manifest_commitment as _selftest_commitment  # noqa: F401
         _attempt_client_available = True
     except ImportError:
@@ -2067,6 +2068,62 @@ def selftest():
         assert "diverged" in divergent_events[-1][1]["failed_gate"], \
             "an observed transport receipt must abort, not alter the preregistered manifest"
         assert not any(e[0] == "measure" for e in divergent_events)
+
+        exit_events = []
+        exit_probe = _AttemptProbe(exit_events)
+
+        def harness_exit(*_args):
+            raise SystemExit("reader configuration changed after mint")
+
+        try:
+            _run_preregistered_panel(good, attempt_spec, harness_exit, exit_probe)
+            raise AssertionError("SystemExit escaped without closing its attempt")
+        except SystemExit as exc:
+            assert "configuration changed" in str(exc)
+        assert exit_events[0][0] == "mint" and exit_events[-1][0] == "abort", \
+            "a normal harness SystemExit after mint must terminalise its obligation"
+
+        class _LostResponseProbe(_AttemptProbe):
+            def measure(self, slug, payload):
+                self.events.append(("measure-lost", payload))
+                raise _SelftestAinglishError(0, {"error": "transport_error",
+                                                  "message": "response connection closed"})
+
+            def attempt(self, attempt_id):
+                self.events.append(("reconcile", attempt_id))
+                return {"attempt_id": attempt_id, "state": "completed",
+                        "measurement_ref": "filed-after-lost-response"}
+
+        lost_events = []
+        recovered = _run_preregistered_panel(good, attempt_spec, tag_reliant,
+                                             _LostResponseProbe(lost_events))
+        assert recovered is not None
+        assert [e[0] for e in lost_events].count("measure-lost") == 1
+        assert lost_events[-1][0] == "reconcile", \
+            "a lost write response must reconcile against the immutable attempt before retrying"
+
+        class _OpenThenSuccessProbe(_AttemptProbe):
+            def __init__(self, events):
+                super().__init__(events)
+                self.submissions = 0
+
+            def measure(self, slug, payload):
+                self.submissions += 1
+                self.events.append(("measure", payload))
+                if self.submissions == 1:
+                    raise _SelftestAinglishError(0, {"error": "transport_error",
+                                                      "message": "nothing reached the server"})
+                return {"measurement": {"manifest_hash": "filed-on-exact-retry"}}
+
+            def attempt(self, attempt_id):
+                self.events.append(("reconcile-open", attempt_id))
+                return {"attempt_id": attempt_id, "state": "open"}
+
+        retry_events = []
+        retried = _run_preregistered_panel(good, attempt_spec, tag_reliant,
+                                           _OpenThenSuccessProbe(retry_events))
+        assert retried is not None and [e[0] for e in retry_events].count("measure") == 2, \
+            "an observed-open attempt may retry the same payload once"
         attempt_summary = "attempts mint before reader spend and close on success/refusal"
     else:
         print("selftest note: attempt-lifecycle section SKIPPED — standalone file, no "
@@ -2079,6 +2136,25 @@ def selftest():
         raise AssertionError("an unknown attempt setting was silently ignored")
     except SystemExit as exc:
         assert "unknown runspec.attempt" in str(exc)
+
+    saved_openai_key = os.environ.pop("OPENAI_API_KEY", None)
+    try:
+        try:
+            _validate_real_reader_configuration(
+                {"panel": [{"name": "unfunded", "provider": "openai", "model": "gpt-test"}]}, ask)
+            raise AssertionError("a missing built-in provider key reached attempt minting")
+        except SystemExit as exc:
+            assert "before attempt mint" in str(exc) and "OPENAI_API_KEY" in str(exc)
+        try:
+            _validate_real_reader_configuration(
+                {"panel": [{"name": "bad-bound", "provider": "ollama", "model": "m",
+                            "max_tokens": False}]}, ask)
+            raise AssertionError("an invalid transport bound reached attempt minting")
+        except SystemExit as exc:
+            assert "before attempt mint" in str(exc) and "positive integer" in str(exc)
+    finally:
+        if saved_openai_key is not None:
+            os.environ["OPENAI_API_KEY"] = saved_openai_key
 
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
@@ -2260,6 +2336,37 @@ def _planned_panel_manifest(manifest):
     return planned
 
 
+def _validate_real_reader_configuration(manifest, ask_fn):
+    """Refuse deterministic reader configuration faults before an attempt is minted.
+
+    The free manifest preview deliberately uses mock readers, so it cannot discover a missing
+    provider key or an incomplete transport entry. Those are not experimental outcomes and must
+    not create an open preregistration obligation. Custom/injected readers own their own transport
+    contract; this check applies only to the built-in ``ask`` path used by the CLI.
+    """
+    if ask_fn is not ask:
+        return
+    for endpoint in manifest.get("panel", []):
+        try:
+            resolved = resolve(endpoint)
+            bounds = bounds_for(endpoint)
+            temperature_for(endpoint)
+        except SystemExit as exc:
+            raise SystemExit(f"REFUSING before attempt mint: {exc}") from None
+        name = resolved.get("name", "?")
+        if not resolved.get("model"):
+            raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs a non-empty model.")
+        # Validate every setting consumed by chat(), without making a network call.
+        for bound, value in bounds.items():
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs {bound} "
+                                 "to be a positive integer.")
+        key_env = resolved.get("api_key_env") or ""
+        if key_env and not os.environ.get(key_env):
+            raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs {key_env}, "
+                             "but it is not set. Export the key or drop the member.")
+
+
 class _Transcript:
     """Mirror panel output to the terminal while retaining an abort-receipt digest."""
     def __init__(self, target):
@@ -2304,9 +2411,10 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                              receipt_stem="runspec"):
     """Mint -> spend -> complete/abort, with no real reader call before the mint."""
     import contextlib
-    from ainglish.client import manifest_commitment
+    from ainglish.client import AinglishError, manifest_commitment
 
     settings = _attempt_settings(spec["attempt"])
+    _validate_real_reader_configuration(manifest, ask_fn)
     planned = _planned_panel_manifest(manifest)
     opened = client.mint_attempt(
         spec["slug"], planned,
@@ -2323,7 +2431,7 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     try:
         with contextlib.redirect_stdout(transcript):
             measurement = run_panel(manifest, ask_fn=ask_fn)
-    except Exception as exc:
+    except (Exception, SystemExit) as exc:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "panel harness raised before measurement emission",
                              {"exception": type(exc).__name__, "message": str(exc),
@@ -2348,7 +2456,38 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
         return None
 
     measurement["attempt_id"] = attempt_id
-    response = client.measure(spec["slug"], measurement)
+    response = None
+    for submission in range(2):
+        try:
+            response = client.measure(spec["slug"], measurement)
+            break
+        except AinglishError as exc:
+            # A response-bearing 4xx/5xx is unambiguous: the server answered, so preserve its
+            # refusal. Only transport loss or an unreadable successful response can conceal a
+            # committed measurement. Reconcile those against the public attempt record before a
+            # single exact-payload retry; attempt completion is atomic with measurement filing.
+            if exc.error == "invalid_response" and exc.status not in (0, 502):
+                raise
+            if exc.error not in ("transport_error", "invalid_response"):
+                raise
+            try:
+                state = client.attempt(attempt_id)
+            except Exception:
+                print(f"SUBMISSION STATUS UNKNOWN: {attempt_id}. The response was lost and the "
+                      "attempt record could not be read; do not abort or change the manifest. "
+                      "Inspect client.attempt(attempt_id) before retrying the same payload.")
+                raise exc
+            if state.get("state") == "completed":
+                response = {"attempt": state, "recovered_after_lost_response": True}
+                print(f"SUBMISSION CONFIRMED FROM ATTEMPT RECORD: {attempt_id} completed as "
+                      f"{state.get('measurement_ref') or 'a filed measurement'}.")
+                break
+            if state.get("state") != "open" or submission == 1:
+                print(f"SUBMISSION NOT CONFIRMED: {attempt_id} is {state.get('state', 'unknown')}. "
+                      "The exact payload remains safe to inspect/retry only while it is open.")
+                raise exc
+            print(f"SUBMISSION RESPONSE LOST: {attempt_id} is still open; retrying the exact "
+                  "manifest and attempt id once.")
     print("SUBMITTED:", json.dumps(response, ensure_ascii=False)[:400])
     return measurement
 

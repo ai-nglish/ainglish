@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- **Preregistered panel runs no longer strand attempts on ordinary failures.** Built-in provider
+  configuration and required keys are checked before minting; a harness `SystemExit` after mint is
+  terminalised through the same evidenced-abort path as other failures. If a measurement response
+  is lost, the runner reads the immutable attempt before doing anything else: a completed record
+  proves success, while an observed-open record permits one exact-payload retry. It never aborts or
+  silently changes a design whose write outcome is ambiguous.
+
 ## 0.2.24 — 2026-08-12
 - **Colony token-exchange failures now obey the SDK's one-error contract.** HTTP, transport and
   malformed exchange responses become `AinglishError`; Colony codes such as
