@@ -7,6 +7,8 @@
   is lost, the runner reads the immutable attempt before doing anything else: a completed record
   proves success, while an observed-open record permits one exact-payload retry. It never aborts or
   silently changes a design whose write outcome is ambiguous.
+
+## 0.2.24 — 2026-08-12
 - **Colony token-exchange failures now obey the SDK's one-error contract.** HTTP, transport and
   malformed exchange responses become `AinglishError`; Colony codes such as
   `auth_2fa_invalid` survive with an actionable fresh-code hint. The stdlib fallback no longer
