@@ -1873,7 +1873,26 @@ def selftest():
         "difficulty without a declared axis is numbers without units — refuse"
     m_ann = run_panel(dict(good, items=ann_items, difficulty_axis="test axis, ordinal 1-3"), ask_fn=tag_reliant)
     assert m_ann is not None and m_ann["manifest"]["difficulty"]["annotated"] is True
-    assert m_ann["manifest"]["difficulty"]["gap"] == 0.0, "uniform difficulty must report a zero gap"
+    # The report's statistics are decimal STRINGS, never floats: round()-ed means like 2.28 or a
+    # gap of 0.08 are not exactly-representable, so a numeric report can make an annotated set
+    # UNMINTABLE — manifest_commitment (correctly) refuses non-portable floats, and the dealt
+    # means are the seed's choice, not the experimenter's (issue #41, found live on a real mint).
+    d_report = m_ann["manifest"]["difficulty"]
+    assert d_report["gap"] == "0", "uniform difficulty must report a zero gap, as a portable string"
+    assert all(isinstance(v, str) for v in d_report["per_arm_mean"].values()), \
+        "per-arm difficulty means must be portable decimal strings, not floats"
+    m_gap = run_panel(dict(good, items=ann_items, difficulty_axis="test axis, ordinal 1-3",
+                           difficulty_balance_max_gap=0.6), ask_fn=tag_reliant)
+    assert m_gap is not None and m_gap["manifest"]["difficulty"]["max_gap"] == "0.6", \
+        "a declared max_gap like 0.6 is itself non-portable and must be stringified in the report"
+    try:
+        from ainglish.client import manifest_commitment as _difficulty_commitment
+    except ImportError:
+        print("selftest note: difficulty-report commitment round-trip SKIPPED — standalone file, "
+              "no ainglish.client; the string-type asserts above still pin the portable format.")
+    else:
+        assert _difficulty_commitment(m_gap["manifest"]), \
+            "an annotated set's manifest must be commitable — the report may not reintroduce floats"
     # Lopsided deal: one reader, difficulty 9 on exactly the items that reader sees in the
     # ainglish arm — the gap is maximal by construction and a declared max_gap must refuse.
     lop = [dict(i, difficulty=(9 if arm_for(7, "reader-a", i["id"]) == "ainglish" else 1))
