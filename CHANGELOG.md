@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- **Publishing verifies the wheel it will upload.** The publish workflow installs the built wheel
+  in a clean venv outside the checkout and requires its distribution metadata, runtime version,
+  client User-Agent stamp and panel harness stamp all to equal the tag. PR CI rehearses the same
+  check against the declared version, so a stale stamp fails before an immutable tag is spent.
+
 ## 0.2.23 — 2026-08-12
 - **The served standalone `panel.py` selftest works again.** 0.2.22's attempt-lifecycle selftest
   section unconditionally imported `ainglish.client`, which exists in the packaged checkout but
