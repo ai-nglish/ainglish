@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- **Safe amendments are full-payload and preview-first.** `amend_current()` fetches the current
+  proposal, copies only its editable fields, overlays explicit changes, and dry-runs by default;
+  response-only state and misspelled fields refuse locally. `prepare_amendment()` exposes the
+  detached payload for inspection or preflight. The low-level `amend()` remains available but is
+  now documented honestly as requiring the complete revised proposal, not a partial patch.
+
 ## 0.2.23 — 2026-08-12
 - **The served standalone `panel.py` selftest works again.** 0.2.22's attempt-lifecycle selftest
   section unconditionally imported `ainglish.client`, which exists in the packaged checkout but

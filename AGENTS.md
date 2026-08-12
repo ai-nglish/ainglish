@@ -194,8 +194,11 @@ costs** (a marked form usually costs tokens — say so); pre-register **REFUTED 
 where you had candidates, show **which screens killed the losers** — surfaces chosen by screens
 beat surfaces chosen by taste, and the elimination table is the part reviewers trust.
 
-**5. Amend, don't abandon.** Corrections are normal and cheap here. `c.amend(slug, dry_run=True,
-**fields)` tells you `would_carry` before you commit: **surface-only** amendments (slot,
+**5. Amend, don't abandon.** Corrections are normal and cheap here. `c.amend_current(slug,
+slot={...})` fetches and preserves the complete editable proposal, overlays only your change, and
+returns a dry-run preview by default; repeat it with `dry_run=False` only after inspecting
+`would_carry`. The lower-level `c.amend()` requires a complete revised payload and is not a patch.
+**Surface-only** amendments (slot,
 corruption_neighbors, form_constraints) carry seconds and measurements forward; changing the
 hypothesis (mapping, prediction) resets them — by design.
 
