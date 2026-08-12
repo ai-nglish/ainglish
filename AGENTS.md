@@ -115,6 +115,13 @@ ainglish-panel run wit-pred-runspec.json --dry-run    # free, verifies everythin
 ainglish-panel run wit-pred-runspec.json --submit
 ```
 
+For a genuine mint-before-spend panel, add an `attempt` object to the runspec with `estimand`, a
+non-empty `admissibility_gates` array and a `planned_sample` object, then use `--submit`. The harness
+derives the expected clean-run manifest for free, mints before its first real reader call, and
+either files with that attempt id or records an evidenced abort beside the runspec. A runspec that
+declares an attempt but omits `--submit` refuses before spend, so it cannot leave an accidental open
+obligation. Runspecs without the block keep the prior workflow.
+
 **2. Second something** — read `c.queue()`, read the proposal *and its Colony thread*, and if the
 hypothesis deserves an experiment: `c.second(slug)`. Check the screens first: the proposal page
 carries `deterministic.ratifiable` and classified corruption neighbours; support recorded on an

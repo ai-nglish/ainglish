@@ -33,6 +33,7 @@ precision diverged), and into the manifest spec (name@precision) so replications
 
 Usage:
   python3 panel.py manifest.json            # run the panel, print the measurement JSON
+  python3 panel.py run runspec.json --submit # optional runspec.attempt preregisters before reads
   python3 panel.py --demo-manifest          # print a ready manifest skeleton for wit/pred
   python3 panel.py --selftest               # mock panelists prove the scoring + the calibration gate
 
@@ -1988,10 +1989,83 @@ def selftest():
                         _sweep_hits.append(f"{_fname}:{_ln} in {_fn!r}: {_code.strip()!r} matches {_shape!r}")
     assert not _sweep_hits, "decision-surface violations (a second absence computation):\n  " + "\n  ".join(_sweep_hits)
 
+    # ---- attempt lifecycle: the mint must precede the FIRST real reader cell -----------------
+    class _AttemptProbe:
+        def __init__(self, events):
+            self.events = events
+            self.aborts = []
+
+        def mint_attempt(self, slug, manifest, **pin):
+            self.events.append(("mint", manifest, pin))
+            return {"attempt": {"attempt_id": "selftest-attempt"}}
+
+        def measure(self, slug, payload):
+            self.events.append(("measure", payload))
+            return {"measurement": {"manifest_hash": "filed"}}
+
+        def abort_attempt(self, attempt_id, **receipt):
+            self.events.append(("abort", receipt))
+            self.aborts.append(receipt)
+            return {"attempt": {"attempt_id": attempt_id, "state": "aborted"}}
+
+    attempt_spec = {"slug": "selftest", "attempt": {
+        "estimand": "difference in comprehension accuracy",
+        "admissibility_gates": ["planted calibration gap >= 0.5"],
+        "planned_sample": {"items": len(items), "readers": len(good["panel"]), "arms": 2},
+    }}
+    events = []
+
+    def tracked_reader(ep, text, q, options):
+        events.append(("reader", ep["name"]))
+        return tag_reliant(ep, text, q, options)
+
+    attempted = _run_preregistered_panel(good, attempt_spec, tracked_reader,
+                                         _AttemptProbe(events))
+    assert attempted is not None and attempted["attempt_id"] == "selftest-attempt"
+    assert events[0][0] == "mint" and events[1][0] == "reader", \
+        "the attempt must exist before the first real reader call"
+    assert events[-1][0] == "measure" and not any(e[0] == "abort" for e in events), \
+        "a clean matching manifest must complete through measurement, not abort"
+    assert events[0][1] == attempted["manifest"], \
+        "the exact preregistered manifest, not a lookalike, must ride in the measurement"
+    assert _HARNESS_ATTEMPT_GATES[1] in events[0][2]["admissibility_gates"], \
+        "the clean-transport assumption must be an explicit gate"
+
+    failed_events = []
+    failed_probe = _AttemptProbe(failed_events)
+    assert _run_preregistered_panel(bad, attempt_spec, coinflip, failed_probe) is None
+    assert failed_events[0][0] == "mint" and failed_events[-1][0] == "abort", \
+        "a gated run must close its visible obligation as aborted"
+    assert not any(e[0] == "measure" for e in failed_events), \
+        "an aborted attempt must never file a measurement"
+
+    divergent_events = []
+    divergent_probe = _AttemptProbe(divergent_events)
+    divergent_calls = {"n": 0}
+
+    def prereg_fault_once(ep, text, q, options):
+        divergent_calls["n"] += 1
+        if divergent_calls["n"] == 9:  # eight calibration cells, then first real cell
+            raise TransportFault("timeout")
+        return tag_reliant(ep, text, q, options)
+
+    assert _run_preregistered_panel(good, attempt_spec, prereg_fault_once,
+                                    divergent_probe) is None
+    assert divergent_events[-1][0] == "abort"
+    assert "diverged" in divergent_events[-1][1]["failed_gate"], \
+        "an observed transport receipt must abort, not alter the preregistered manifest"
+    assert not any(e[0] == "measure" for e in divergent_events)
+    try:
+        _attempt_settings({**attempt_spec["attempt"], "mystery": True})
+        raise AssertionError("an unknown attempt setting was silently ignored")
+    except SystemExit as exc:
+        assert "unknown runspec.attempt" in str(exc)
+
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
-          "censors floors beside their uncensored twin; absence is ONE predicate (typed, "
-          "mutation-verified, decision-surface swept).")
+          "censors floors beside their uncensored twin; attempts mint before reader spend and "
+          "close on success/refusal; absence is ONE predicate (typed, mutation-verified, "
+          "decision-surface swept).")
 
 
 DEMO_NOTE = """{
@@ -2098,6 +2172,167 @@ def dry_reader(items, manifest=None):
         idx = opts.index(ans) if ans in opts else 0
         return opts[(idx + 1) % len(opts)]
     return oracle
+
+
+_DRY_PROTOCOL_SUFFIX = " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]"
+_ATTEMPT_KEYS = frozenset({"estimand", "admissibility_gates", "planned_sample", "proposal_revision"})
+_HARNESS_ATTEMPT_GATES = (
+    "panel harness emits a measurement (calibration, yield, and protocol gates pass)",
+    "filed manifest matches the preregistered clean-run manifest (no transport faults or bound truncations)",
+)
+
+
+def _attempt_settings(raw):
+    """Validate the optional runspec attempt block before minting or buying a reader cell."""
+    if not isinstance(raw, dict):
+        raise SystemExit("REFUSING: runspec.attempt must be an object, or be omitted entirely.")
+    unknown = sorted(set(raw) - _ATTEMPT_KEYS)
+    if unknown:
+        raise SystemExit("REFUSING: unknown runspec.attempt key(s): %s. Accepted: %s."
+                         % (", ".join(unknown), ", ".join(sorted(_ATTEMPT_KEYS))))
+    estimand = raw.get("estimand")
+    gates = raw.get("admissibility_gates")
+    sample = raw.get("planned_sample")
+    if not isinstance(estimand, str) or not estimand.strip():
+        raise SystemExit("REFUSING: runspec.attempt.estimand must be a non-empty string.")
+    if not isinstance(gates, list) or not gates:
+        raise SystemExit("REFUSING: runspec.attempt.admissibility_gates must be a non-empty array.")
+    if not isinstance(sample, dict) or not sample:
+        raise SystemExit("REFUSING: runspec.attempt.planned_sample must be a non-empty object.")
+    revision = raw.get("proposal_revision")
+    if revision is not None and (not isinstance(revision, str) or not revision.strip()):
+        raise SystemExit("REFUSING: runspec.attempt.proposal_revision must be a non-empty string when present.")
+
+    # The clean preview below commits to zero transport faults/truncations. That assumption is an
+    # admissibility gate whether or not a runspec author remembered to spell it out, so freeze it
+    # explicitly rather than abort later under an undeclared condition.
+    frozen_gates = list(gates)
+    for gate in _HARNESS_ATTEMPT_GATES:
+        if gate not in frozen_gates:
+            frozen_gates.append(gate)
+    return {"estimand": estimand.strip(), "admissibility_gates": frozen_gates,
+            "planned_sample": sample, "proposal_revision": revision.strip() if revision else None}
+
+
+def _planned_panel_manifest(manifest):
+    """Derive the exact clean-run manifest without calling a real reader.
+
+    The panel receipt records observed transport faults and bound truncations inside the filed
+    manifest. A clean run is therefore the only final manifest knowable before spend. The dry
+    oracle builds that manifest from frozen inputs; only its loud non-evidence protocol suffix is
+    removed. If the real run later records a fault, the commitment differs and the attempt aborts
+    instead of filing a changed design under the preregistration.
+    """
+    import contextlib
+    import io
+
+    preview = dict(manifest)
+    preview["_dry_run"] = True
+    with contextlib.redirect_stdout(io.StringIO()):
+        measurement = run_panel(preview, ask_fn=dry_reader(preview["items"], preview))
+    if measurement is None:
+        raise SystemExit("REFUSING before attempt mint: the zero-cost dry preview could not emit "
+                         "the manifest this run would preregister. Run --dry-run for the refusal.")
+    planned = json.loads(json.dumps(measurement["manifest"]))
+    protocol = planned.get("protocol", "")
+    if not protocol.endswith(_DRY_PROTOCOL_SUFFIX):
+        raise SystemExit("REFUSING before attempt mint: dry preview lost its non-evidence stamp; "
+                         "the harness cannot safely derive a real-run commitment.")
+    planned["protocol"] = protocol[:-len(_DRY_PROTOCOL_SUFFIX)]
+    return planned
+
+
+class _Transcript:
+    """Mirror panel output to the terminal while retaining an abort-receipt digest."""
+    def __init__(self, target):
+        import io
+        self._target = target
+        self._buffer = io.StringIO()
+
+    def write(self, value):
+        self._target.write(value)
+        return self._buffer.write(value)
+
+    def flush(self):
+        self._target.flush()
+
+    def text(self):
+        return self._buffer.getvalue()
+
+
+def _abort_panel_attempt(client, attempt_id, slug, failed_gate, details, receipt_dir=None,
+                         receipt_stem="runspec"):
+    receipt = {
+        "kind": "ainglish.panel.abort-receipt.v1",
+        "attempt_id": attempt_id,
+        "proposal": slug,
+        "failed_gate": failed_gate,
+        "details": details,
+    }
+    encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False).encode()
+    digest = hashlib.sha256(encoded).hexdigest()
+    if receipt_dir:
+        safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", receipt_stem).strip("-") or "runspec"
+        path = os.path.join(receipt_dir, f"{safe_stem}.attempt-{attempt_id}.abort.json")
+        with open(path, "wb") as handle:
+            handle.write(encoded + b"\n")
+        print(f"ABORT RECEIPT: {path} (sha256 {digest})")
+    client.abort_attempt(attempt_id, failed_gate=failed_gate, preflight_receipt_hash=digest)
+    print(f"ATTEMPT ABORTED: {attempt_id} — {failed_gate}")
+
+
+def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
+                             receipt_stem="runspec"):
+    """Mint -> spend -> complete/abort, with no real reader call before the mint."""
+    import contextlib
+    from ainglish.client import manifest_commitment
+
+    settings = _attempt_settings(spec["attempt"])
+    planned = _planned_panel_manifest(manifest)
+    opened = client.mint_attempt(
+        spec["slug"], planned,
+        estimand=settings["estimand"],
+        admissibility_gates=settings["admissibility_gates"],
+        planned_sample=settings["planned_sample"],
+        proposal_revision=settings["proposal_revision"],
+    )
+    attempt_id = opened["attempt"]["attempt_id"]
+    expected = manifest_commitment(planned)
+    print(f"ATTEMPT MINTED BEFORE READER SPEND: {attempt_id} (manifest {expected})")
+
+    transcript = _Transcript(sys.stdout)
+    try:
+        with contextlib.redirect_stdout(transcript):
+            measurement = run_panel(manifest, ask_fn=ask_fn)
+    except Exception as exc:
+        _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             "panel harness raised before measurement emission",
+                             {"exception": type(exc).__name__, "message": str(exc),
+                              "transcript": transcript.text()},
+                             receipt_dir, receipt_stem)
+        raise
+    if measurement is None:
+        _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             "panel harness emitted no measurement",
+                             {"transcript": transcript.text()},
+                             receipt_dir, receipt_stem)
+        return None
+
+    actual = manifest_commitment(measurement["manifest"])
+    if actual != expected:
+        _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             "filed manifest diverged from preregistered clean-run manifest",
+                             {"expected_manifest_commitment": expected,
+                              "actual_manifest_commitment": actual,
+                              "transcript": transcript.text()},
+                             receipt_dir, receipt_stem)
+        return None
+
+    measurement["attempt_id"] = attempt_id
+    response = client.measure(spec["slug"], measurement)
+    print("SUBMITTED:", json.dumps(response, ensure_ascii=False)[:400])
+    return measurement
 
 
 def mint_colony_access_token(colony, key, totp=None):
@@ -2233,12 +2468,34 @@ def main(argv):
               "\n       panel.py --demo-manifest | --selftest")
         return 0
     if argv[1] == "run":
+        if len(argv) < 3:
+            raise SystemExit("ainglish-panel run needs a runspec path (or - for stdin).")
         spec = json.loads(sys.stdin.read() if argv[2] == "-" else open(argv[2]).read())
         items, digest = fetch_items(spec["items_url"], spec.get("items_sha256"))
         manifest = dict(spec, items=items, items_sha256=digest)
         dry = "--dry-run" in argv
+        if "attempt" in spec:
+            _attempt_settings(spec["attempt"])
         if dry:
             manifest["_dry_run"] = True
+        if "attempt" in spec and not dry:
+            if "--submit" not in argv:
+                raise SystemExit("REFUSING before reader spend: this runspec declares an attempt, "
+                                 "so a real run needs --submit to close it atomically with its "
+                                 "measurement. Use --dry-run for the zero-cost preview.")
+            try:
+                from ainglish.client import AinglishClient
+            except ImportError:
+                raise SystemExit("runspec.attempt needs the installed ainglish package so the "
+                                 "panel and attempt client share one canonicalizer: pip install ainglish")
+            client = AinglishClient(
+                base_url=os.environ.get("AINGLISH_BASE", "https://ainglish.org"),
+                colony_base=os.environ.get("COLONY_BASE", "https://thecolony.ai"),
+            )
+            receipt_dir = os.getcwd() if argv[2] == "-" else os.path.dirname(os.path.abspath(argv[2]))
+            receipt_stem = "stdin-runspec" if argv[2] == "-" else os.path.basename(argv[2])
+            return 0 if _run_preregistered_panel(
+                manifest, spec, ask, client, receipt_dir, receipt_stem) is not None else 1
         m = run_panel(manifest, ask_fn=dry_reader(items, manifest) if dry else ask)
         if m is None:
             return 1
