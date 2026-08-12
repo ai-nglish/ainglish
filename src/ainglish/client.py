@@ -230,7 +230,52 @@ class AinglishClient:
             return self._token
         if self._key:
             from ainglish.panel import mint_id_token  # one exchange implementation, not two
-            self._token = mint_id_token(self.colony_base, AUDIENCE, self._key, totp=self._totp)
+            try:
+                self._token = mint_id_token(self.colony_base, AUDIENCE, self._key, totp=self._totp)
+            except AinglishError:
+                raise
+            except urllib.error.HTTPError as exc:
+                # Colony's errors are `{detail:{code,message}}`, not Ainglish envelopes. Preserve
+                # that machine code across the SDK boundary instead of leaking urllib's HTTPError.
+                try:
+                    payload = json.loads(exc.read())
+                except Exception:
+                    payload = {}
+                detail = payload.get("detail") if isinstance(payload, dict) else None
+                detail = detail if isinstance(detail, dict) else {}
+                code = detail.get("code") or (payload.get("error") if isinstance(payload, dict) else None)
+                message = detail.get("message") or (payload.get("message") if isinstance(payload, dict) else None)
+                code = str(code or "auth_exchange_failed").lower()
+                message = str(message or "Colony refused the credential exchange.")
+                hint = "check the Colony API key and retry"
+                if code in ("auth_2fa_required", "auth_2fa_invalid"):
+                    hint = ("pass totp= as a zero-argument callable returning a fresh six-digit code; "
+                            "TOTP codes rotate every 30 seconds, so do not cache one across token re-mints")
+                raise AinglishError(exc.code, {
+                    "error": code, "message": message, "hint": hint,
+                }) from None
+            except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+                raise AinglishError(0, {
+                    "error": "auth_transport_error",
+                    "message": "could not reach Colony while minting an Ainglish credential: %s" % exc,
+                    "hint": "check connectivity and colony_base, then retry; no request was sent to Ainglish",
+                }) from None
+            except (SystemExit, RuntimeError, KeyError, TypeError, ValueError) as exc:
+                raise AinglishError(502, {
+                    "error": "auth_invalid_response",
+                    "message": "Colony's credential exchange returned an unusable response: %s" % exc,
+                    "hint": "retry once; if it persists, report Colony/Ainglish SDK contract drift",
+                }) from None
+            except Exception as exc:
+                # colony-sdk owns its exception hierarchy. Keep that optional dependency behind the
+                # same public contract even when a new SDK version introduces a new error class.
+                status = getattr(exc, "status_code", 502)
+                status = status if isinstance(status, int) else 502
+                raise AinglishError(status, {
+                    "error": "auth_exchange_failed",
+                    "message": "Colony credential exchange failed: %s" % exc,
+                    "hint": "check the API key/TOTP and retry; if it persists, report the Colony SDK error",
+                }) from None
             return self._token
         if self._token:
             raise AinglishError(401, {"error": "token_expired",
@@ -623,14 +668,85 @@ class AinglishClient:
         return self.post("/api/v1/proposals", fields)
 
     def amend(self, slug, dry_run=False, **fields):
-        """Declared supersession. dry_run=True answers would_carry/surface_only WITHOUT filing —
-        always dry-run first: a surface-only amendment carries seconds and measurements forward;
-        anything else resets them, by design (a changed hypothesis is a new hypothesis).
+        """Low-level declared supersession: ``fields`` must be the COMPLETE revised proposal.
+
+        Prefer :meth:`amend_current`, which copies the current editable surface safely and
+        dry-runs by default. This primitive remains for callers which already hold a complete
+        payload. ``dry_run=True`` answers would_carry/surface_only WITHOUT filing: a surface-only
+        amendment carries seconds and measurements forward; anything else resets them, by design
+        (a changed hypothesis is a new hypothesis).
         """
         path = "/api/v1/proposals/%s/amend" % urllib.parse.quote(slug, safe="")
         if dry_run:
             path += "?dry_run=1"
         return self.post(path, fields)
+
+    # The server's create/amend input contract. Deliberately local and explicit: copying a whole
+    # proposal response would send response-only state (slug, stage, proposer, measurements, ...),
+    # while omitting one of these fields changes or invalidates the successor. Keep this tuple in
+    # the client selftest so a future edit cannot quietly widen the write surface.
+    AMENDMENT_FIELDS = (
+        "title", "kind", "origin", "rationale", "form", "english_mapping",
+        "predicted_measurement", "colony_thread_url", "example_ainglish",
+        "example_english", "corruption_neighbors", "form_constraints", "slot",
+        "protocol_meta", "evidence_contract",
+    )
+    AMENDMENT_REQUIRED_FIELDS = (
+        "title", "kind", "origin", "rationale", "form", "english_mapping",
+        "predicted_measurement", "colony_thread_url",
+    )
+
+    def prepare_amendment(self, proposal_or_slug, **changes):
+        """Build a complete amendment payload without mutating or leaking response-only state.
+
+        ``proposal_or_slug`` may be a proposal dict already fetched with :meth:`proposal`, or a
+        slug (which this method reads publicly). Only server-editable fields are copied. Explicit
+        changes are then overlaid; a misspelled/response-only change key fails locally rather than
+        being posted. The result is a detached deep copy suitable for local preflight, inspection,
+        or :meth:`amend`.
+        """
+        import copy
+
+        if isinstance(proposal_or_slug, str):
+            current = self.proposal(proposal_or_slug)
+        elif isinstance(proposal_or_slug, dict):
+            current = proposal_or_slug
+        else:
+            raise TypeError("proposal_or_slug must be a proposal dict or slug string")
+        unknown = sorted(set(changes) - set(self.AMENDMENT_FIELDS))
+        if unknown:
+            raise ValueError("unknown amendment field(s): %s" % ", ".join(unknown))
+
+        payload = {
+            field: copy.deepcopy(current[field])
+            for field in self.AMENDMENT_FIELDS
+            if field in current
+        }
+        payload.update(copy.deepcopy(changes))
+        missing = [field for field in self.AMENDMENT_REQUIRED_FIELDS if field not in payload]
+        if missing:
+            raise ValueError(
+                "proposal response is missing required amendment field(s): %s; fetch the full "
+                "proposal with client.proposal(slug)" % ", ".join(missing)
+            )
+        # protocol_meta is absent, rather than null, on ordinary language proposal responses.
+        # Do not invent it there; it is required and already present for kind=protocol.
+        if payload.get("kind") == "protocol" and "protocol_meta" not in payload:
+            raise ValueError("protocol proposal response is missing required protocol_meta")
+        return payload
+
+    def amend_current(self, slug, dry_run=True, **changes):
+        """Safely amend the current revision; non-mutating preview is the default.
+
+        Fetches the full proposal, preserves every editable field, overlays ``changes``, strips
+        response-only fields, then calls :meth:`amend`. At least one explicit change is required,
+        so ``dry_run=False`` cannot accidentally file a zero-change successor. Inspect the preview's
+        ``would_carry`` and submit the SAME changes with ``dry_run=False`` only when satisfied.
+        """
+        if not changes:
+            raise ValueError("amend_current requires at least one changed field")
+        fields = self.prepare_amendment(slug, **changes)
+        return self.amend(slug, dry_run=dry_run, **fields)
 
     def second(self, slug, worth_measuring_because=None, weakest_part=None):
         """Second = "worth MEASURING", never "worth adopting". Weight >= 3 across >= 2 distinct
@@ -994,8 +1110,68 @@ def selftest():
         assert AinglishClient(use_env=False)._totp is None
     finally:
         os.environ.pop("AINGLISH_TOTP", None) if old_totp is None else os.environ.__setitem__("AINGLISH_TOTP", old_totp)
-    # gzip decode: roundtrip through the same helper the transport uses
+    # Credential exchange is part of the client's public transport boundary. Colony failures must
+    # arrive as AinglishError — never urllib internals, SystemExit, or stdout that corrupts a JSON
+    # consumer. Exercise the real import seam because _bearer deliberately reuses panel.py's minter.
+    import io
+    import contextlib
+    import sys
     import types
+    from ainglish import panel as _panel
+    real_mint = _panel.mint_id_token
+    try:
+        def _http_2fa(*args, **kwargs):
+            raise urllib.error.HTTPError(
+                "https://thecolony.ai/api/v1/auth/token", 401, "Unauthorized", {},
+                io.BytesIO(b'{"detail":{"message":"Invalid 2FA code.","code":"AUTH_2FA_INVALID"}}'))
+        _panel.mint_id_token = _http_2fa
+        try:
+            AinglishClient(colony_api_key="key", use_env=False)._bearer()
+            raise AssertionError("Colony 401 leaked or was accepted")
+        except AinglishError as err:
+            assert err.status == 401 and err.error == "auth_2fa_invalid" and "callable" in err.hint, str(err)
+
+        def _bad_shape(*args, **kwargs):
+            raise SystemExit("no id_token")
+        _panel.mint_id_token = _bad_shape
+        try:
+            AinglishClient(colony_api_key="key", use_env=False)._bearer()
+            raise AssertionError("SystemExit escaped the library boundary")
+        except AinglishError as err:
+            assert err.status == 502 and err.error == "auth_invalid_response", str(err)
+
+        def _offline(*args, **kwargs):
+            raise urllib.error.URLError("offline")
+        _panel.mint_id_token = _offline
+        try:
+            AinglishClient(colony_api_key="key", use_env=False)._bearer()
+            raise AssertionError("URLError escaped the library boundary")
+        except AinglishError as err:
+            assert err.status == 0 and err.error == "auth_transport_error", str(err)
+    finally:
+        _panel.mint_id_token = real_mint
+
+    # The reusable minter itself is silent on success; provenance belongs in explicit receipts,
+    # not unsolicited stdout. A fake colony-sdk exercises the preferred path without a network.
+    _missing = object()
+    old_colony_sdk = sys.modules.get("colony_sdk", _missing)
+    fake_colony_sdk = types.SimpleNamespace(
+        __version__="test",
+        ColonyClient=lambda **kwargs: types.SimpleNamespace(
+            exchange_token=lambda **kwargs: {"id_token": "header.payload.signature"}),
+    )
+    try:
+        sys.modules["colony_sdk"] = fake_colony_sdk
+        captured_stdout = io.StringIO()
+        with contextlib.redirect_stdout(captured_stdout):
+            assert _panel.mint_id_token("https://thecolony.ai", "aud", "key") == "header.payload.signature"
+        assert captured_stdout.getvalue() == "", "credential minting must not write to stdout"
+    finally:
+        if old_colony_sdk is _missing:
+            sys.modules.pop("colony_sdk", None)
+        else:
+            sys.modules["colony_sdk"] = old_colony_sdk
+    # gzip decode: roundtrip through the same helper the transport uses
     raw = json.dumps({"kind": "x"}).encode()
     packed = gzip.compress(raw)
     resp = types.SimpleNamespace(read=lambda: packed, headers={"Content-Encoding": "gzip"})
@@ -1109,6 +1285,56 @@ def selftest():
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
+
+    # --- safe amendments: preserve the editable surface, never replay response state ---------
+    current = {
+        "slug": "some-slug", "stage": "measured", "proposer": {"sub": "author"},
+        "measurements": [{"manifest_hash": "response-only"}],
+        "title": "Before", "kind": "notational", "origin": "prospective",
+        "rationale": "why", "form": "safe:", "english_mapping": "the safe meaning",
+        "predicted_measurement": "refuted if accuracy falls",
+        "colony_thread_url": "https://thecolony.ai/post/thread",
+        "example_ainglish": None, "example_english": None,
+        "corruption_neighbors": None, "form_constraints": None, "slot": None,
+        "evidence_contract": {"claim_carrier": ["comprehension_accuracy_delta"],
+                              "prerequisites": ["token_delta"]},
+    }
+    prepared = probe.prepare_amendment(current, slot={"safe:": "the safe meaning"})
+    assert prepared["title"] == "Before" and prepared["english_mapping"] == "the safe meaning"
+    assert prepared["slot"] == {"safe:": "the safe meaning"}
+    assert "slug" not in prepared and "stage" not in prepared and "measurements" not in prepared
+    prepared["evidence_contract"]["prerequisites"].append("learnability")
+    assert current["evidence_contract"]["prerequisites"] == ["token_delta"], \
+        "the prepared payload must not alias nested response data"
+    for bad in ({"slug": "new"}, {"english_maping": "typo"}):
+        try:
+            probe.prepare_amendment(current, **bad)
+            raise AssertionError("unknown/response-only amendment fields must refuse locally")
+        except ValueError:
+            pass
+
+    class _AmendProbe(_Probe):
+        def proposal(self, slug, authenticated=False):
+            sent["fetched_slug"] = slug
+            return current
+
+    amend_probe = _AmendProbe(id_token="x", use_env=False)
+    sent.clear()
+    preview = amend_probe.amend_current("some slug", slot={"safe:": "the safe meaning"})
+    assert preview == {"ok": True}
+    assert sent["fetched_slug"] == "some slug"
+    assert sent["path"] == "/api/v1/proposals/some%20slug/amend?dry_run=1", sent
+    assert sent["payload"]["slot"] == {"safe:": "the safe meaning"}
+    assert sent["payload"]["english_mapping"] == current["english_mapping"]
+    sent.clear()
+    amend_probe.amend_current("some slug", dry_run=False, title="After")
+    assert sent["path"] == "/api/v1/proposals/some%20slug/amend", sent
+    assert sent["payload"]["title"] == "After"
+    try:
+        amend_probe.amend_current("some slug", dry_run=False)
+        raise AssertionError("a zero-change live amendment must refuse before the fetch/write")
+    except ValueError:
+        pass
 
     # --- attempt lifecycle: exact commitment + every wire route ------------------------------
     # Expected bytes/hashes were verified byte-for-byte against BOTH register environments'

@@ -1,6 +1,15 @@
 # Changelog
 
 ## Unreleased
+- **Colony token-exchange failures now obey the SDK's one-error contract.** HTTP, transport and
+  malformed exchange responses become `AinglishError`; Colony codes such as
+  `auth_2fa_invalid` survive with an actionable fresh-code hint. The stdlib fallback no longer
+  prints success output or exits the process, and it sends the versioned SDK User-Agent.
+- **Safe amendments are full-payload and preview-first.** `amend_current()` fetches the current
+  proposal, copies only its editable fields, overlays explicit changes, and dry-runs by default;
+  response-only state and misspelled fields refuse locally. `prepare_amendment()` exposes the
+  detached payload for inspection or preflight. The low-level `amend()` remains available but is
+  now documented honestly as requiring the complete revised proposal, not a partial patch.
 - **Publishing verifies the wheel it will upload.** The publish workflow installs the built wheel
   in a clean venv outside the checkout and requires its distribution metadata, runtime version,
   client User-Agent stamp and panel harness stamp all to equal the tag. PR CI rehearses the same
