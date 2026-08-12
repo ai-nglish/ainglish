@@ -42,6 +42,7 @@ using a DIFFERENT manifest. Re-running this exact manifest is a useful build che
 register policy does not count that deterministic reproduction as independent confirmation.
 """
 import hashlib
+import ipaddress
 import json
 import re
 import os
@@ -62,6 +63,25 @@ def _origin(url):
     p = urllib.parse.urlsplit(url)
     port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
     return p.scheme.lower(), (p.hostname or "").lower(), port
+
+
+def _require_secure_credential_url(url, purpose):
+    """Refuse cleartext credential transport, except to an explicit loopback endpoint."""
+    p = urllib.parse.urlsplit(url)
+    if p.scheme.lower() == "https":
+        return
+    host = (p.hostname or "").lower().rstrip(".")
+    loopback = host == "localhost" or host.endswith(".localhost")
+    if host:
+        try:
+            loopback = loopback or ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            pass
+    if p.scheme.lower() == "http" and loopback:
+        return
+    raise ValueError(
+        f"{purpose} would send credentials to {url!r} without HTTPS; use https://, or an explicit "
+        "localhost/loopback URL for local development")
 
 
 class _SensitiveRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -233,6 +253,11 @@ def chat(endpoint, prompt):
     if ep.get("api_key_env") and not key:
         raise SystemExit(f"panel entry {ep.get('name', '?')!r}: {ep['api_key_env']} is not set. "
                          "Refusing to run a panelist that would silently 401 — export the key or drop the member.")
+    if key:
+        try:
+            _require_secure_credential_url(ep["base_url"], f"panel entry {ep.get('name', '?')!r}")
+        except ValueError as exc:
+            raise SystemExit(f"REFUSING: {exc}") from None
     bounds = bounds_for(endpoint)
     temperature = temperature_for(endpoint)
     sampling = {} if temperature is None else {"temperature": temperature}
@@ -1321,6 +1346,15 @@ def selftest():
     # urllib's default handler forwards Authorization/x-api-key across origins. The request must
     # be stopped before a redirect can replay a provider key (or a credential in a 307 body).
     assert _origin("https://api.openai.com/v1") == _origin("https://API.OPENAI.COM:443/v2")
+    for safe in ("https://example.test/api", "http://localhost:11434/v1",
+                 "http://127.0.0.1:8920/api", "http://[::1]:11434/v1"):
+        _require_secure_credential_url(safe, "selftest")
+    for unsafe in ("http://api.example.test/v1", "ftp://localhost/key", "relative/path"):
+        try:
+            _require_secure_credential_url(unsafe, "selftest")
+            raise AssertionError(f"credential URL must refuse: {unsafe}")
+        except ValueError:
+            pass
     redirect_probe = urllib.request.Request(
         "https://api.openai.com/v1/chat/completions",
         b"{}", {"Authorization": "Bearer sentinel"})
@@ -2164,6 +2198,16 @@ def selftest():
             raise AssertionError("a missing built-in provider key reached attempt minting")
         except SystemExit as exc:
             assert "before attempt mint" in str(exc) and "OPENAI_API_KEY" in str(exc)
+        os.environ["OPENAI_API_KEY"] = "sentinel"
+        try:
+            _validate_real_reader_configuration(
+                {"panel": [{"name": "cleartext", "provider": "openai", "model": "gpt-test",
+                            "base_url": "http://api.example.test/v1"}]}, ask)
+            raise AssertionError("a cleartext provider key destination reached attempt minting")
+        except SystemExit as exc:
+            assert "before attempt mint" in str(exc) and "without HTTPS" in str(exc)
+        finally:
+            os.environ.pop("OPENAI_API_KEY", None)
         try:
             _validate_real_reader_configuration(
                 {"panel": [{"name": "bad-bound", "provider": "ollama", "model": "m",
@@ -2381,9 +2425,15 @@ def _validate_real_reader_configuration(manifest, ask_fn):
                 raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs {bound} "
                                  "to be a positive integer.")
         key_env = resolved.get("api_key_env") or ""
-        if key_env and not os.environ.get(key_env):
+        key = os.environ.get(key_env, "") if key_env else ""
+        if key_env and not key:
             raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs {key_env}, "
                              "but it is not set. Export the key or drop the member.")
+        if key:
+            try:
+                _require_secure_credential_url(resolved["base_url"], f"panel entry {name!r}")
+            except ValueError as exc:
+                raise SystemExit(f"REFUSING before attempt mint: {exc}") from None
 
 
 class _Transcript:
@@ -2518,6 +2568,7 @@ def mint_colony_access_token(colony, key, totp=None):
     keeping the credentialled POST in one guarded implementation prevents 2FA and redirect safety
     from drifting between command-line harnesses.
     """
+    _require_secure_credential_url(colony, "Colony token exchange")
     code = totp() if callable(totp) else totp
     body = {"api_key": key}
     if code:
@@ -2550,6 +2601,7 @@ def mint_id_token(colony, client_id, key, totp=None):
     callable returning one (mirrors colony-sdk's own parameter); resolved at mint time because
     codes are short-lived and a re-mint needs a FRESH one. CLI paths read AINGLISH_TOTP.
     """
+    _require_secure_credential_url(colony, "Colony OIDC exchange")
     try:
         import colony_sdk
     except ImportError:
@@ -2608,6 +2660,7 @@ def submit_measurement(measurement, slug):
     client_id = os.environ.get("AINGLISH_CLIENT_ID", "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j")
 
     def http(url, data=None, headers=None):
+        _require_secure_credential_url(url, "Ainglish measurement submission")
         req = urllib.request.Request(url, data=data, headers={"User-Agent": "ainglish-panel/1.0", **(headers or {})},
                                      method="POST")
         with _open(req, timeout=45, sensitive=True) as r:
