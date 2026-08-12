@@ -2367,13 +2367,13 @@ def mint_colony_access_token(colony, key, totp=None):
     req = urllib.request.Request(
         f"{colony.rstrip('/')}/api/v1/auth/token",
         data=json.dumps(body).encode(),
-        headers={"User-Agent": "ainglish-panel/1.0", "Content-Type": "application/json"},
+        headers={"User-Agent": f"ainglish-python/{HARNESS_VERSION}", "Content-Type": "application/json"},
         method="POST",
     )
     with _open(req, timeout=45, sensitive=True) as resp:
         token = json.loads(resp.read()).get("access_token") or ""
     if not token:
-        raise SystemExit("Colony token endpoint returned no access_token — refusing an unauthenticated continuation.")
+        raise RuntimeError("Colony token endpoint returned no access_token — refusing an unauthenticated continuation.")
     return token
 
 
@@ -2384,8 +2384,8 @@ def mint_id_token(colony, client_id, key, totp=None):
     by the same party the key is already being sent to, so the trust boundary does not move.
     Pure-stdlib fallback keeps the curl-ed single file and zero-dep installs first-class. ONLY
     ImportError falls back: an installed SDK that fails is a real error, and silently switching
-    paths would bury it under a second failure envelope. The path used is printed, because a
-    submission's operator should be able to say which code minted its credential.
+    paths would bury it under a second failure envelope. This library helper never writes to
+    stdout: callers producing machine-readable output must not gain an authentication preamble.
 
     totp: for 2FA-enabled Colony accounts (@Rosetta, 0.2.1 feedback: the key path 401'd with
     AUTH_2FA_REQUIRED and nothing on this side could supply the code). A string, or a zero-arg
@@ -2401,15 +2401,14 @@ def mint_id_token(colony, client_id, key, totp=None):
             audience=client_id, scope=AINGLISH_OIDC_SCOPE)
         tok = r.get("id_token") or ""
         if not tok:
-            raise SystemExit("colony-sdk exchange_token returned no id_token — SDK contract drift; "
-                             "report it (or uninstall colony-sdk to use the stdlib exchange).")
-        print(f"token minted via colony-sdk {getattr(colony_sdk, '__version__', '?')}")
+            raise RuntimeError("colony-sdk exchange_token returned no id_token — SDK contract drift; "
+                               "report it (or uninstall colony-sdk to use the stdlib exchange).")
         return tok
     import urllib.parse
     import urllib.request
 
     def post(url, data, headers):
-        req = urllib.request.Request(url, data=data, headers={"User-Agent": "ainglish-panel/1.0", **headers},
+        req = urllib.request.Request(url, data=data, headers={"User-Agent": f"ainglish-python/{HARNESS_VERSION}", **headers},
                                      method="POST")
         # Both calls carry credentials (first the raw Colony key, then the subject token in the
         # form body). A 307/308 can replay a POST body, so protecting headers alone is insufficient.
@@ -2421,8 +2420,10 @@ def mint_id_token(colony, client_id, key, totp=None):
         "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
         "subject_token": jwt, "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
         "audience": client_id, "scope": AINGLISH_OIDC_SCOPE}).encode()
-    tok = post(f"{colony}/oauth/token", form, {"Content-Type": "application/x-www-form-urlencoded"})["id_token"]
-    print("token minted via stdlib exchange")
+    exchanged = post(f"{colony}/oauth/token", form, {"Content-Type": "application/x-www-form-urlencoded"})
+    tok = exchanged.get("id_token") if isinstance(exchanged, dict) else ""
+    if not tok:
+        raise RuntimeError("Colony OIDC exchange returned no id_token — refusing an unauthenticated continuation.")
     return tok
 
 

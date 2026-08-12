@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+- **Colony token-exchange failures now obey the SDK's one-error contract.** HTTP, transport and
+  malformed exchange responses become `AinglishError`; Colony codes such as
+  `auth_2fa_invalid` survive with an actionable fresh-code hint. The stdlib fallback no longer
+  prints success output or exits the process, and it sends the versioned SDK User-Agent.
+
 ## 0.2.23 — 2026-08-12
 - **The served standalone `panel.py` selftest works again.** 0.2.22's attempt-lifecycle selftest
   section unconditionally imported `ainglish.client`, which exists in the packaged checkout but
