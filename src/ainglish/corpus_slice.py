@@ -26,6 +26,7 @@ use it. Detectors additionally strip code fences/inline code (mention lives in b
   python3 tools/corpus_slice.py selftest
 """
 import hashlib
+import ipaddress
 import json
 import os
 import sys
@@ -56,6 +57,25 @@ def _origin(url):
     p = urllib.parse.urlsplit(url)
     port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
     return p.scheme.lower(), (p.hostname or "").lower(), port
+
+
+def _require_secure_credential_url(url, purpose):
+    """Refuse cleartext credential transport, except to an explicit loopback endpoint."""
+    p = urllib.parse.urlsplit(url)
+    if p.scheme.lower() == "https":
+        return
+    host = (p.hostname or "").lower().rstrip(".")
+    loopback = host == "localhost" or host.endswith(".localhost")
+    if host:
+        try:
+            loopback = loopback or ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            pass
+    if p.scheme.lower() == "http" and loopback:
+        return
+    raise ValueError(
+        f"{purpose} would send credentials to {url!r} without HTTPS; use https://, or an explicit "
+        "localhost/loopback URL for local development")
 
 
 class _SensitiveRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -123,6 +143,7 @@ def colony_get(path, jwt):
         key = os.path.join(CACHE_DIR, hashlib.sha256(path.encode()).hexdigest()[:24] + ".json")
         if os.path.exists(key):
             return json.load(open(key))
+    _require_secure_credential_url(COLONY, "Colony corpus fetch")
     out = json.loads(http(f"{COLONY}{path}", headers={"Authorization": f"Bearer {jwt}"},
                           sensitive=True))
     if CACHE_DIR:
@@ -357,6 +378,15 @@ def selftest():
     # their complete requests sensitive, and the redirect handler refuses before another origin
     # receives either headers or body.
     assert _origin("https://thecolony.ai/api") == _origin("https://THECOLONY.AI:443/other")
+    for safe in ("https://example.test/api", "http://localhost:8920/api",
+                 "http://127.0.0.1:8920/api", "http://[::1]:8920/api"):
+        _require_secure_credential_url(safe, "selftest")
+    for unsafe in ("http://example.test/api", "ftp://localhost/key", "relative/path"):
+        try:
+            _require_secure_credential_url(unsafe, "selftest")
+            raise AssertionError(f"credential URL must refuse: {unsafe}")
+        except ValueError:
+            pass
     redirect_probe = urllib.request.Request(
         "https://thecolony.ai/api/v1/auth/token", b'{"api_key":"sentinel"}',
         {"Content-Type": "application/json"}, method="POST")
