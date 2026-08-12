@@ -37,6 +37,7 @@ list(resp) before reaching into it — a guessed key that misses reads as a conf
 negative about data that is actually there.
 """
 import base64
+import decimal
 import gzip
 import hashlib
 import http.client
@@ -63,9 +64,18 @@ def _canonical_json(value):
 
     Ainglish's PHP canonicalizer recursively sorts object keys, preserves array order and uses
     PHP's native JSON number rendering. ``json.dumps(sort_keys=True)`` is almost, but not quite,
-    the same: notably ``1.0``, exponent zero-padding and the 1e16/1e17 notation boundary differ.
-    An almost-right commitment is worse than no helper because the attempt can only be aborted.
-    Keep the small serializer here pinned by fixtures generated with the server canonicalizer.
+    the same: notably ``1.0``, empty objects (PHP's assoc decode turns ``{}`` into ``[]``) and
+    float rendering differ. An almost-right commitment is worse than no helper because the
+    attempt can only be aborted.
+
+    Float rendering additionally depends on PHP's ``serialize_precision`` ini setting, and the
+    register's environments DISAGREE: default builds use -1 (shortest round-trip) while the
+    production host pins 100 (exact decimal expansion — ``0.1`` becomes 55 digits). The two
+    agree only on floats whose shortest repr IS the exact expansion, in the shared fixed-notation
+    window: integral floats and exactly-representable decimals with 1e-4 <= |v| < 1e17. Anything
+    outside that provably-portable window is refused at commitment time — before spend — instead
+    of minting an attempt that can never close. Every accepted rendering below is pinned by
+    fixtures verified byte-for-byte against BOTH environments' PHP.
     """
     if value is None:
         return "null"
@@ -83,13 +93,14 @@ def _canonical_json(value):
         if value == 0.0:
             return "-0" if math.copysign(1.0, value) < 0 else "0"
         magnitude = abs(value)
-        if 1e-4 <= magnitude < 1e17:
-            return str(int(value)) if value.is_integer() else repr(value)
-        coefficient, exponent = repr(value).lower().split("e")
-        if "." not in coefficient:
-            coefficient += ".0"
-        exponent_i = int(exponent)
-        return "%se%s%d" % (coefficient, "+" if exponent_i >= 0 else "", exponent_i)
+        exact = decimal.Decimal(repr(value)) == decimal.Decimal(value)
+        if not exact or not (1e-4 <= magnitude < 1e17):
+            raise ValueError(
+                "manifest float %r is not portable: the register's environments disagree on "
+                "PHP's serialize_precision, and only exactly-representable decimals with "
+                "1e-4 <= |v| < 1e17 render identically on all of them — express this number "
+                "as an integer, a scaled integer, or a string" % (value,))
+        return str(int(value)) if value.is_integer() else repr(value)
     if isinstance(value, str):
         # PHP leaves Unicode unescaped except the two JavaScript line terminators unless
         # JSON_UNESCAPED_LINE_TERMINATORS is explicitly requested (the server does not).
@@ -99,6 +110,10 @@ def _canonical_json(value):
     if isinstance(value, dict):
         if any(not isinstance(key, str) for key in value):
             raise ValueError("manifest object keys must be strings")
+        if not value:
+            # PHP decodes request bodies to associative arrays, where an empty object is
+            # indistinguishable from an empty list — the server canonicalizes both as [].
+            return "[]"
         return "{" + ",".join(
             _canonical_json(key) + ":" + _canonical_json(value[key]) for key in sorted(value)
         ) + "}"
@@ -1088,19 +1103,24 @@ def selftest():
     assert sent["path"].endswith("/second"), sent
 
     # --- attempt lifecycle: exact commitment + every wire route ------------------------------
-    # Expected bytes/hashes were generated with the server's PHP Canonicalizer. These are the
-    # cases where json.dumps(sort_keys=True) diverges and would mint an uncloseable attempt.
-    manifest = {
-        "unicode": "line\u2028separator",
-        "numbers": [1.0, 1e-7, 1e16, 1e17, -0.0, 0.25],
-        "nested": {"z": True, "a": None},
-    }
+    # Expected bytes/hashes were verified byte-for-byte against BOTH register environments'
+    # PHP Canonicalizer (default serialize_precision=-1 AND the production host's pinned 100).
+    # These are the cases where json.dumps(sort_keys=True) diverges and would mint an
+    # uncloseable attempt: 1.0 folds to 1, an empty object canonicalizes as [], and U+2028
+    # stays escaped inside otherwise-unescaped Unicode.
+    manifest = {"pin": {"empty": {}, "thr": 0.5, "n": 1.0, "u": "line\u2028sep"}, "list": []}
     assert _canonical_json(manifest) == (
-        '{"nested":{"a":null,"z":true},"numbers":[1,1.0e-7,10000000000000000,'
-        '1.0e+17,-0,0.25],"unicode":"line\\u2028separator"}'
+        '{"list":[],"pin":{"empty":[],"n":1,"thr":0.5,"u":"line\\u2028sep"}}'
     )
-    assert manifest_commitment(manifest) == "0378e6e5ab9cd932c42ab9d1da4da1a8140020cefab8ad75478695e85737fc8c"
-    for bad in ({"x": float("nan")}, {1: "not a JSON object key"}, ["not", "an", "object"]):
+    assert manifest_commitment(manifest) == "385e7388a2208549216c68be22414adeb06b9ebb0d861e42bf3cb7b285612e86"
+    assert _canonical_json([1e16, 1.5e16, -0.0, 0.0625, 0.000244140625, 3.5]) == (
+        "[10000000000000000,15000000000000000,-0,0.0625,0.000244140625,3.5]"
+    )
+    # Floats outside the provably-portable window must refuse BEFORE spend, never mint a
+    # commitment prod cannot reproduce: prod's serialize_precision=100 renders 0.1 as its
+    # 55-digit exact expansion while default builds render the shortest repr.
+    for bad in ({"x": float("nan")}, {1: "not a JSON object key"}, ["not", "an", "object"],
+                {"x": 0.1}, {"x": 1e-7}, {"x": 1e17}, {"x": 0.0001}, {"x": 0.30000000000000004}):
         try:
             manifest_commitment(bad)
             raise AssertionError("non-canonical manifest shape must refuse: %r" % (bad,))
