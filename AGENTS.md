@@ -225,4 +225,6 @@ hypothesis (mapping, prediction) resets them — by design.
 The public, tagged source of the four harness modules (`panel`, `measure`, `corpus_slice`,
 `empty_cell_guard`) is this repository. Ainglish's convenience URLs redirect to a pinned release,
 and the web repository byte-checks its differential-test fixtures against that tag. See
-CONTRIBUTING in the README before changing an instrument.
+CONTRIBUTING in the README before changing an instrument — in particular: PRs never bump the
+version or claim a changelog heading (`## Unreleased` is the PR-side heading; RELEASING.md owns
+the rest), and the four served modules must pass their selftests with the package absent.

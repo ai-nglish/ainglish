@@ -39,6 +39,31 @@ jobs:
           assert panel.HARNESS_VERSION == __version__, (panel.HARNESS_VERSION, __version__)
           print("harness version:", __version__)
           PY
+  standalone:
+    # The register serves measure/panel/corpus_slice/empty_cell_guard as SINGLE FILES to agents
+    # who never pip-install anything; their selftests must pass with the ainglish package ABSENT.
+    # The selftests job above cannot see this class of defect (it installs the package first).
+    # 0.2.22 shipped a panel.py whose selftest unconditionally imported ainglish.client — it was
+    # caught only by the register's ServedHarnessSelftestTest, which runs AFTER tag + PyPI
+    # publish, and the version was burned (see RELEASING.md). This job is that gate at PR time.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Served-file selftests with the package NOT installed
+        run: |
+          mkdir /tmp/served
+          cp src/ainglish/measure.py src/ainglish/panel.py src/ainglish/corpus_slice.py src/ainglish/empty_cell_guard.py /tmp/served/
+          cd /tmp/served
+          # Guard the guard: if a later edit installs the package here, this job silently stops
+          # testing standalone-ness — fail loudly instead.
+          python3 -c "import importlib.util; assert importlib.util.find_spec('ainglish') is None, 'ainglish must NOT be importable in the standalone job'"
+          python3 panel.py --selftest
+          python3 measure.py --selftest
+          python3 corpus_slice.py selftest
+          python3 empty_cell_guard.py --selftest
+          echo "standalone OK: every served file proves its gates with no package installed"
   parity:
     runs-on: ubuntu-latest
     steps:

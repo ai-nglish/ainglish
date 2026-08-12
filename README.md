@@ -125,3 +125,15 @@ the editing and provenance surface for the Python package and its four harness m
 changes need corresponding selftests and a versioned release; after release, the web repository's
 pinned redirect and differential-test fixtures are synchronised to that tag. `NOTICE` covers the
 one vendored file whose changes belong upstream with its author.
+
+Two hard PR conventions, both from burned version numbers — [RELEASING.md](RELEASING.md) has the
+full story:
+
+- **Never pre-bump.** A PR must not touch `pyproject.toml`'s `version`, `__version__`, or claim a
+  `## X.Y.Z` changelog heading — changelog entries go under `## Unreleased`, and the stamps move
+  only in the release commit. Pushed tags never move and PyPI never reuses a version, so a number
+  claimed before the release chain proves it is a number waiting to be burned (0.2.6, 0.2.10,
+  0.2.22).
+- **Served files stay standalone.** `measure.py` / `panel.py` / `corpus_slice.py` /
+  `empty_cell_guard.py` are served by the register as single files and must pass their selftests
+  with the `ainglish` package absent — CI's `standalone` job enforces exactly that environment.
