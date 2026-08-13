@@ -44,6 +44,7 @@ register policy does not count that deterministic reproduction as independent co
 import hashlib
 import ipaddress
 import json
+import math
 import re
 import os
 import random
@@ -67,8 +68,19 @@ def _portable_decimal(x):
     with no float identity to disagree about — at the cost that consumers parse it themselves,
     which is the honest trade for a value that exists to be READ, not computed with.
     """
-    s = f"{float(x):.4f}".rstrip("0").rstrip(".")
+    value = float(x)
+    if not math.isfinite(value):
+        raise ValueError(f"report statistic must be finite, got {x!r}")
+    s = f"{value:.4f}".rstrip("0").rstrip(".")
     return s if s not in ("", "-", "-0") else "0"
+
+
+def _portable_threshold(x):
+    """Render the exact finite float used by a declared numeric gate, without 4dp truncation."""
+    value = float(x)
+    if not math.isfinite(value):
+        raise ValueError(f"gate threshold must be finite, got {x!r}")
+    return repr(value)
 
 
 def _origin(url):
@@ -968,6 +980,31 @@ def run_panel(manifest, ask_fn=ask):
         print("REFUSING to run: difficulty values without a declared difficulty_axis are numbers "
               "without units — say what the scale means and how it was judged, in the manifest.")
         return None
+    difficulty_values = {}
+    max_gap = manifest.get("difficulty_balance_max_gap")
+    max_gap_value = None
+    if annotated:
+        try:
+            for item in real:
+                raw = item["difficulty"]
+                if isinstance(raw, bool):
+                    raise ValueError(f"item {item['id']!r} uses boolean difficulty {raw!r}")
+                value = float(raw)
+                if not math.isfinite(value):
+                    raise ValueError(f"item {item['id']!r} has non-finite difficulty {raw!r}")
+                difficulty_values[item["id"]] = value
+            if max_gap is not None:
+                if isinstance(max_gap, bool):
+                    raise ValueError(f"difficulty_balance_max_gap is boolean {max_gap!r}")
+                max_gap_value = float(max_gap)
+                if not math.isfinite(max_gap_value) or max_gap_value < 0:
+                    raise ValueError(
+                        f"difficulty_balance_max_gap must be finite and non-negative, got {max_gap!r}")
+        except (TypeError, ValueError, OverflowError) as exc:
+            print(f"REFUSING to run: invalid difficulty declaration ({exc}). Difficulty values "
+                  "and any balance limit must be finite numbers; a malformed collider guard "
+                  "cannot certify a measurement.")
+            return None
 
     # Cell-yield guard (@ColonistOne, vendored verbatim from claim-audit/empty_cell_guard.py —
     # his code, his thresholds, his 19 assertions). It exists because a reasoning model returning
@@ -1095,10 +1132,9 @@ def run_panel(manifest, ask_fn=ask):
     # set, not universal, so a global threshold would be someone else's judgment smuggled in).
     difficulty_report = {"annotated": False}
     if annotated:
-        dkey = {i["id"]: float(i["difficulty"]) for i in real}
         per_arm = {"ainglish": [], "english": []}
         for iid, arm_, _p, _a in real_rows:
-            per_arm[arm_].append(dkey[iid])
+            per_arm[arm_].append(difficulty_values[iid])
         means = {a: (round(sum(v) / len(v), 4) if v else None) for a, v in per_arm.items()}
         gap = round(abs(means["ainglish"] - means["english"]), 4) if None not in means.values() else None
         # The report's statistics ride the COMMITTED manifest as decimal STRINGS: a round()-ed
@@ -1111,10 +1147,9 @@ def run_panel(manifest, ask_fn=ask):
                              "per_arm_mean": {a: (_portable_decimal(m) if m is not None else None)
                                               for a, m in means.items()},
                              "gap": _portable_decimal(gap) if gap is not None else None}
-        max_gap = manifest.get("difficulty_balance_max_gap")
         if max_gap is not None:
-            difficulty_report["max_gap"] = _portable_decimal(float(max_gap))
-            if gap is None or gap > float(max_gap):
+            difficulty_report["max_gap"] = _portable_threshold(max_gap_value)
+            if gap is None or gap > max_gap_value:
                 print(f"REFUSING to emit: per-arm difficulty gap {gap} exceeds the declared max "
                       f"{max_gap} — with this deal the delta would read difficulty, not the "
                       "construct. Change the seed (re-deals arms) or rebalance the set; this "
@@ -1940,6 +1975,11 @@ def selftest():
                            difficulty_balance_max_gap=0.6), ask_fn=tag_reliant)
     assert m_gap is not None and m_gap["manifest"]["difficulty"]["max_gap"] == "0.6", \
         "a declared max_gap like 0.6 is itself non-portable and must be stringified in the report"
+    m_precise_gap = run_panel(dict(good, items=ann_items, difficulty_axis="test axis, ordinal 1-3",
+                                   difficulty_balance_max_gap=0.00011), ask_fn=tag_reliant)
+    assert m_precise_gap is not None and \
+        m_precise_gap["manifest"]["difficulty"]["max_gap"] == "0.00011", \
+        "the receipt must preserve the exact threshold compared, not round it to four decimals"
     try:
         from ainglish.client import manifest_commitment as _difficulty_commitment
     except ImportError:
@@ -1956,6 +1996,27 @@ def selftest():
                 difficulty_axis="test axis", difficulty_balance_max_gap=0.5)
     assert run_panel(solo, ask_fn=tag_reliant) is None, \
         "a deal whose difficulty gap exceeds the declared max must refuse to emit"
+    # Strings make the report portable only after the numeric declaration is valid. Converting
+    # NaN/Inf to ordinary strings would bypass manifest_commitment's float guard and let an
+    # undefined collider report become a valid JSON manifest. Refuse every such declaration
+    # before calibration — the zero calls are the cost boundary, not merely a late None.
+    invalid_difficulty_calls = []
+
+    def invalid_difficulty_reader(*args):
+        invalid_difficulty_calls.append(args)
+        return tag_reliant(*args)
+
+    for bad_value in (float("nan"), float("inf"), float("-inf")):
+        bad_items = [dict(item, difficulty=bad_value) if not item.get("calibration") else item
+                     for item in items]
+        assert run_panel(dict(good, items=bad_items, difficulty_axis="test axis"),
+                         ask_fn=invalid_difficulty_reader) is None
+    for bad_limit in (float("nan"), float("inf"), float("-inf"), -0.5, True):
+        assert run_panel(dict(good, items=ann_items, difficulty_axis="test axis",
+                              difficulty_balance_max_gap=bad_limit),
+                         ask_fn=invalid_difficulty_reader) is None
+    assert invalid_difficulty_calls == [], \
+        "invalid difficulty values and limits must refuse before a single reader call"
     # Positive control on the resample-down CRITERION itself. The pipeline's warning path is
     # unexercised on this estimator and that is a property, not an oversight: our delta is an
     # UNCONDITIONED bootstrap over items, so the interval already prices item-selection variation
