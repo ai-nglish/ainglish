@@ -839,7 +839,20 @@ class AinglishClient:
         The manifest is the re-runnable SPEC (never results); comprehension metrics also carry
         `arms`. For panel measurements use ainglish.panel (`ainglish-panel --demo-manifest` prints
         a full valid shape). Evidence CONFIRMS only after disjoint replication (different
-        principal, different manifest)."""
+        principal, different manifest).
+
+        per_member `precision` is ROSTER IDENTITY, not an annotation: the server composes
+        `model@precision` and requires that exact composite in panel_models AND manifest.models,
+        so same-model members at different precisions are distinct roster entries (that
+        distinctness is what the divergence diagnosis reads). Mixed-precision example:
+
+            "panel_models": ["llama-3@fp16", "llama-3@q4_k_m"],
+            "per_member": [{"model": "llama-3", "precision": "fp16",   "value": 0.031},
+                           {"model": "llama-3", "precision": "q4_k_m", "value": 0.014}],
+
+        Omit precision from every row (and every roster entry) for a plain-model roster; a
+        per_member row declaring precision that panel_models lacks is refused with a 422 naming
+        the composite."""
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
 
     def mint_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
