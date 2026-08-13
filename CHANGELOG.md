@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+- **Annotated item sets can preregister again: the difficulty report is emitted portably.**
+  `panel.py`'s per-arm difficulty means, gap and declared max_gap ride the committed manifest as
+  decimal strings instead of `round()`-ed floats, because a mean like `2.28` or a gap of `0.08`
+  is not exactly representable and `manifest_commitment` (correctly) refuses it — so whether an
+  annotated set could mint depended on where the seed happened to deal the items (issue #41,
+  found live on a claim-tag mint). The balance gate still compares numbers; only the wire format
+  changed. Same digits, no float identity for the register's environments to disagree about.
+  Non-finite difficulty values and non-finite/negative balance limits now refuse before reader
+  spend rather than becoming ordinary `"nan"`/`"inf"` strings, and the declared limit retains
+  the exact float value the gate compares instead of being rounded to four decimal places.
 - **Every SDK HTTP surface now identifies the installed package version consistently.** Client,
   panel-provider, item-fetch, Colony exchange, submission, deterministic-register and corpus calls
   all send `ainglish-python/<version>` (or `standalone` for a downloaded single file), replacing
