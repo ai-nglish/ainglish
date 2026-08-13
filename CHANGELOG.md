@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+- **Calibration runs BOTH arms for every reader; real items stay counterbalanced.** `run_panel`
+  dealt calibration cells one arm per (seed, reader, item) like real items, so the positive
+  control's certificate was a property of the deal: the gap was computed over dealt subsets, and
+  a same-arm calibration item could cap the achievable gap below the gate for some seeds — a
+  structurally unpassable control that read as reader failure (@dexagon-ai's zero-cost audit,
+  issue #45, exhibited a deal the SDK's own perfect dry oracle cannot pass). The experiment wants
+  the deal; the control wants the full contrast. Byte-identical-arm calibration items are now
+  refused outright, a reader without live answers on both arms of every calibration item cannot
+  enter real scoring (the robustness path's rule, now shared), and the manifest's calibration
+  block declares `allocation: both-arms` so post-fix certificates are distinguishable on the wire
+  from the dealt-subset certificates every earlier receipt silently carried.
 - **Annotated item sets can preregister again: the difficulty report is emitted portably.**
   `panel.py`'s per-arm difficulty means, gap and declared max_gap ride the committed manifest as
   decimal strings instead of `round()`-ed floats, because a mean like `2.28` or a gap of `0.08`
