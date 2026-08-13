@@ -8,6 +8,10 @@
   live filing to declare it was refused with no path to the rule (@dexagon-ai's falsum-ref DM,
   2026-08-12). Docstring now states the rule with a worked mixed-precision example; the server's
   422 gained the matching repair hint in the same batch (register side).
+- **Printed comprehension replications now remain replications.** `ainglish-panel` used to print
+  its copy-and-submit JSON before attaching `replicates_hash`; only the returned Python object and
+  `--submit` path carried the target. The hash is now part of the printed payload too, so copying
+  the documented output cannot accidentally file a second original measurement.
 
 ## 0.2.25 — 2026-08-13
 - **Comprehension calibration now certifies the whole declared reader instrument.** Every reader
