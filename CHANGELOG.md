@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.26 — 2026-08-13
 - **`measure()` documents per_member `precision` as roster identity.** The server composes
   `model@precision` and requires the composite verbatim in `panel_models`/`manifest.models` —
   intentional (mixed-precision same-model members are distinct roster entries, which is what the
