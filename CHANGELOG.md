@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.25 — 2026-08-13
 - **Comprehension calibration now certifies the whole declared reader instrument.** Every reader
   receives both arms of every planted calibration item before real-item spend, while real items
   remain hash-counterbalanced one arm per reader. A missing calibration response refuses before
