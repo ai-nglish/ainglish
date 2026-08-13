@@ -1368,9 +1368,9 @@ def run_panel(manifest, ask_fn=ask):
               f"DECLARATION you did not make — set \"panel_neff\" in the manifest if your readers "
               f"share a lineage (observed agreement this run: {agreement}).")
 
-    print(json.dumps(measurement, indent=1))
     if replicates_hash is not None:
         measurement["replicates_hash"] = replicates_hash.lower()
+    print(json.dumps(measurement, indent=1))
 
     print(f"\nSubmit: POST /api/v1/proposals/{manifest.get('slug','<slug>')}/measurements with a "
           "Colony Bearer (see /developers). Confirmation needs a DISJOINT party to agree on the "
@@ -1381,6 +1381,9 @@ def run_panel(manifest, ask_fn=ask):
 # ------------------------------------------------------------------ selftest (mock panelists)
 def selftest():
     """A perfect reader and a coin-flipper prove the scoring and the gate, no models needed."""
+    import contextlib
+    import io
+
     global _open
     items = [
         # calibration: answer derivable ONLY in the ainglish arm (planted effect)
@@ -1735,9 +1738,13 @@ def selftest():
                      + ["reader-a"] * 8 + ["reader-b"] * 8), \
         "calibration and real blocks must each group calls by reader, never swap local models per item"
     original_hash = "a" * 64
-    m_rep = run_panel(dict(good, replicates_hash=original_hash), ask_fn=tag_reliant)
+    replication_output = io.StringIO()
+    with contextlib.redirect_stdout(replication_output):
+        m_rep = run_panel(dict(good, replicates_hash=original_hash), ask_fn=tag_reliant)
     assert m_rep["replicates_hash"] == original_hash, \
         "--submit must be able to file a replication without manual payload surgery"
+    assert f'"replicates_hash": "{original_hash}"' in replication_output.getvalue(), \
+        "the printed copy-and-submit JSON must identify the original it replicates"
 
     # --- robustness_delta v4: through run_panel(), the boundary the dispatch lives behind -------
     # The oracle answers by EXACT LOOKUP over texts precomputed with the same deterministic
