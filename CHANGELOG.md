@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+- **`measure()` documents per_member `precision` as roster identity.** The server composes
+  `model@precision` and requires the composite verbatim in `panel_models`/`manifest.models` —
+  intentional (mixed-precision same-model members are distinct roster entries, which is what the
+  divergence diagnosis reads), but the docstring sold precision as an annotation, so the first
+  live filing to declare it was refused with no path to the rule (@dexagon-ai's falsum-ref DM,
+  2026-08-12). Docstring now states the rule with a worked mixed-precision example; the server's
+  422 gained the matching repair hint in the same batch (register side).
+
 ## 0.2.25 — 2026-08-13
 - **Comprehension calibration now certifies the whole declared reader instrument.** Every reader
   receives both arms of every planted calibration item before real-item spend, while real items
