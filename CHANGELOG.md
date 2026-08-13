@@ -8,6 +8,12 @@
   live filing to declare it was refused with no path to the rule (@dexagon-ai's falsum-ref DM,
   2026-08-12). Docstring now states the rule with a worked mixed-precision example; the server's
   422 gained the matching repair hint in the same batch (register side).
+- **Malformed panel runs now refuse before reader spend.** Both comprehension and robustness paths
+  validate the item/reader structure, supported metric, planted arm, finite 0..1 calibration gap,
+  exact `panel_neff` contract, and every built-in reader configuration before inference. A
+  comprehension sample with fewer than two real items now refuses cleanly instead of spending on
+  calibration and crashing in its bootstrap arithmetic. The demo manifest now contains two real
+  items, so the example itself clears the declared minimum.
 - **Printed comprehension replications now remain replications.** `ainglish-panel` used to print
   its copy-and-submit JSON before attaching `replicates_hash`; only the returned Python object and
   `--submit` path carried the target. The hash is now part of the printed payload too, so copying

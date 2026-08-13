@@ -552,7 +552,72 @@ def _same_arm_calibration_ids(items):
             if item.get("english") == item.get("ainglish")]
 
 
-def run_robustness(manifest, ask_fn=ask):
+def _validate_item_block(items, label):
+    """Validate fields every reader/scorer will dereference, before buying a reader cell."""
+    if not isinstance(items, list):
+        print(f"REFUSING to run: {label} must be a JSON list of item objects.")
+        return False
+    for position, item in enumerate(items):
+        if not isinstance(item, dict):
+            print(f"REFUSING to run: {label}[{position}] must be an item object.")
+            return False
+        missing = [key for key in ("id", "english", "ainglish", "question", "options", "answer")
+                   if key not in item]
+        if missing:
+            print(f"REFUSING to run: {label}[{position}] is missing required field(s) "
+                  f"{missing}. No reader cell was bought.")
+            return False
+        for key in ("english", "ainglish", "question"):
+            if not isinstance(item[key], str):
+                print(f"REFUSING to run: {label}[{position}].{key} must be a string. "
+                      "No reader cell was bought.")
+                return False
+        if not isinstance(item["options"], list) or not item["options"]:
+            print(f"REFUSING to run: {label}[{position}].options must be a non-empty list. "
+                  "No reader cell was bought.")
+            return False
+    return True
+
+
+def _validate_panel_declarations(manifest, panel):
+    """Return (planted_arm, calibration_min_gap), or None on a zero-cost refusal."""
+    metric = manifest.get("metric")
+    if metric not in ("comprehension_accuracy_delta", "interpretation_entropy_delta",
+                      "robustness_delta"):
+        print(f"REFUSING to run: unsupported panel metric {metric!r}. Use "
+              "comprehension_accuracy_delta, interpretation_entropy_delta, or robustness_delta. "
+              "No reader cell was bought.")
+        return None
+
+    planted_arm = manifest.get("planted_arm", "ainglish")
+    if planted_arm not in ("english", "ainglish"):
+        print(f"REFUSING to run: planted_arm must be 'english' or 'ainglish'; got "
+              f"{planted_arm!r}. No reader cell was bought.")
+        return None
+
+    raw_gap = manifest.get("calibration_min_gap", 0.5)
+    try:
+        if isinstance(raw_gap, bool):
+            raise ValueError("boolean thresholds are not numbers")
+        min_gap = float(raw_gap)
+        if not math.isfinite(min_gap) or not (0 <= min_gap <= 1):
+            raise ValueError("the accuracy gap must be finite and between 0 and 1")
+    except (TypeError, ValueError, OverflowError) as exc:
+        print(f"REFUSING to run: invalid calibration_min_gap {raw_gap!r} ({exc}). "
+              "No reader cell was bought.")
+        return None
+
+    neff = manifest.get("panel_neff")
+    if neff is not None and (isinstance(neff, bool) or not isinstance(neff, int)
+                             or not (1 <= neff <= len(panel))):
+        print(f"REFUSING to run: panel_neff must be an integer from 1 to {len(panel)} "
+              f"(the roster size); got {neff!r}. No coercion and no reader spend.")
+        return None
+
+    return planted_arm, min_gap
+
+
+def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
     """robustness_delta v4: DIFFERENTIAL degradation under one corruption event, in PERCENTAGE
     POINTS (the API contract's unit — accuracy differences scale by 100 exactly as the
     comprehension branch's do).
@@ -604,20 +669,13 @@ def run_robustness(manifest, ask_fn=ask):
         print("REFUSING to run: robustness needs at least two items — resample-down sensitivity "
               "is undefined over one cell, and a one-cell differential is not a measurement.")
         return None
-    neff = manifest.get("panel_neff")
-    # Presence AND contract, both before a single call (@dexagon-ai, M15): the server requires an
-    # integer in 1..count(panel_models), and waiting for int() at emission meant 0, -1, True and
-    # 1.5 bought the whole run first ("bogus" bought it and then crashed). bool is excluded
-    # explicitly — True is an int in Python and would coerce to a declaration of 1.
-    if neff is None:
+    # Robustness requires the declaration; the shared pre-spend validator has already checked the
+    # exact integer contract when one is present.
+    if manifest.get("panel_neff") is None:
         print("REFUSING to run: robustness needs an EXPLICIT panel_neff declaration. The register "
               "defaults an absent n_eff to the roster count and labels it `declared:` — a "
               "declaration you never made, minted by omission on the --submit path. Say what you "
               "mean: panel_neff = the number of genuinely independent reader lineages.")
-        return None
-    if isinstance(neff, bool) or not isinstance(neff, int) or not (1 <= neff <= len(manifest["panel"])):
-        print(f"REFUSING to run: panel_neff must be an integer from 1 to {len(manifest['panel'])} "
-              f"(the roster size); got {neff!r}. No coercion — a declaration is exact or absent.")
         return None
     # The shared identity gate in run_panel() covered the panel and the REAL items; the
     # calibration set is this runner's own input and gets the same discipline.
@@ -718,8 +776,6 @@ def run_robustness(manifest, ask_fn=ask):
                   "positive control would certify one cohort while the veto-bearing value "
                   f"measures another. No real cell was bought ({len(items) * len(panel) * 4} saved).")
             return None
-    planted_arm = manifest.get("planted_arm", "ainglish")
-    min_gap = float(manifest.get("calibration_min_gap", 0.5))
     det = acc(calib, planted_arm, "baseline")
     und = acc(calib, "english" if planted_arm != "english" else "ainglish", "baseline")
     if det is None or und is None or (det - und) < min_gap:
@@ -923,8 +979,21 @@ def run_robustness(manifest, ask_fn=ask):
 
 
 def run_panel(manifest, ask_fn=ask):
-    items = manifest["items"]
-    panel = manifest["panel"]
+    if not isinstance(manifest, dict):
+        print("REFUSING to run: the panel manifest must be one JSON object.")
+        return None
+    items = manifest.get("items")
+    panel = manifest.get("panel")
+    if not isinstance(panel, list) or not panel or any(not isinstance(p, dict) for p in panel):
+        print("REFUSING to run: panel must be a non-empty list of reader objects. "
+              "No reader cell was bought.")
+        return None
+    if not _validate_item_block(items, "items"):
+        return None
+    declarations = _validate_panel_declarations(manifest, panel)
+    if declarations is None:
+        return None
+    planted_arm, calibration_min_gap = declarations
 
     replicates_hash = manifest.get("replicates_hash")
     if replicates_hash is not None and (not isinstance(replicates_hash, str)
@@ -971,7 +1040,14 @@ def run_panel(manifest, ask_fn=ask):
     # reader name bought double inference and still emitted. Everything above this line guards
     # BOTH metrics; run_robustness() additionally validates its calibration ids.
     if manifest.get("metric") == "robustness_delta":
-        return run_robustness(manifest, ask_fn)
+        if not _validate_item_block(manifest.get("calibration_items", []), "calibration_items"):
+            return None
+        try:
+            _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
+        except SystemExit as exc:
+            print(exc)
+            return None
+        return run_robustness(manifest, ask_fn, planted_arm, calibration_min_gap)
 
     calib = [i for i in items if i.get("calibration")]
     real = [i for i in items if not i.get("calibration")]
@@ -985,6 +1061,10 @@ def run_panel(manifest, ask_fn=ask):
         print(f"REFUSING to run: byte-identical English/Ainglish arms on calibration item(s) "
               f"{same_arm}. A same-arm row cannot carry a planted effect; move it to a labelled "
               "diagnostic or real-item control. No reader cell was bought.")
+        return None
+    if len(real) < 2:
+        print("REFUSING to run: comprehension panels need at least two real items — bootstrap and "
+              "resample-down sensitivity are undefined for a smaller sample. No reader cell was bought.")
         return None
 
     # --- per-item difficulty (@Exori's collider condition; the item SET carries it, per
@@ -1026,6 +1106,12 @@ def run_panel(manifest, ask_fn=ask):
                   "and any balance limit must be finite numbers; a malformed collider guard "
                   "cannot certify a measurement.")
             return None
+
+    try:
+        _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
+    except SystemExit as exc:
+        print(exc)
+        return None
 
     # Cell-yield guard (@ColonistOne, vendored verbatim from claim-audit/empty_cell_guard.py —
     # his code, his thresholds, his 19 assertions). It exists because a reasoning model returning
@@ -1131,8 +1217,6 @@ def run_panel(manifest, ask_fn=ask):
                   f"control. No real cell was bought ({len(real) * len(panel)} saved).")
             return None
     cacc, _ = score(calib_rows, calib)
-    planted_arm = manifest.get("planted_arm", "ainglish")
-    calibration_min_gap = float(manifest.get("calibration_min_gap", 0.5))
     other_arm = "english" if planted_arm != "english" else "ainglish"
     detectable, undetectable = cacc.get(planted_arm), cacc.get(other_arm)
     if detectable is None or undetectable is None or (detectable - undetectable) < calibration_min_gap:
@@ -1418,6 +1502,35 @@ def selftest():
 
     good = {"construct": "wit-demo", "slug": "demo", "metric": "comprehension_accuracy_delta",
             "seed": 7, "items": items, "panel": [{"name": "reader-a"}, {"name": "reader-b"}]}
+
+    def assert_pre_spend_refusal(candidate, label):
+        calls = []
+
+        def probe(*args):
+            calls.append(args)
+            return "yes"
+
+        assert run_panel(candidate, ask_fn=probe) is None, label
+        assert calls == [], f"{label} must refuse before buying a reader cell"
+
+    for real_count in (0, 1):
+        assert_pre_spend_refusal(
+            dict(good, items=items[:4] + items[4:4 + real_count]),
+            f"a {real_count}-real-item comprehension sample is not bootstrap-able",
+        )
+    assert_pre_spend_refusal(dict(good, panel_neff="2"),
+                             "panel_neff must be an exact integer, not a coercible string")
+    for bad_gap in ("bogus", float("nan"), -0.1, 1.1, True):
+        assert_pre_spend_refusal(dict(good, calibration_min_gap=bad_gap),
+                                 f"invalid calibration_min_gap {bad_gap!r}")
+    assert_pre_spend_refusal(dict(good, planted_arm="baseline"),
+                             "planted_arm must name one of the two measured arms")
+    assert_pre_spend_refusal(dict(good, metric="not_a_panel_metric"),
+                             "an unsupported metric must not buy a comprehension panel")
+    malformed_items = [dict(item) for item in items]
+    del malformed_items[0]["question"]
+    assert_pre_spend_refusal(dict(good, items=malformed_items),
+                             "missing reader/scorer fields must fail during structural validation")
 
     # Duplicate identities must refuse before inference: otherwise repeated reader names receive
     # the same arm, are aggregated into the same per-member bucket, yet still increase the roster;
@@ -2409,6 +2522,9 @@ def selftest():
             raise AssertionError("a missing built-in provider key reached attempt minting")
         except SystemExit as exc:
             assert "before attempt mint" in str(exc) and "OPENAI_API_KEY" in str(exc)
+        assert run_panel(dict(good, panel=[{"name": "unfunded", "provider": "openai",
+                                           "model": "gpt-test"}]), ask_fn=ask) is None, \
+            "ordinary non-attempt runs must validate every built-in reader before inference"
         os.environ["OPENAI_API_KEY"] = "sentinel"
         try:
             _validate_real_reader_configuration(
@@ -2455,6 +2571,10 @@ DEMO_NOTE = """{
     {"id": "r1",
      "english": "The digest matched, and the evidence generator is of class public-path.",
      "ainglish": "The digest matched wit(public-path).",
+     "question": "Could a stranger have observed this evidence?", "options": ["yes", "no", "cannot tell"], "answer": "yes"},
+    {"id": "r2",
+     "english": "The receipt matched, and the evidence generator is of class public-path.",
+     "ainglish": "The receipt matched wit(public-path).",
      "question": "Could a stranger have observed this evidence?", "options": ["yes", "no", "cannot tell"], "answer": "yes"}
   ]
 }"""
@@ -2610,8 +2730,8 @@ def _planned_panel_manifest(manifest):
     return planned
 
 
-def _validate_real_reader_configuration(manifest, ask_fn):
-    """Refuse deterministic reader configuration faults before an attempt is minted.
+def _validate_real_reader_configuration(manifest, ask_fn, context="attempt mint"):
+    """Refuse deterministic reader configuration faults before inference or attempt minting.
 
     The free manifest preview deliberately uses mock readers, so it cannot discover a missing
     provider key or an incomplete transport entry. Those are not experimental outcomes and must
@@ -2626,25 +2746,25 @@ def _validate_real_reader_configuration(manifest, ask_fn):
             bounds = bounds_for(endpoint)
             temperature_for(endpoint)
         except SystemExit as exc:
-            raise SystemExit(f"REFUSING before attempt mint: {exc}") from None
+            raise SystemExit(f"REFUSING before {context}: {exc}") from None
         name = resolved.get("name", "?")
         if not resolved.get("model"):
-            raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs a non-empty model.")
+            raise SystemExit(f"REFUSING before {context}: panel entry {name!r} needs a non-empty model.")
         # Validate every setting consumed by chat(), without making a network call.
         for bound, value in bounds.items():
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-                raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs {bound} "
+                raise SystemExit(f"REFUSING before {context}: panel entry {name!r} needs {bound} "
                                  "to be a positive integer.")
         key_env = resolved.get("api_key_env") or ""
         key = os.environ.get(key_env, "") if key_env else ""
         if key_env and not key:
-            raise SystemExit(f"REFUSING before attempt mint: panel entry {name!r} needs {key_env}, "
+            raise SystemExit(f"REFUSING before {context}: panel entry {name!r} needs {key_env}, "
                              "but it is not set. Export the key or drop the member.")
         if key:
             try:
                 _require_secure_credential_url(resolved["base_url"], f"panel entry {name!r}")
             except ValueError as exc:
-                raise SystemExit(f"REFUSING before attempt mint: {exc}") from None
+                raise SystemExit(f"REFUSING before {context}: {exc}") from None
 
 
 class _Transcript:
