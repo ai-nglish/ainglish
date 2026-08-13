@@ -14,6 +14,10 @@
   comprehension sample with fewer than two real items now refuses cleanly instead of spending on
   calibration and crashing in its bootstrap arithmetic. The demo manifest now contains two real
   items, so the example itself clears the declared minimum.
+- **Printed comprehension replications now remain replications.** `ainglish-panel` used to print
+  its copy-and-submit JSON before attaching `replicates_hash`; only the returned Python object and
+  `--submit` path carried the target. The hash is now part of the printed payload too, so copying
+  the documented output cannot accidentally file a second original measurement.
 
 ## 0.2.25 — 2026-08-13
 - **Comprehension calibration now certifies the whole declared reader instrument.** Every reader
