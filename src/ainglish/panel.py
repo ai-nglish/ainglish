@@ -182,6 +182,7 @@ try:  # packaged (pip install ainglish) or a single curl-ed file — both are fi
     from ainglish import __version__ as HARNESS_VERSION
 except Exception:
     HARNESS_VERSION = "standalone"
+USER_AGENT = f"ainglish-python/{HARNESS_VERSION}"
 
 
 def resolve(endpoint):
@@ -276,7 +277,7 @@ def chat(endpoint, prompt):
     if ep.get("api", "openai") == "anthropic":
         body = {"model": ep["model"], **sampling, **bounds,
                 "messages": [{"role": "user", "content": prompt}]}
-        headers = {"Content-Type": "application/json", "User-Agent": "ainglish-panel",
+        headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT,
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
         req = urllib.request.Request(ep["base_url"].rstrip("/") + "/v1/messages",
                                      json.dumps(body).encode(), headers)
@@ -285,7 +286,7 @@ def chat(endpoint, prompt):
                 data.get("stop_reason") == "max_tokens")
     body = {"model": ep["model"], **sampling, **bounds,
             "messages": [{"role": "user", "content": prompt}]}
-    headers = {"Content-Type": "application/json", "User-Agent": "ainglish-panel"}
+    headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
     if key:
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(ep["base_url"].rstrip("/") + "/chat/completions",
@@ -2278,7 +2279,7 @@ def fetch_items(url_or_path, pinned_sha256):
     if url_or_path.startswith("http"):
         import urllib.request
         doc = json.loads(_open(
-            urllib.request.Request(url_or_path, headers={"User-Agent": "ainglish-panel/1.0"}),
+            urllib.request.Request(url_or_path, headers={"User-Agent": USER_AGENT}),
             timeout=45).read())
     else:
         doc = json.load(open(url_or_path))
@@ -2596,7 +2597,7 @@ def mint_colony_access_token(colony, key, totp=None):
     req = urllib.request.Request(
         f"{colony.rstrip('/')}/api/v1/auth/token",
         data=json.dumps(body).encode(),
-        headers={"User-Agent": f"ainglish-python/{HARNESS_VERSION}", "Content-Type": "application/json"},
+        headers={"User-Agent": USER_AGENT, "Content-Type": "application/json"},
         method="POST",
     )
     with _open(req, timeout=45, sensitive=True) as resp:
@@ -2638,7 +2639,7 @@ def mint_id_token(colony, client_id, key, totp=None):
     import urllib.request
 
     def post(url, data, headers):
-        req = urllib.request.Request(url, data=data, headers={"User-Agent": f"ainglish-python/{HARNESS_VERSION}", **headers},
+        req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT, **headers},
                                      method="POST")
         # Both calls carry credentials (first the raw Colony key, then the subject token in the
         # form body). A 307/308 can replay a POST body, so protecting headers alone is insufficient.
@@ -2664,7 +2665,7 @@ def submit_measurement(measurement, slug):
       AINGLISH_ID_TOKEN   (preferred) an id_token you already exchanged, audienced to
                           ainglish.org's client_id — mint it with your own SSO tooling and hand
                           this process nothing else. Audience-scoping makes it useless anywhere
-                          but ainglish.org, and it expires in ~15 minutes. Least privilege.
+                          but ainglish.org, and it expires in ~5 minutes. Least privilege.
       COLONY_API_KEY      (convenience) your Colony agent key; this process performs the RFC 8693
                           exchange itself. The raw key is sent ONLY to thecolony.ai's own token
                           endpoint — the issuer it already belongs to — and NEVER to ainglish.org,
@@ -2681,7 +2682,7 @@ def submit_measurement(measurement, slug):
 
     def http(url, data=None, headers=None):
         _require_secure_credential_url(url, "Ainglish measurement submission")
-        req = urllib.request.Request(url, data=data, headers={"User-Agent": "ainglish-panel/1.0", **(headers or {})},
+        req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT, **(headers or {})},
                                      method="POST")
         with _open(req, timeout=45, sensitive=True) as r:
             return r.read()

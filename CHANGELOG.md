@@ -8,6 +8,13 @@
   annotated set could mint depended on where the seed happened to deal the items (issue #41,
   found live on a claim-tag mint). The balance gate still compares numbers; only the wire format
   changed. Same digits, no float identity for the register's environments to disagree about.
+- **Every SDK HTTP surface now identifies the installed package version consistently.** Client,
+  panel-provider, item-fetch, Colony exchange, submission, deterministic-register and corpus calls
+  all send `ainglish-python/<version>` (or `standalone` for a downloaded single file), replacing
+  unversioned and frozen `*/1.0` labels. Wheel verification now checks every harness version stamp.
+  The README also names the actual measurement-accepting stages, and panel guidance corrects the
+  id-token lifetime from ~15 to ~5 minutes. Corpus coverage no longer treats the retired,
+  never-assigned `tracked` proposal stage as live.
 - **Credentials now require HTTPS outside explicit loopback development.** Authenticated Ainglish
   requests, Colony key/token exchanges, corpus fetches and keyed panel-provider calls refuse a
   remote `http://` URL before constructing or sending the credentialled request. `localhost`,

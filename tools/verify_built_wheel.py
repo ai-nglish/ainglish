@@ -14,13 +14,16 @@ PROBE = r"""
 import importlib.metadata
 import json
 import ainglish
-from ainglish import client, panel
+from ainglish import client, corpus_slice, measure, panel
 
 print(json.dumps({
     "distribution metadata": importlib.metadata.version("ainglish"),
     "ainglish.__version__": ainglish.__version__,
-    "client User-Agent stamp": client._V,
+    "client User-Agent stamp": client.USER_AGENT.removeprefix("ainglish-python/"),
+    "corpus User-Agent stamp": corpus_slice.USER_AGENT.removeprefix("ainglish-python/"),
+    "measure User-Agent stamp": measure.USER_AGENT.removeprefix("ainglish-python/"),
     "panel harness stamp": panel.HARNESS_VERSION,
+    "panel User-Agent stamp": panel.USER_AGENT.removeprefix("ainglish-python/"),
 }, sort_keys=True))
 """
 

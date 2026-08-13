@@ -46,6 +46,11 @@ import unicodedata
 import urllib.parse
 import urllib.request
 
+try:  # packaged (pip install ainglish) or a single curl-ed file — both are first-class
+    from ainglish import __version__ as HARNESS_VERSION
+except Exception:
+    HARNESS_VERSION = "standalone"
+USER_AGENT = f"ainglish-python/{HARNESS_VERSION}"
 
 PROPOSAL_PAGE_SIZE = 200
 
@@ -65,7 +70,7 @@ def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SI
 
     if fetch is None:
         def fetch(url):
-            req = urllib.request.Request(url, headers={"User-Agent": "ainglish-measure/1.0"})
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=30) as response:
                 return response.read()
 
@@ -470,6 +475,7 @@ EVIDENTIALS = {"obs:": "first-hand observation", "inf:": "derived by reasoning",
 def selftest():
     """Known-positive AND known-negative — a screen never observed rejecting anything is
     decoration, and one that rejects everything is worse."""
+    assert USER_AGENT == f"ainglish-python/{HARNESS_VERSION}"
     assert transform_screen({"SHOULD": "RFC 2119 recommendation", "should": "plain English"})["has_transform_collision"]
     assert slot_crossproduct({"ask:": "I want an answer", "ack:": "received", "fyi:": "no action"})["has_silent_single_edit"]
     assert not transform_screen(EVIDENTIALS)["has_transform_collision"]

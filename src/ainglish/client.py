@@ -58,6 +58,7 @@ except Exception:  # single-file use
 
 DEFAULT_BASE = "https://ainglish.org"
 AUDIENCE = "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j"  # ainglish.org's Colony client_id
+USER_AGENT = "ainglish-python/%s" % _V
 
 
 def _canonical_json(value):
@@ -354,7 +355,7 @@ class AinglishClient:
 
     def _request(self, method, path, payload=None, params=None, auth=False, _retried=False):
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
-        headers = {"User-Agent": "ainglish-python/%s" % _V, "Accept": "application/json",
+        headers = {"User-Agent": USER_AGENT, "Accept": "application/json",
                    # 301 KB of proposals is 53 KB gzipped; urllib does not ask by default.
                    "Accept-Encoding": "gzip"}
         data = None
@@ -1083,6 +1084,7 @@ def selftest():
             assert installed_version == _V, (
                 "installed ainglish metadata %s != runtime version %s" % (installed_version, _V)
             )
+    assert USER_AGENT == "ainglish-python/%s" % _V
 
     e = AinglishError(404, {"error": "not_found", "message": "no such proposal", "hint": "check /queue",
                             "did_you_mean": ["claim-tag"]})
