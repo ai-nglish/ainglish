@@ -7,15 +7,18 @@ MODEL panel, and until now "panel" existed only as prose. This file makes it an 
 give it a manifest and model endpoints, and it produces a measurement ready to submit to
 POST /api/v1/proposals/{slug}/measurements — with the methodology enforced by construction:
 
-  COUNTERBALANCED ARMS   Each panelist answers every item exactly once — half in the standard-English
-                         arm, half in the Ainglish arm, split deterministically by seed — so both arms
-                         share readers without any reader seeing both forms of one item.
+  COUNTERBALANCED ARMS   For REAL items, each panelist answers every item exactly once — half in the
+                         standard-English arm, half in the Ainglish arm, split deterministically by
+                         seed — so both arms share readers without any reader seeing both forms of
+                         one real item. Calibration is the positive control and deliberately exposes
+                         every reader to both arms of every calibration item.
   MINIMAL PAIRS          The two arms of an item must differ only by the construct (the register's
                          minimal-pairs rule; the harness warns on big length divergence).
   CALIBRATION GATE       Planted-effect items (the correct answer is derivable in one arm and NOT in
-                         the other) are the panel's positive control: a panel that cannot detect the
-                         planted difference is not measuring, and the harness REFUSES to emit a
-                         measurement — ctl() applied to the panel itself. Fails closed.
+                         the other) are the panel's positive control. Every reader receives both arms
+                         of every calibration item; byte-identical arms refuse before spend. A panel
+                         that cannot detect the planted difference is not measuring, and the harness
+                         REFUSES to emit a measurement — ctl() applied to the panel itself.
   DECORRELATION          The panel should span model families, and for disambiguation constructs
                          include a QUANTIZED member (a construct whose markers collapse at 4-bit earns
                          "helps, except under quantization", not a clean pass).
@@ -543,6 +546,12 @@ def corrupt(text, key, channel):
     raise SystemExit(f"unknown corruption channel {channel!r} — declare drop_token or corrupt_char")
 
 
+def _same_arm_calibration_ids(items):
+    """Calibration rows whose two declared arms cannot carry a planted contrast."""
+    return [item.get("id", "<missing id>") for item in items
+            if item.get("english") == item.get("ainglish")]
+
+
 def run_robustness(manifest, ask_fn=ask):
     """robustness_delta v4: DIFFERENTIAL degradation under one corruption event, in PERCENTAGE
     POINTS (the API contract's unit — accuracy differences scale by 100 exactly as the
@@ -584,6 +593,12 @@ def run_robustness(manifest, ask_fn=ask):
         print("REFUSING to run: robustness needs calibration_items (a planted effect the panel "
               "must detect at BASELINE) — a panel that cannot read the intact forms cannot "
               "attribute a corrupted miss to corruption.")
+        return None
+    same_arm = _same_arm_calibration_ids(calib)
+    if same_arm:
+        print(f"REFUSING to run: byte-identical English/Ainglish arms on calibration item(s) "
+              f"{same_arm}. A same-arm row cannot carry a planted effect; move it to a labelled "
+              "diagnostic or real-item control. No reader cell was bought.")
         return None
     if len(items) < 2:
         print("REFUSING to run: robustness needs at least two items — resample-down sensitivity "
@@ -965,6 +980,12 @@ def run_panel(manifest, ask_fn=ask):
         print("REFUSING to run: no calibration items. A panel that was never shown a detectable "
               "difference proves nothing when it detects none (ctl(none) is not evidence).")
         return None
+    same_arm = _same_arm_calibration_ids(calib)
+    if same_arm:
+        print(f"REFUSING to run: byte-identical English/Ainglish arms on calibration item(s) "
+              f"{same_arm}. A same-arm row cannot carry a planted effect; move it to a labelled "
+              "diagnostic or real-item control. No reader cell was bought.")
+        return None
 
     # --- per-item difficulty (@Exori's collider condition; the item SET carries it, per
     # @Rosetta's build-time rule — the harness change is deliberately just a reporting detail).
@@ -1042,7 +1063,7 @@ def run_panel(manifest, ask_fn=ask):
     faults = {}
     truncations = {}
 
-    def run_items(subset):
+    def run_items(subset, both_arms=False):
         """Ask every panelist every item in subset. Rows, or None if the guard aborted.
 
         No `if guard is not None`: the construction above fails closed, so by here the guard
@@ -1050,29 +1071,35 @@ def run_panel(manifest, ask_fn=ask):
         optional.
         """
         out = []
-        # Reader outermost prevents local-model weight thrash. Arm assignment is a pure function
-        # of (seed, reader, item), so changing execution order cannot re-deal the experiment.
+        # Reader outermost prevents local-model weight thrash. REAL arm assignment is a pure
+        # function of (seed, reader, item), so changing execution order cannot re-deal the
+        # estimator. Calibration is the instrument's positive control: every reader receives both
+        # arms of every item, so its certificate cannot depend on a tiny disjoint hash deal.
         for ep in panel:
             for item in subset:
-                arm = arm_for(seed, ep["name"], item["id"])
-                try:
-                    answer = ask_fn(ep, item[arm], item["question"], item["options"])
-                except TransportFault as fault:
-                    # A fault is a DEAD CELL WITH A STATED CAUSE — never a wrong answer, and never
-                    # a dead run. Before this, one slow reader raised out of run_panel and took
-                    # every completed cell with it: real inference paid for, nothing emitted, and
-                    # no receipt saying which reader stalled or on which arm.
-                    per_arm = faults.setdefault(ep["name"], {}).setdefault(arm, {})
-                    per_arm[fault.reason] = per_arm.get(fault.reason, 0) + 1
-                    answer = None
-                note_truncation(truncations, ep["name"], arm, answer)
-                try:
-                    guard.observe(ep["name"], arm, None if is_absent(answer) else str(answer), answer)
-                except _ecg.CellYieldAbort as abort:
-                    print(f"\n{abort}\nNo measurement emitted — a fault-produced delta is worse "
-                          "than no delta, because it looks like a result.")
-                    return None
-                out.append((item["id"], arm, ep["name"], answer))
+                arms = ("english", "ainglish") if both_arms else (
+                    arm_for(seed, ep["name"], item["id"]),
+                )
+                for arm in arms:
+                    try:
+                        answer = ask_fn(ep, item[arm], item["question"], item["options"])
+                    except TransportFault as fault:
+                        # A fault is a DEAD CELL WITH A STATED CAUSE — never a wrong answer, and
+                        # never a dead run. Before this, one slow reader raised out of run_panel
+                        # and took every completed cell with it: real inference paid for, nothing
+                        # emitted, and no receipt saying which reader stalled or on which arm.
+                        per_arm = faults.setdefault(ep["name"], {}).setdefault(arm, {})
+                        per_arm[fault.reason] = per_arm.get(fault.reason, 0) + 1
+                        answer = None
+                    note_truncation(truncations, ep["name"], arm, answer)
+                    try:
+                        guard.observe(ep["name"], arm,
+                                      None if is_absent(answer) else str(answer), answer)
+                    except _ecg.CellYieldAbort as abort:
+                        print(f"\n{abort}\nNo measurement emitted — a fault-produced delta is "
+                              "worse than no delta, because it looks like a result.")
+                        return None
+                    out.append((item["id"], arm, ep["name"], answer))
         return out
 
     # --- calibration EXECUTES first, and gates before a single real item is bought ------------
@@ -1088,13 +1115,26 @@ def run_panel(manifest, ask_fn=ask):
     # For the stateless single-turn completions this harness makes, that is the cheaper of the two
     # risks — and unlike the old ordering it is a risk you can see in the manifest, alongside the
     # provider-aware sampling setting each reader actually used.
-    calib_rows = run_items(calib)
+    calib_rows = run_items(calib, both_arms=True)
     if calib_rows is None:
         return None
+    # Pooling can still certify the wrong cohort when one reader's calibration transport dies.
+    # The manifest names the full panel, so every named reader must supply a live answer on both
+    # arms of every positive-control item before any of them enters the real-item estimator.
+    for ep in panel:
+        missing = [(item["id"], arm) for item in calib for arm in ("english", "ainglish")
+                   if not any(row[0] == item["id"] and row[1] == arm and row[2] == ep["name"]
+                              and not is_absent(row[3]) for row in calib_rows)]
+        if missing:
+            print(f"REFUSING to run: reader {ep['name']!r} has no live calibration answer for "
+                  f"{missing} — every measured reader must pass both arms of every positive "
+                  f"control. No real cell was bought ({len(real) * len(panel)} saved).")
+            return None
     cacc, _ = score(calib_rows, calib)
     planted_arm = manifest.get("planted_arm", "ainglish")
     calibration_min_gap = float(manifest.get("calibration_min_gap", 0.5))
-    detectable, undetectable = cacc.get(planted_arm), cacc.get("english")
+    other_arm = "english" if planted_arm != "english" else "ainglish"
+    detectable, undetectable = cacc.get(planted_arm), cacc.get(other_arm)
     if detectable is None or undetectable is None or (detectable - undetectable) < calibration_min_gap:
         print(f"CALIBRATION FAILED: planted-effect gap {detectable} vs {undetectable} — this panel "
               "cannot detect a known difference, so its null on the real items is vacuous. "
@@ -1250,8 +1290,13 @@ def run_panel(manifest, ask_fn=ask):
     spec["models"] = [labelled(p_) for p_ in panel]
     spec["readers"] = [reader_receipt(p_) for p_ in panel]
     spec["item_counts"] = {"real": len(real), "calibration": len(calib)}
-    spec["calibration"] = {"planted_arm": planted_arm, "min_gap": calibration_min_gap,
-                           "ordering": "calibration-first"}
+    spec["calibration"] = {
+        "planted_arm": planted_arm,
+        "min_gap": calibration_min_gap,
+        "ordering": "calibration-first",
+        "arm_exposure": "both-arms-per-reader-item",
+        "cells": len(calib) * len(panel) * 2,
+    }
     # Difficulty is part of the experiment's identity, and ABSENCE IS STATED: a set that was
     # never annotated and a set that balanced perfectly must not read the same. The per-item
     # values ride inside items_sha256, so the pin covers them.
@@ -1271,7 +1316,8 @@ def run_panel(manifest, ask_fn=ask):
     # the delta the manifest describes.
     spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
     spec["transport_truncations"] = truncation_receipt(truncations, ("english", "ainglish"))
-    spec["protocol"] = "panel.py counterbalanced-arms + planted-effect calibration gate" + (
+    spec["protocol"] = ("panel.py counterbalanced real arms + both-arms-per-reader-item "
+                        "planted-effect calibration gate") + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
     measurement = {
         "metric": metric, "value": value,
@@ -1386,6 +1432,71 @@ def selftest():
     duplicate_items[-1]["id"] = duplicate_items[0]["id"]
     assert run_panel(dict(good, items=duplicate_items), ask_fn=identity_probe) is None
     assert not identity_calls, "duplicate items must refuse before buying calibration cells"
+
+    # Calibration is the reader instrument's positive control, not part of the randomized
+    # construct estimator. Every reader must therefore receive BOTH arms of EVERY calibration
+    # item; dealing one arm per item certifies only a tiny, seed-dependent subset. Give each
+    # calibration row unique text so this assertion proves the full Cartesian coverage rather
+    # than merely counting calls whose item identity cannot be recovered.
+    dual_items = [dict(item) for item in items]
+    for n, item in enumerate(dual_items[:4]):
+        item["english"] = f"The check {n} passed."
+        item["ainglish"] = f"The check {n} passed wit(counterparty-settled)."
+    calibration_texts = {
+        (item["id"], arm): item[arm]
+        for item in dual_items if item.get("calibration") for arm in ("english", "ainglish")
+    }
+    calibration_calls = []
+
+    def calibration_probe(ep, text, q, options):
+        calibration_calls.append((ep["name"], text))
+        return tag_reliant(ep, text, q, options)
+
+    dual = run_panel(dict(good, items=dual_items), ask_fn=calibration_probe)
+    assert dual is not None
+    expected_calibration_calls = sorted(
+        (reader["name"], text)
+        for reader in good["panel"] for text in calibration_texts.values()
+    )
+    got_calibration_calls = sorted(
+        call for call in calibration_calls if call[1] in set(calibration_texts.values())
+    )
+    assert got_calibration_calls == expected_calibration_calls, \
+        "every reader must receive both arms of every calibration item exactly once"
+    for reader in good["panel"]:
+        for item in (item for item in dual_items if not item.get("calibration")):
+            exposed = sum((reader["name"], item[arm]) in calibration_calls
+                          for arm in ("english", "ainglish"))
+            assert exposed == 1, \
+                "real items must remain one counterbalanced arm per reader after calibration doubles"
+
+    # Asking every cell is insufficient if a named reader never returns one of them. A pooled
+    # gate could still pass on the other readers and then measure a cohort the control did not
+    # certify, so calibration completeness is per reader/item/arm and gates before real spend.
+    incomplete_calls = []
+    missing_text = dual_items[0]["ainglish"]
+    real_texts = {item[arm] for item in dual_items if not item.get("calibration")
+                  for arm in ("english", "ainglish")}
+
+    def incomplete_calibration_probe(ep, text, q, options):
+        incomplete_calls.append(text)
+        if ep["name"] == "reader-b" and text == missing_text:
+            raise TransportFault("timeout")
+        return tag_reliant(ep, text, q, options)
+
+    assert run_panel(dict(good, items=dual_items),
+                     ask_fn=incomplete_calibration_probe) is None
+    assert not (set(incomplete_calls) & real_texts), \
+        "a reader missing one calibration arm must be refused before all real spend"
+
+    # A byte-identical pair cannot carry a planted contrast. It must refuse before reader spend,
+    # not merely dilute the gate until a particular seed happens to fail.
+    same_arm_items = [dict(item) for item in dual_items]
+    same_arm_items[0]["ainglish"] = same_arm_items[0]["english"]
+    same_arm_calls = []
+    assert run_panel(dict(good, items=same_arm_items),
+                     ask_fn=lambda *args: same_arm_calls.append(args) or "yes") is None
+    assert same_arm_calls == [], "same-arm calibration must refuse before a single reader call"
 
     # Adapter resolution: preset merge works, the entry wins, and an unknown provider with no
     # base_url refuses loudly (a screen never observed rejecting anything is decoration).
@@ -1572,7 +1683,7 @@ def selftest():
 
     def stalls_once(ep, text, q, options):
         seen["n"] += 1
-        if seen["n"] == 9:          # calibration runs first: 4 items x 2 readers = cells 1-8
+        if seen["n"] == 17:         # 4 calibration items x 2 arms x 2 readers = cells 1-16
             raise TransportFault("timeout")
         return tag_reliant(ep, text, q, options)
 
@@ -1596,9 +1707,14 @@ def selftest():
     assert m_dec["panel_neff"] == 1 and m_dec["panel_neff_basis"] == "declared:reader-axis-unvalidated", \
         "a declared n_eff rides with its provenance"
     assert m_dec["panel_members"] == 2, "and does not overwrite the roster count it disagrees with"
-    assert m["yield_report"]["cells"] == len(items) * 2
+    assert m["yield_report"]["cells"] == (8 + 4 * 2) * 2, \
+        "real rows buy one arm/read; calibration rows buy both arms/read"
     assert m["calibration"] == {"planted_arm": "ainglish", "detectable": 1.0, "other": 0.0,
                                 "gap": 1.0, "min_gap": 0.5, "passed": True}
+    assert m["manifest"]["calibration"] == {
+        "planted_arm": "ainglish", "min_gap": 0.5, "ordering": "calibration-first",
+        "arm_exposure": "both-arms-per-reader-item", "cells": 16,
+    }, "the committed manifest must disclose the full positive-control exposure"
     assert m["manifest"]["items"] == items and "items_url" not in m["manifest"], \
         "inline bytes must survive beside their digest so another party can rerun them"
     assert all("api_key_env" not in r for r in m["manifest"]["readers"]), \
@@ -1615,7 +1731,7 @@ def selftest():
         return tag_reliant(ep, text, q, options)
 
     assert run_panel(good, ask_fn=ordered_reader) is not None
-    assert order == (["reader-a"] * 4 + ["reader-b"] * 4
+    assert order == (["reader-a"] * 8 + ["reader-b"] * 8
                      + ["reader-a"] * 8 + ["reader-b"] * 8), \
         "calibration and real blocks must each group calls by reader, never swap local models per item"
     original_hash = "a" * 64
@@ -1743,6 +1859,12 @@ def selftest():
                      ask_fn=r_oracle) is None, "case-insensitive duplicate readers must refuse pre-inference"
     assert run_panel(dict(r_good, calibration_items=[dict(r_calib[0], id="r1")]),
                      ask_fn=r_oracle) is None, "a calibration id colliding with a real id must refuse"
+    same_arm_robustness_calls = []
+    same_arm_robustness = [dict(r_calib[0], ainglish=r_calib[0]["english"])]
+    assert run_panel(dict(r_good, calibration_items=same_arm_robustness),
+                     ask_fn=lambda *args: same_arm_robustness_calls.append(args) or "yes") is None
+    assert same_arm_robustness_calls == [], \
+        "same-arm calibration must refuse before spend on every panel metric"
 
     # a reader faulting on every call is HALF the cells dead: the guard must kill the run
     def r_half_dead(ep, text, question, options):
@@ -1944,7 +2066,7 @@ def selftest():
     real_texts = {i[arm] for i in items if not i.get("calibration") for arm in ("english", "ainglish")}
     assert not (set(asked) & real_texts), \
         f"calibration failed but {len(set(asked) & real_texts)} real items were still bought"
-    assert len(asked) == len([i for i in items if i.get("calibration")]) * len(bad["panel"]), \
+    assert len(asked) == len([i for i in items if i.get("calibration")]) * len(bad["panel"]) * 2, \
         "exactly the calibration cells should have been spent"
 
     # Reordering must not move a number: arms are dealt per (seed, panelist, item), so execution
@@ -2193,7 +2315,7 @@ def selftest():
 
         def prereg_fault_once(ep, text, q, options):
             divergent_calls["n"] += 1
-            if divergent_calls["n"] == 9:  # eight calibration cells, then first real cell
+            if divergent_calls["n"] == 17:  # 16 calibration cells, then first real cell
                 raise TransportFault("timeout")
             return tag_reliant(ep, text, q, options)
 

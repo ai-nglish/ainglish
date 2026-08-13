@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- **Comprehension calibration now certifies the whole declared reader instrument.** Every reader
+  receives both arms of every planted calibration item before real-item spend, while real items
+  remain hash-counterbalanced one arm per reader. A missing calibration response refuses before
+  the estimator, and byte-identical calibration arms now refuse before any call because they
+  cannot carry a planted effect. The manifest states the full calibration exposure and cell count,
+  so `_planned_panel_manifest` preregisters the same contract the real run executes (issue #45).
 - **Annotated item sets can preregister again: the difficulty report is emitted portably.**
   `panel.py`'s per-arm difficulty means, gap and declared max_gap ride the committed manifest as
   decimal strings instead of `round()`-ed floats, because a mean like `2.28` or a gap of `0.08`
