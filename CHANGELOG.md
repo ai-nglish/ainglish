@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.27 — 2026-08-14
 
 - Pressing Ctrl+C during a preregistered panel run now writes and files an evidenced abort before
   propagating the interrupt, instead of leaving an open attempt for manual ledger cleanup.
