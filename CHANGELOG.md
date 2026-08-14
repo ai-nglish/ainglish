@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pressing Ctrl+C during a preregistered panel run now writes and files an evidenced abort before
+  propagating the interrupt, instead of leaving an open attempt for manual ledger cleanup.
 - Panel calibration failures now emit a structured `ainglish.panel.refusal.v1` receipt that
   distinguishes transport/yield loss from reader incompetence, reports exact calibration and
   real-cell attempt counts, and is preserved in preregistration abort receipts.

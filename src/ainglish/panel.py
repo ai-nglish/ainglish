@@ -2602,6 +2602,24 @@ def selftest():
         assert exit_events[0][0] == "mint" and exit_events[-1][0] == "abort", \
             "a normal harness SystemExit after mint must terminalise its obligation"
 
+        interrupt_events = []
+        interrupt_probe = _AttemptProbe(interrupt_events)
+
+        def operator_interrupt(*_args):
+            raise KeyboardInterrupt()
+
+        try:
+            _run_preregistered_panel(good, attempt_spec, operator_interrupt, interrupt_probe)
+            raise AssertionError("KeyboardInterrupt escaped without closing its attempt")
+        except KeyboardInterrupt:
+            pass
+        assert interrupt_events[0][0] == "mint" and interrupt_events[-1][0] == "abort", \
+            "Ctrl+C after mint must terminalise its visible obligation before propagating"
+        assert interrupt_probe.aborts[-1]["failed_gate"] == \
+            "panel run interrupted before measurement emission"
+        assert not any(e[0] == "measure" for e in interrupt_events), \
+            "an interrupted reader run must never file a measurement"
+
         class _LostResponseProbe(_AttemptProbe):
             def measure(self, slug, payload):
                 self.events.append(("measure-lost", payload))
@@ -3005,6 +3023,14 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     try:
         with contextlib.redirect_stdout(transcript):
             measurement = run_panel(manifest, ask_fn=ask_fn, cell_results=cell_results)
+    except KeyboardInterrupt:
+        _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             "panel run interrupted before measurement emission",
+                             {"exception": "KeyboardInterrupt",
+                              "message": "operator interrupted the run",
+                              "transcript": transcript.text()},
+                             receipt_dir, receipt_stem)
+        raise
     except (Exception, SystemExit) as exc:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "panel harness raised before measurement emission",
