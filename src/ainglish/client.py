@@ -40,11 +40,14 @@ import base64
 import decimal
 import gzip
 import hashlib
+import hmac
 import http.client
 import ipaddress
 import json
 import math
 import os
+import stat
+import struct
 import time
 import urllib.error
 import urllib.parse
@@ -215,6 +218,60 @@ def _jwt_exp(token):
         return 0
 
 
+def _totp_code(secret, at=None):
+    """Generate Colony's RFC 6238 SHA-1/30-second/six-digit code from a base32 secret."""
+    compact = "".join(str(secret).split()).upper().rstrip("=")
+    if not compact:
+        raise ValueError("TOTP secret file is empty")
+    try:
+        key = base64.b32decode(compact + "=" * (-len(compact) % 8), casefold=True)
+    except Exception as exc:
+        raise ValueError("TOTP secret file does not contain a valid base32 secret") from exc
+    counter = int((time.time() if at is None else at) // 30)
+    digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    value = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
+    return "%06d" % (value % 1_000_000)
+
+
+def _totp_provider_from_file(path):
+    """Load one private seed and return a callback which derives a fresh code at every mint.
+
+    Long panel runs can outlive their first five-minute id_token. A literal ``AINGLISH_TOTP``
+    code cannot survive that refresh, while a local seed can. Refuse symlinks, non-regular files,
+    foreign owners and group/other permissions on POSIX before bringing the seed into memory.
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("AINGLISH_TOTP_SECRET_FILE must name a non-empty path")
+    path = os.path.abspath(os.path.expanduser(path.strip()))
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise ValueError("cannot open AINGLISH_TOTP_SECRET_FILE %r: %s" % (path, exc)) from exc
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError("AINGLISH_TOTP_SECRET_FILE must be a regular file")
+        if os.name == "posix":
+            if info.st_uid != os.getuid():
+                raise ValueError("AINGLISH_TOTP_SECRET_FILE must be owned by the current user")
+            if stat.S_IMODE(info.st_mode) & 0o077:
+                raise ValueError("AINGLISH_TOTP_SECRET_FILE must not grant group/other access (use chmod 600)")
+        with os.fdopen(fd, "r", encoding="ascii") as handle:
+            fd = None
+            secret = handle.read().strip()
+    finally:
+        if fd is not None:
+            os.close(fd)
+    # Validate now, before an evidence run reaches a token refresh. The returned closure derives
+    # against the current clock each time; it never caches a six-digit code.
+    _totp_code(secret)
+    return lambda: _totp_code(secret)
+
+
 class AinglishClient:
     """One client, every endpoint. Credentials are optional and touch only the write paths.
 
@@ -238,7 +295,17 @@ class AinglishClient:
         # colony-sdk pattern, mirrored) — resolved freshly at each mint, since codes expire and
         # a ~300s token lifecycle re-mints. Without it, a 2FA account's key path 401s with
         # AUTH_2FA_REQUIRED (@Rosetta, 0.2.1 feedback #1).
-        self._totp = totp or env.get("AINGLISH_TOTP") or None
+        if totp is not None:
+            self._totp = totp
+        else:
+            env_code = env.get("AINGLISH_TOTP") or ""
+            env_secret_file = env.get("AINGLISH_TOTP_SECRET_FILE") or ""
+            if env_code and env_secret_file:
+                raise ValueError(
+                    "set only one of AINGLISH_TOTP (one current code) and "
+                    "AINGLISH_TOTP_SECRET_FILE (fresh codes for long-running clients)")
+            self._totp = env_code or (
+                _totp_provider_from_file(env_secret_file) if env_secret_file else None)
 
     # ------------------------------------------------------------------ transport
     def _bearer(self):
@@ -1167,17 +1234,51 @@ def selftest():
     finally:
         for k, v in old.items():
             os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
-    # totp: explicit beats env; env supplies when absent; use_env=False ignores it; callables pass through
-    old_totp = os.environ.get("AINGLISH_TOTP")
+    # TOTP: explicit beats env; a private seed file supplies fresh codes across a long run's
+    # token refresh; ambiguous env configuration refuses instead of silently choosing stale auth.
+    import tempfile
+    old_totp = {k: os.environ.get(k) for k in ("AINGLISH_TOTP", "AINGLISH_TOTP_SECRET_FILE")}
     try:
+        os.environ.pop("AINGLISH_TOTP_SECRET_FILE", None)
         os.environ["AINGLISH_TOTP"] = "111111"
         assert AinglishClient()._totp == "111111"
         assert AinglishClient(totp="222222")._totp == "222222", "explicit totp must win"
         fn = lambda: "333333"
         assert AinglishClient(totp=fn)._totp is fn, "callables are stored unresolved (codes expire; resolve at mint)"
         assert AinglishClient(use_env=False)._totp is None
+        # RFC 6238's SHA-1 vector is 94287082 at t=59; the Colony-compatible six-digit suffix is
+        # 287082. This pins the clock step, dynamic truncation and digit width without networking.
+        rfc_secret = base64.b32encode(b"12345678901234567890").decode()
+        assert _totp_code(rfc_secret, at=59) == "287082"
+        with tempfile.TemporaryDirectory() as td:
+            secret_path = os.path.join(td, "totp-secret")
+            with open(secret_path, "w", encoding="ascii") as handle:
+                handle.write(rfc_secret + "\n")
+            os.chmod(secret_path, 0o600)
+            os.environ.pop("AINGLISH_TOTP", None)
+            os.environ["AINGLISH_TOTP_SECRET_FILE"] = secret_path
+            provider = AinglishClient()._totp
+            assert callable(provider) and len(provider()) == 6, \
+                "a seed file must become a fresh-code callback, never one cached code"
+            os.environ["AINGLISH_TOTP"] = "444444"
+            try:
+                AinglishClient()
+                raise AssertionError("two competing TOTP env sources must refuse")
+            except ValueError as exc:
+                assert "only one" in str(exc)
+            assert AinglishClient(totp="555555")._totp == "555555", \
+                "an explicit source must remain authoritative over environment ambiguity"
+            os.environ.pop("AINGLISH_TOTP", None)
+            if os.name == "posix":
+                os.chmod(secret_path, 0o644)
+                try:
+                    AinglishClient()
+                    raise AssertionError("a group/world-readable TOTP seed must refuse")
+                except ValueError as exc:
+                    assert "chmod 600" in str(exc)
     finally:
-        os.environ.pop("AINGLISH_TOTP", None) if old_totp is None else os.environ.__setitem__("AINGLISH_TOTP", old_totp)
+        for k, v in old_totp.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
     # Credential exchange is part of the client's public transport boundary. Colony failures must
     # arrive as AinglishError — never urllib internals, SystemExit, or stdout that corrupts a JSON
     # consumer. Exercise the real import seam because _bearer deliberately reuses panel.py's minter.

@@ -4,6 +4,13 @@
 
 - `ainglish-panel` now refuses unknown, duplicate and contradictory command-line arguments before
   fetching an artifact or calling a reader, so a misspelled `--dry-run` cannot become a paid run.
+- Long-running 2FA-authenticated clients and panel runs can now set
+  `AINGLISH_TOTP_SECRET_FILE` to a private base32 seed file; every Colony token refresh derives a
+  fresh code locally instead of reusing the expired one-time value from `AINGLISH_TOTP`.
+- Preregistered panel runs now atomically save the exact measurement request beside the runspec
+  before submission, preserving an expensive result for inspection or exact retry if filing is
+  rejected or its outcome cannot be reconciled. A local write failure warns but does not gate an
+  otherwise valid submission.
 - Panel calibration failures now emit a structured `ainglish.panel.refusal.v1` receipt that
   distinguishes transport/yield loss from reader incompetence, reports exact calibration and
   real-cell attempt counts, and is preserved in preregistration abort receipts.
