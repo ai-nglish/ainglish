@@ -1008,7 +1008,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
     return measurement
 
 
-def run_panel(manifest, ask_fn=ask):
+def run_panel(manifest, ask_fn=ask, cell_results=None):
     if not isinstance(manifest, dict):
         print("REFUSING to run: the panel manifest must be one JSON object.")
         return None
@@ -1226,6 +1226,37 @@ def run_panel(manifest, ask_fn=ask):
                         print(message)
                         return None
                     out.append((item["id"], arm, ep["name"], answer))
+                    if stage == "real" and cell_results is not None:
+                        expected = item.get("answer")
+                        normal_answer = None if is_absent(answer) else str(answer)
+                        record = {
+                            "kind": "ainglish.panel.cell-result.v1",
+                            "item_id": item["id"],
+                            "arm": arm,
+                            "reader": ep["name"],
+                            "answer": normal_answer,
+                            "expected": expected,
+                            "correct": (None if not normal_answer or not expected else
+                                        normal_answer.casefold() == str(expected).casefold()),
+                        }
+                        reason = getattr(answer, "reason", None)
+                        if reason:
+                            record["absence_reason"] = reason
+                        strata = {
+                            key: item[key] for key in (
+                                "cell", "condition", "marker", "class", "consequence_class",
+                                "scenario_id",
+                            )
+                            if key in item and isinstance(item[key], (str, int, bool))
+                        }
+                        if isinstance(item.get("strata"), dict):
+                            strata.update({
+                                str(key): value for key, value in item["strata"].items()
+                                if isinstance(value, (str, int, bool))
+                            })
+                        if strata:
+                            record["strata"] = strata
+                        cell_results.append(record)
         return out
 
     # --- calibration EXECUTES first, and gates before a single real item is bought ------------
@@ -1652,8 +1683,15 @@ def selftest():
         calibration_calls.append((ep["name"], text))
         return tag_reliant(ep, text, q, options)
 
-    dual = run_panel(dict(good, items=dual_items), ask_fn=calibration_probe)
+    dual_cells = []
+    dual = run_panel(dict(good, items=dual_items), ask_fn=calibration_probe,
+                     cell_results=dual_cells)
     assert dual is not None
+    assert len(dual_cells) == len([item for item in dual_items if not item.get("calibration")]) * 2
+    assert all(row["kind"] == "ainglish.panel.cell-result.v1" and
+               row["answer"] is not None and isinstance(row["correct"], bool)
+               for row in dual_cells), \
+        "the sidecar source must retain every normalized real-cell verdict and no calibration row"
     expected_calibration_calls = sorted(
         (reader["name"], text)
         for reader in good["panel"] for text in calibration_texts.values()
@@ -2261,9 +2299,11 @@ def selftest():
         "a clean run must still STATE zero faults"
 
     bad = dict(good, panel=[{"name": "flip-a"}, {"name": "flip-b"}])
-    incompetent = run_panel(bad, ask_fn=coinflip)
+    refused_cells = []
+    incompetent = run_panel(bad, ask_fn=coinflip, cell_results=refused_cells)
     assert _is_panel_refusal(incompetent) and incompetent["cause"] == "competence", \
         "a coin-flipping panel must FAIL the calibration gate with a competence receipt"
+    assert refused_cells == [], "a calibration refusal must prove zero real rows in the sidecar"
 
     # …and it must fail BEFORE buying a single real item. The gate used to be scored last, so a
     # blind panel paid for the whole run before saying it was blind. Asserting "returns None" does
@@ -2909,6 +2949,34 @@ def _abort_panel_attempt(client, attempt_id, slug, failed_gate, details, receipt
     print(f"ATTEMPT ABORTED: {attempt_id} — {failed_gate}")
 
 
+def _write_cell_results(attempt_id, slug, rows, receipt_dir, receipt_stem):
+    """Persist normalized scored-cell answers beside an attempt, never in its API payload.
+
+    The aggregate is sufficient for the register's scalar, but not for a preregistered stratum
+    claim. A local sidecar keeps that audit surface without expanding the server schema or putting
+    observed answers inside the preregistered manifest commitment. Calibration rows are omitted;
+    a calibration refusal therefore produces an explicit zero-row receipt.
+    """
+    if not receipt_dir:
+        return None
+    document = {
+        "kind": "ainglish.panel.cell-results.v1",
+        "attempt_id": attempt_id,
+        "proposal": slug,
+        "real_cells_recorded": len(rows),
+        "rows": rows,
+    }
+    encoded = json.dumps(document, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False).encode()
+    digest = hashlib.sha256(encoded).hexdigest()
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", receipt_stem).strip("-") or "runspec"
+    path = os.path.join(receipt_dir, f"{safe_stem}.attempt-{attempt_id}.cells.json")
+    with open(path, "wb") as handle:
+        handle.write(encoded + b"\n")
+    print(f"CELL RESULTS: {path} ({len(rows)} real cell(s), sha256 {digest})")
+    return {"path": path, "sha256": digest, "real_cells_recorded": len(rows)}
+
+
 def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                              receipt_stem="runspec"):
     """Mint -> spend -> complete/abort, with no real reader call before the mint."""
@@ -2930,9 +2998,10 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     print(f"ATTEMPT MINTED BEFORE READER SPEND: {attempt_id} (manifest {expected})")
 
     transcript = _Transcript(sys.stdout)
+    cell_results = []
     try:
         with contextlib.redirect_stdout(transcript):
-            measurement = run_panel(manifest, ask_fn=ask_fn)
+            measurement = run_panel(manifest, ask_fn=ask_fn, cell_results=cell_results)
     except (Exception, SystemExit) as exc:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "panel harness raised before measurement emission",
@@ -2940,16 +3009,20 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                               "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         raise
+    cell_receipt = _write_cell_results(
+        attempt_id, spec["slug"], cell_results, receipt_dir, receipt_stem
+    )
     if _is_panel_refusal(measurement):
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "panel harness refused at calibration",
-                             {"refusal": measurement, "transcript": transcript.text()},
+                             {"refusal": measurement, "cell_results": cell_receipt,
+                              "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         return None
     if measurement is None:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "panel harness emitted no measurement",
-                             {"transcript": transcript.text()},
+                             {"cell_results": cell_receipt, "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         return None
 
