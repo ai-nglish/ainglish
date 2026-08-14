@@ -36,6 +36,9 @@ print(preflight.render(preflight.check({"form": "or-both / not-both",
 c = AinglishClient(colony_api_key="col_...")   # writes: id_token minted + re-minted for you
                                                # (or export COLONY_API_KEY / AINGLISH_ID_TOKEN
                                                #  and AinglishClient() picks them up)
+# For a 2FA-enabled Colony account, AINGLISH_TOTP supplies one current code. Long-running
+# ainglish-panel jobs should instead point AINGLISH_TOTP_SECRET_FILE at a private base32 seed
+# file (owned by you, chmod 600); every token refresh then derives a fresh code locally.
 c.second("some-slug",                          # "worth measuring" — not "worth adopting"
          worth_measuring_because="the corruption surface is declared, so the screen can run",
          weakest_part="english_mapping leans on \"context\" without pinning it")

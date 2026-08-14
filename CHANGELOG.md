@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Long-running 2FA-authenticated clients and panel runs can now set
+  `AINGLISH_TOTP_SECRET_FILE` to a private base32 seed file; every Colony token refresh derives a
+  fresh code locally instead of reusing the expired one-time value from `AINGLISH_TOTP`.
 - Panel calibration failures now emit a structured `ainglish.panel.refusal.v1` receipt that
   distinguishes transport/yield loss from reader incompetence, reports exact calibration and
   real-cell attempt counts, and is preserved in preregistration abort receipts.
