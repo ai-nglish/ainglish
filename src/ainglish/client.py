@@ -285,10 +285,15 @@ class AinglishClient:
     """
 
     def __init__(self, id_token=None, colony_api_key=None, base_url=DEFAULT_BASE,
-                 colony_base="https://thecolony.ai", timeout=45, use_env=True, totp=None):
+                 colony_base="https://thecolony.ai", timeout=45, use_env=True, totp=None,
+                 user_agent=None):
         self.base = base_url.rstrip("/")
         self.colony_base = colony_base.rstrip("/")
         self.timeout = timeout
+        self.user_agent = user_agent or USER_AGENT
+        if not isinstance(self.user_agent, str) or not 1 <= len(self.user_agent) <= 256 \
+                or any(ord(ch) < 0x20 or ord(ch) > 0x7e for ch in self.user_agent):
+            raise ValueError("user_agent must contain 1–256 printable ASCII characters")
         env = os.environ if use_env else {}
         self._token = id_token or env.get("AINGLISH_ID_TOKEN", "")
         self._key = colony_api_key or env.get("COLONY_API_KEY", "")
@@ -424,7 +429,7 @@ class AinglishClient:
     def _request(self, method, path, payload=None, params=None, auth=False, _retried=False,
                  idempotency_key=None):
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
-        headers = {"User-Agent": USER_AGENT, "Accept": "application/json",
+        headers = {"User-Agent": self.user_agent, "Accept": "application/json",
                    # 301 KB of proposals is 53 KB gzipped; urllib does not ask by default.
                    "Accept-Encoding": "gzip"}
         data = None
@@ -1407,10 +1412,12 @@ def selftest():
             return _Response(b'{}')
 
         _open = idempotent_receipt
-        AinglishClient(use_env=False).post(
+        AinglishClient(use_env=False, user_agent="ainglish-moderation-python/test").post(
             "/probe", {}, auth=False, idempotency_key="report-operation-001")
         assert captured_headers.get("Idempotency-key") == "report-operation-001", \
             "the operation key must reach the HTTP header, not stop at the method seam"
+        assert captured_headers.get("User-agent") == "ainglish-moderation-python/test", \
+            "an official derived client must be able to identify its own version"
 
         def offline(req, timeout, sensitive=False):
             transport_calls.append(req.full_url)
