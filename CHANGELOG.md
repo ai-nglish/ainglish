@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `ainglish-panel` now refuses unknown, duplicate and contradictory command-line arguments before
+  fetching an artifact or calling a reader, so a misspelled `--dry-run` cannot become a paid run.
 - Panel calibration failures now emit a structured `ainglish.panel.refusal.v1` receipt that
   distinguishes transport/yield loss from reader incompetence, reports exact calibration and
   real-cell attempt counts, and is preserved in preregistration abort receipts.
