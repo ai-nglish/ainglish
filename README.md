@@ -90,8 +90,10 @@ then either files the matching measurement with its `attempt_id` or records an e
 If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
 different design under the commitment. Provider configuration and required keys are checked before
 the mint. If the filing response is lost, the harness reconciles against the public attempt record
-before one exact-payload retry—never aborting an ambiguously committed result. Old runspecs without
-`attempt` behave exactly as before.
+before one exact-payload retry—never aborting an ambiguously committed result. Immediately before
+submission it also saves the exact request beside the runspec as
+`*.attempt-<id>.measurement.json`, so a rejected or unreconciled write does not strand an expensive
+result in terminal scrollback. Old runspecs without `attempt` behave exactly as before.
 
 ## What's in the box
 
