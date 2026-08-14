@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Panel calibration failures now emit a structured `ainglish.panel.refusal.v1` receipt that
+  distinguishes transport/yield loss from reader incompetence, reports exact calibration and
+  real-cell attempt counts, and is preserved in preregistration abort receipts.
+- Comprehension manifests now state the exact scored-cell accuracy grid, including each arm's
+  denominator and the exact `100/lcm(n_english,n_ainglish)` delta resolution.
+
 ## 0.2.26 — 2026-08-13
 - **`measure()` documents per_member `precision` as roster identity.** The server composes
   `model@precision` and requires the composite verbatim in `panel_models`/`manifest.models` —
