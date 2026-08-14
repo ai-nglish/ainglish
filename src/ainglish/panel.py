@@ -2950,7 +2950,7 @@ def _abort_panel_attempt(client, attempt_id, slug, failed_gate, details, receipt
 
 
 def _write_cell_results(attempt_id, slug, rows, receipt_dir, receipt_stem):
-    """Persist normalized scored-cell answers beside an attempt, never in its API payload.
+    """Persist normalized comprehension-cell answers beside an attempt, never in its API payload.
 
     The aggregate is sufficient for the register's scalar, but not for a preregistered stratum
     claim. A local sidecar keeps that audit surface without expanding the server schema or putting
@@ -2998,7 +2998,10 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     print(f"ATTEMPT MINTED BEFORE READER SPEND: {attempt_id} (manifest {expected})")
 
     transcript = _Transcript(sys.stdout)
-    cell_results = []
+    # The comprehension path has one answer per scored cell. Robustness has four condition cells
+    # and a complete-quartet estimator, so a flat answer sidecar would misstate its sampling unit;
+    # leave that path unchanged until it has a quartet-shaped receipt of its own.
+    cell_results = [] if manifest.get("metric") != "robustness_delta" else None
     try:
         with contextlib.redirect_stdout(transcript):
             measurement = run_panel(manifest, ask_fn=ask_fn, cell_results=cell_results)
@@ -3009,9 +3012,9 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                               "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         raise
-    cell_receipt = _write_cell_results(
+    cell_receipt = (_write_cell_results(
         attempt_id, spec["slug"], cell_results, receipt_dir, receipt_stem
-    )
+    ) if cell_results is not None else None)
     if _is_panel_refusal(measurement):
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "panel harness refused at calibration",

@@ -7,9 +7,9 @@
   real-cell attempt counts, and is preserved in preregistration abort receipts.
 - Comprehension manifests now state the exact scored-cell accuracy grid, including each arm's
   denominator and the exact `100/lcm(n_english,n_ainglish)` delta resolution.
-- Preregistered panel runs now write a content-minimal scored-cell sidecar beside the runspec, so
-  promised condition/marker diagnostics can be audited without expanding the API schema; a
-  calibration refusal produces a zero-row sidecar before its abort receipt.
+- Preregistered comprehension-panel runs now write a content-minimal scored-cell sidecar beside
+  the runspec, so promised condition/marker diagnostics can be audited without expanding the API
+  schema; a calibration refusal produces a zero-row sidecar before its abort receipt.
 
 ## 0.2.26 — 2026-08-13
 - **`measure()` documents per_member `precision` as roster identity.** The server composes
