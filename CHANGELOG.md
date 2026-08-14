@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `ainglish-panel` now refuses unknown, duplicate and contradictory command-line arguments before
+  fetching an artifact or calling a reader, so a misspelled `--dry-run` cannot become a paid run.
 - Long-running 2FA-authenticated clients and panel runs can now set
   `AINGLISH_TOTP_SECRET_FILE` to a private base32 seed file; every Colony token refresh derives a
   fresh code locally instead of reusing the expired one-time value from `AINGLISH_TOTP`.

@@ -1583,6 +1583,25 @@ def selftest():
     import contextlib
     import io
 
+    assert _parse_cli(["panel.py", "run", "spec.json", "--dry-run"]) == {
+        "command": "run", "path": "spec.json", "dry_run": True, "submit": False,
+    }
+    assert _parse_cli(["panel.py", "run", "-", "--submit"]) == {
+        "command": "run", "path": "-", "dry_run": False, "submit": True,
+    }
+    for bad_argv, expected in (
+            (["panel.py", "run", "spec.json", "--dryrun"], "unknown"),
+            (["panel.py", "run", "spec.json", "--dry-run", "--submit"], "mutually exclusive"),
+            (["panel.py", "run", "spec.json", "--submit", "--submit"], "duplicate"),
+            (["panel.py", "manifest.json", "--dry-run"], "exactly one"),
+            (["panel.py", "--selftest", "ignored"], "no additional"),
+    ):
+        try:
+            _parse_cli(bad_argv)
+            raise AssertionError("bad CLI tokens were silently accepted: %r" % (bad_argv,))
+        except SystemExit as exc:
+            assert expected in str(exc), (bad_argv, exc)
+
     global _open
     items = [
         # calibration: answer derivable ONLY in the ainglish arm (planted effect)
@@ -3268,30 +3287,79 @@ def submit_measurement(measurement, slug):
     print("SUBMITTED:", resp.decode()[:400])
 
 
-def main(argv):
-    if "--selftest" in argv:
-        selftest(); return 0
-    if "--demo-manifest" in argv:
-        print(DEMO_NOTE); return 0
-    if len(argv) < 2:
-        print(__doc__.strip().split("\n\n")[0])
-        print("\nusage: panel.py manifest.json            (items inline)"
-              "\n       panel.py run runspec.json [--dry-run] [--submit]   (items fetched by URL, digest-pinned)"
-              "\n       panel.py --demo-manifest | --selftest")
-        return 0
+def _usage():
+    return (__doc__.strip().split("\n\n")[0]
+            + "\n\nusage: panel.py manifest.json            (items inline)"
+              "\n       panel.py run runspec.json [--dry-run | --submit]   "
+              "(items fetched by URL, digest-pinned)"
+              "\n       panel.py --demo-manifest | --selftest"
+              "\n       panel.py --help")
+
+
+def _parse_cli(argv):
+    """Parse the deliberately small CLI, refusing every ignored or contradictory token.
+
+    This is kept local rather than delegated to an application framework because panel.py is a
+    served standalone instrument. A typo in ``--dry-run`` must never fall through to a paid real
+    run, and a stray flag must never be silently absent from the experiment an operator thought
+    they requested.
+    """
+    if len(argv) == 1 or (len(argv) == 2 and argv[1] in ("-h", "--help")):
+        return {"command": "help"}
+    if argv[1] in ("--selftest", "--demo-manifest"):
+        if len(argv) != 2:
+            raise SystemExit("REFUSING: %s takes no additional arguments." % argv[1])
+        return {"command": argv[1][2:].replace("-", "_")}
     if argv[1] == "run":
         if len(argv) < 3:
             raise SystemExit("ainglish-panel run needs a runspec path (or - for stdin).")
-        spec = json.loads(sys.stdin.read() if argv[2] == "-" else open(argv[2]).read())
+        path, flags = argv[2], argv[3:]
+        allowed = {"--dry-run", "--submit"}
+        unknown = [value for value in flags if value not in allowed]
+        if unknown:
+            raise SystemExit(
+                "REFUSING: unknown panel run argument(s): %s. Accepted: --dry-run or --submit."
+                % ", ".join(unknown))
+        duplicates = sorted({value for value in flags if flags.count(value) > 1})
+        if duplicates:
+            raise SystemExit("REFUSING: duplicate panel run argument(s): %s."
+                             % ", ".join(duplicates))
+        if "--dry-run" in flags and "--submit" in flags:
+            raise SystemExit(
+                "REFUSING: --dry-run and --submit are mutually exclusive; choose the free "
+                "preview or the real filing run.")
+        return {"command": "run", "path": path,
+                "dry_run": "--dry-run" in flags, "submit": "--submit" in flags}
+    if argv[1].startswith("-") and argv[1] != "-":
+        raise SystemExit("REFUSING: unknown panel command or option %r. Use --help." % argv[1])
+    if len(argv) != 2:
+        raise SystemExit(
+            "REFUSING: inline-manifest mode accepts exactly one path (or - for stdin); "
+            "unexpected argument(s): %s" % ", ".join(argv[2:]))
+    return {"command": "manifest", "path": argv[1]}
+
+
+def main(argv):
+    parsed = _parse_cli(argv)
+    if parsed["command"] == "selftest":
+        selftest(); return 0
+    if parsed["command"] == "demo_manifest":
+        print(DEMO_NOTE); return 0
+    if parsed["command"] == "help":
+        print(_usage())
+        return 0
+    if parsed["command"] == "run":
+        path = parsed["path"]
+        spec = json.loads(sys.stdin.read() if path == "-" else open(path).read())
         items, digest = fetch_items(spec["items_url"], spec.get("items_sha256"))
         manifest = dict(spec, items=items, items_sha256=digest)
-        dry = "--dry-run" in argv
+        dry = parsed["dry_run"]
         if "attempt" in spec:
             _attempt_settings(spec["attempt"])
         if dry:
             manifest["_dry_run"] = True
         if "attempt" in spec and not dry:
-            if "--submit" not in argv:
+            if not parsed["submit"]:
                 raise SystemExit("REFUSING before reader spend: this runspec declares an attempt, "
                                  "so a real run needs --submit to close it atomically with its "
                                  "measurement. Use --dry-run for the zero-cost preview.")
@@ -3304,8 +3372,8 @@ def main(argv):
                 base_url=os.environ.get("AINGLISH_BASE", "https://ainglish.org"),
                 colony_base=os.environ.get("COLONY_BASE", "https://thecolony.ai"),
             )
-            receipt_dir = os.getcwd() if argv[2] == "-" else os.path.dirname(os.path.abspath(argv[2]))
-            receipt_stem = "stdin-runspec" if argv[2] == "-" else os.path.basename(argv[2])
+            receipt_dir = os.getcwd() if path == "-" else os.path.dirname(os.path.abspath(path))
+            receipt_stem = "stdin-runspec" if path == "-" else os.path.basename(path)
             return 0 if _run_preregistered_panel(
                 manifest, spec, ask, client, receipt_dir, receipt_stem) is not None else 1
         m = run_panel(manifest, ask_fn=dry_reader(items, manifest) if dry else ask)
@@ -3315,10 +3383,11 @@ def main(argv):
             print("\nDRY RUN complete: pipeline + payload verified, zero API calls. The payload above "
                   "is stamped DRY-RUN inside its own manifest — not submittable as evidence.")
             return 0
-        if "--submit" in argv:
+        if parsed["submit"]:
             submit_measurement(m, spec["slug"])
         return 0
-    manifest = json.loads(sys.stdin.read() if argv[1] == "-" else open(argv[1]).read())
+    path = parsed["path"]
+    manifest = json.loads(sys.stdin.read() if path == "-" else open(path).read())
     result = run_panel(manifest)
     return 1 if result is None or _is_panel_refusal(result) else 0
 
