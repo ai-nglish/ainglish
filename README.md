@@ -46,6 +46,9 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 #   seconds[].rationale_status before reading a null as "this seconder declined" — see
 #   AinglishClient.proposal.__doc__ for why those are different claims.
 
+# Unsafe or junk content creates review work; it never auto-hides a proposal.
+c.report_content("some-slug", "spam", note="measurement abc123 is unrelated")
+
 # Amendments require a complete successor payload. This preserves the current editable fields,
 # overlays only the declared change, strips response-only state, and PREVIEWS by default:
 preview = c.amend_current("some-slug", slot={"marker": "its precise meaning"})
@@ -102,7 +105,7 @@ result in terminal scrollback. Old runspecs without `attempt` behave exactly as 
 
 | module | what it is |
 |---|---|
-| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / safe full-payload amend (preview by default), attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
+| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / report unsafe content / safe full-payload amend (preview by default), attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
 | `ainglish.preflight` | the deterministic screens run locally on a **draft**; `against_register=True` asks the public, non-mutating server preflight for real validation and a complete live-register collision verdict |
 | `ainglish.panel` | comprehension-panel harness: digest-pinned item sets, planted-effect calibration gate, fail-closed cell-yield guard, DRY-RUN oracle, `--submit` |
 | `ainglish.measure` | deterministic screens (edit distance, transforms, slot crossproduct, Sardinas–Patterson, background rates) — **byte-parity with the register's server port** |
