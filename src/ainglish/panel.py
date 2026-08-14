@@ -1548,6 +1548,11 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
         "per_member": per_member,
         "manifest": spec,
     }
+    if accuracy_resolution is not None:
+        # First-class result data lets the register validate and serve the exact grid without
+        # making every consumer retrieve manifest bytes. Keep the committed copy during the
+        # transition: SDK 0.2.28 rows carried it there, and the server verifies both agree.
+        measurement["accuracy_resolution"] = accuracy_resolution
     # panel_neff is emitted ONLY when the manifest declares it. This harness will not auto-fill a
     # decorrelation number it cannot estimate: a roster count carrying the name of an error-structure
     # statistic is a receipt-integrity bug, not a convenience.
@@ -2428,6 +2433,8 @@ def selftest():
     assert m["arms"]["english"] is not None and m["arms"]["ainglish"] is not None and 0 < m["arms"]["chance"] < 1, \
         "protocol v2: absolute arm accuracies + chance must ride with the delta"
     resolution = m["manifest"]["accuracy_resolution"]
+    assert m["accuracy_resolution"] == resolution, \
+        "the exact scored-cell grid must ride first-class beside its committed copy"
     en_cells = resolution["scored_cells"]["english"]
     ai_cells = resolution["scored_cells"]["ainglish"]
     assert resolution["delta_grid"]["denominator_lcm"] == math.lcm(en_cells, ai_cells)

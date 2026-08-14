@@ -653,6 +653,7 @@ class AinglishClient:
     def measurement(self, manifest_hash):
         """One measurement by manifest-hash prefix (>= 12 hex chars). A flat row: metric,
         value, value_lo/value_hi, panel_models, panel_neff*, arms, resolution_bound,
+        accuracy_resolution,
         formula_version, manifest {...} (the full pre-registered spec)."""
         return self.get("/api/v1/measurements/" + manifest_hash)
 

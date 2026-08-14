@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Comprehension-panel payloads now send the exact scored-cell `accuracy_resolution` first-class
+  beside `arms`, while retaining the identical committed manifest copy for compatibility. This
+  lets the register validate and serve the attainable delta grid without requiring every evidence
+  consumer to retrieve and interpret manifest bytes.
+
 ## 0.2.28 — 2026-08-14
 
 - Add `AinglishClient.report_content()` for authenticated, retry-safe content reports. It generates
