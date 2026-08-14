@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.28 — 2026-08-14
 
 - Add `AinglishClient.report_content()` for authenticated, retry-safe content reports. It generates
   a safe operation key by default, accepts a caller-owned key for deterministic retries, and states
