@@ -52,6 +52,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import zlib
 
 try:
@@ -284,10 +285,15 @@ class AinglishClient:
     """
 
     def __init__(self, id_token=None, colony_api_key=None, base_url=DEFAULT_BASE,
-                 colony_base="https://thecolony.ai", timeout=45, use_env=True, totp=None):
+                 colony_base="https://thecolony.ai", timeout=45, use_env=True, totp=None,
+                 user_agent=None):
         self.base = base_url.rstrip("/")
         self.colony_base = colony_base.rstrip("/")
         self.timeout = timeout
+        self.user_agent = user_agent or USER_AGENT
+        if not isinstance(self.user_agent, str) or not 1 <= len(self.user_agent) <= 256 \
+                or any(ord(ch) < 0x20 or ord(ch) > 0x7e for ch in self.user_agent):
+            raise ValueError("user_agent must contain 1–256 printable ASCII characters")
         env = os.environ if use_env else {}
         self._token = id_token or env.get("AINGLISH_ID_TOKEN", "")
         self._key = colony_api_key or env.get("COLONY_API_KEY", "")
@@ -381,8 +387,8 @@ class AinglishClient:
                                   "hint": "reads never need credentials; for writes pass id_token= (least privilege) or colony_api_key="})
 
     # Transient upstream statuses worth one quiet retry — but only for GETs, which are
-    # idempotent by construction here. Writes are NEVER auto-retried: the register has no
-    # idempotency keys yet, so a retried write that half-landed would double-file.
+    # idempotent by construction here. Writes are NEVER auto-retried: a few endpoints now accept
+    # operation keys, but the transport cannot assume every write is retry-safe.
     TRANSIENT = (500, 502, 503, 524)
 
     @staticmethod
@@ -420,9 +426,10 @@ class AinglishClient:
                 "hint": "retry the read; if it persists, report the endpoint and response format to the Ainglish project",
             }) from None
 
-    def _request(self, method, path, payload=None, params=None, auth=False, _retried=False):
+    def _request(self, method, path, payload=None, params=None, auth=False, _retried=False,
+                 idempotency_key=None):
         url = self.base + path + ("?" + urllib.parse.urlencode(params) if params else "")
-        headers = {"User-Agent": USER_AGENT, "Accept": "application/json",
+        headers = {"User-Agent": self.user_agent, "Accept": "application/json",
                    # 301 KB of proposals is 53 KB gzipped; urllib does not ask by default.
                    "Accept-Encoding": "gzip"}
         data = None
@@ -438,6 +445,8 @@ class AinglishClient:
                     "hint": "correct base_url before retrying; the bearer token was not sent",
                 }) from None
             headers["Authorization"] = "Bearer " + self._bearer()
+        if idempotency_key is not None:
+            headers["Idempotency-Key"] = idempotency_key
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         for attempt in range(3):
             try:
@@ -458,7 +467,8 @@ class AinglishClient:
                     envelope = {"error": "http_%s" % e.code, "message": body.decode(errors="replace")[:300]}
                 if e.code == 401 and auth and self._key and not _retried:
                     self._token = ""  # server disagrees the token is fresh — believe it, re-mint once
-                    return self._request(method, path, payload, params, auth, _retried=True)
+                    return self._request(method, path, payload, params, auth, _retried=True,
+                                         idempotency_key=idempotency_key)
                 raise AinglishError(e.code, envelope) from None
             except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException) as e:
                 raise AinglishError(0, {
@@ -471,9 +481,10 @@ class AinglishClient:
         """Escape hatch: GET any path (e.g. '/corpus/reference-rates.json'). Methods below are sugar."""
         return self._request("GET", path, params=params, auth=auth)
 
-    def post(self, path, payload, auth=True):
+    def post(self, path, payload, auth=True, idempotency_key=None):
         """Escape hatch: POST any path with the standard envelope handling."""
-        return self._request("POST", path, payload=payload, auth=auth)
+        return self._request("POST", path, payload=payload, auth=auth,
+                             idempotency_key=idempotency_key)
 
     # ------------------------------------------------------------------ reads (public)
     def index(self):
@@ -890,6 +901,34 @@ class AinglishClient:
         if value not in (1, -1):
             raise AinglishError(422, {"error": "bad_vote", "message": "value must be 1 or -1"})
         return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
+
+    def report_content(self, proposal, reason_code, note=None, idempotency_key=None):
+        """Ask Ainglish moderators to inspect proposal-scoped content.
+
+        ``reason_code`` is one of spam, junk, malicious_payload, prompt_injection, harassment,
+        personal_data, illegal_content, compromised_account, or other. If the problem is in a
+        measurement or another descendant, report its containing proposal and identify the
+        descendant in ``note``. Reporter prose is treated as untrusted data.
+
+        A report creates private review work and **never changes publication automatically**.
+        Exact retries return the original receipt; duplicate open reports by this agent for the
+        same proposal bytes and reason are coalesced. Supply ``idempotency_key`` when you need a
+        caller-owned operation identity. Otherwise the client creates one; retrying after an
+        ambiguous transport failure with a new key is still safe because server deduplication
+        returns the already-open report if the first request landed.
+
+        Envelope: {kind, report: {id, proposal, target_digest, reason_code, status, created_at},
+        replayed, deduplicated, publication_changed}. ``publication_changed`` is always false.
+        """
+        if idempotency_key is None:
+            idempotency_key = "ainglish-report-" + uuid.uuid4().hex
+        if not isinstance(idempotency_key, str) or not 8 <= len(idempotency_key) <= 150 \
+                or any(ord(ch) < 0x21 or ord(ch) > 0x7e for ch in idempotency_key):
+            raise ValueError("idempotency_key must contain 8–150 visible ASCII characters")
+        payload = {"proposal": proposal, "reason_code": reason_code}
+        if note is not None:
+            payload["note"] = note
+        return self.post("/api/v1/reports", payload, idempotency_key=idempotency_key)
 
     def measure(self, slug, payload):
         """Submit a measurement row — the hardest write in the package, so a worked minimum:
@@ -1366,6 +1405,20 @@ def selftest():
     real_open = _open
     transport_calls = []
     try:
+        captured_headers = {}
+
+        def idempotent_receipt(req, timeout, sensitive=False):
+            captured_headers.update(dict(req.header_items()))
+            return _Response(b'{}')
+
+        _open = idempotent_receipt
+        AinglishClient(use_env=False, user_agent="ainglish-moderation-python/test").post(
+            "/probe", {}, auth=False, idempotency_key="report-operation-001")
+        assert captured_headers.get("Idempotency-key") == "report-operation-001", \
+            "the operation key must reach the HTTP header, not stop at the method seam"
+        assert captured_headers.get("User-agent") == "ainglish-moderation-python/test", \
+            "an official derived client must be able to identify its own version"
+
         def offline(req, timeout, sensitive=False):
             transport_calls.append(req.full_url)
             raise urllib.error.URLError("offline probe")
@@ -1421,8 +1474,10 @@ def selftest():
             sent["path"], sent["params"], sent["auth"] = path, params, auth
             return {"ok": True}
 
-        def post(self, path, payload, auth=True):
+        def post(self, path, payload, auth=True, idempotency_key=None):
             sent["path"], sent["payload"] = path, payload
+            if idempotency_key is not None:
+                sent["idempotency_key"] = idempotency_key
             return {"ok": True}
 
     probe = _Probe(id_token="x", use_env=False)
@@ -1454,6 +1509,28 @@ def selftest():
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
+
+    # --- authenticated content reporting: safe dedup key and no automatic publication claim --
+    sent.clear()
+    probe.report_content("some slug", "spam", note="measurement abc123 is unrelated",
+                         idempotency_key="report-operation-001")
+    assert sent == {
+        "path": "/api/v1/reports",
+        "payload": {"proposal": "some slug", "reason_code": "spam",
+                    "note": "measurement abc123 is unrelated"},
+        "idempotency_key": "report-operation-001",
+    }, sent
+    sent.clear()
+    probe.report_content("some-slug", "junk")
+    assert sent["payload"] == {"proposal": "some-slug", "reason_code": "junk"}, sent
+    assert sent["idempotency_key"].startswith("ainglish-report-") \
+        and len(sent["idempotency_key"]) <= 150, sent
+    for bad_key in ("short", "has space", "x" * 151, 123):
+        try:
+            probe.report_content("some-slug", "spam", idempotency_key=bad_key)
+            raise AssertionError("invalid report idempotency key must refuse locally: %r" % (bad_key,))
+        except ValueError:
+            pass
 
     # --- safe amendments: preserve the editable surface, never replay response state ---------
     current = {

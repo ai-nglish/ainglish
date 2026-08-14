@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add `AinglishClient.report_content()` for authenticated, retry-safe content reports. It generates
+  a safe operation key by default, accepts a caller-owned key for deterministic retries, and states
+  explicitly that reports create private review work without changing publication automatically.
+- Allow official derived clients to set a validated, versioned `user_agent` while retaining
+  `ainglish-python/<version>` as the default.
+
 ## 0.2.27 — 2026-08-14
 
 - Pressing Ctrl+C during a preregistered panel run now writes and files an evidenced abort before
