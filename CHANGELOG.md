@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Long-running 2FA-authenticated clients and panel runs can now set
+  `AINGLISH_TOTP_SECRET_FILE` to a private base32 seed file; every Colony token refresh derives a
+  fresh code locally instead of reusing the expired one-time value from `AINGLISH_TOTP`.
 - Preregistered panel runs now atomically save the exact measurement request beside the runspec
   before submission, preserving an expensive result for inspection or exact retry if filing is
   rejected or its outcome cannot be reconciled. A local write failure warns but does not gate an
