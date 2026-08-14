@@ -2562,6 +2562,29 @@ def selftest():
         assert _HARNESS_ATTEMPT_GATES[1] in events[0][2]["admissibility_gates"], \
             "the clean-transport assumption must be an explicit gate"
 
+        receipt_events = []
+        with tempfile.TemporaryDirectory() as receipt_dir:
+            receipted = _run_preregistered_panel(
+                good, attempt_spec, tag_reliant, _AttemptProbe(receipt_events),
+                receipt_dir=receipt_dir, receipt_stem="panel runspec.json")
+            request_paths = [name for name in os.listdir(receipt_dir)
+                             if name.endswith(".measurement.json")]
+            assert request_paths == [
+                "panel-runspec.json.attempt-selftest-attempt.measurement.json"
+            ], "a successful attempt must save one deterministic pre-submission request"
+            request_path = os.path.join(receipt_dir, request_paths[0])
+            with open(request_path, encoding="utf-8") as handle:
+                saved_request = json.load(handle)
+            filed_request = next(event[1] for event in receipt_events if event[0] == "measure")
+            assert saved_request == filed_request == receipted, \
+                "the saved request, submitted object and returned measurement must be identical"
+            warning = io.StringIO()
+            with contextlib.redirect_stdout(warning):
+                unsaved = _write_measurement_request(
+                    "unwritable", receipted, os.path.join(receipt_dir, "missing"), "runspec")
+            assert unsaved is None and "Submission will continue" in warning.getvalue(), \
+                "local receipt failure must warn without becoming a new filing gate"
+
         failed_events = []
         failed_probe = _AttemptProbe(failed_events)
         assert _run_preregistered_panel(bad, attempt_spec, coinflip, failed_probe) is None
@@ -2977,6 +3000,46 @@ def _write_cell_results(attempt_id, slug, rows, receipt_dir, receipt_stem):
     return {"path": path, "sha256": digest, "real_cells_recorded": len(rows)}
 
 
+def _write_measurement_request(attempt_id, measurement, receipt_dir, receipt_stem):
+    """Persist the exact JSON request object before its first submission attempt.
+
+    The register is authoritative after a successful filing, but a response-bearing rejection or
+    an unreconciled lost response can otherwise leave an expensive panel result only in terminal
+    scrollback. Saving is deliberately advisory: an unwritable directory warns but never turns a
+    valid experimental result into a new process gate.
+    """
+    if not receipt_dir:
+        return None
+    import tempfile
+
+    encoded = json.dumps(measurement, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False).encode()
+    digest = hashlib.sha256(encoded).hexdigest()
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", receipt_stem).strip("-") or "runspec"
+    path = os.path.join(receipt_dir, f"{safe_stem}.attempt-{attempt_id}.measurement.json")
+    temporary = None
+    try:
+        fd, temporary = tempfile.mkstemp(prefix=f".{safe_stem}.measurement-", dir=receipt_dir)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(encoded + b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    except OSError as exc:
+        print(f"MEASUREMENT REQUEST WARNING: could not save the pre-submission request in "
+              f"{receipt_dir}: {exc}. Submission will continue; preserve the printed payload.")
+        return None
+    finally:
+        if temporary:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+    print(f"MEASUREMENT REQUEST: {path} (sha256 {digest})")
+    return {"path": path, "sha256": digest}
+
+
 def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                              receipt_stem="runspec"):
     """Mint -> spend -> complete/abort, with no real reader call before the mint."""
@@ -3040,6 +3103,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
         return None
 
     measurement["attempt_id"] = attempt_id
+    request_receipt = _write_measurement_request(
+        attempt_id, measurement, receipt_dir, receipt_stem)
     response = None
     for submission in range(2):
         try:
@@ -3059,7 +3124,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
             except Exception:
                 print(f"SUBMISSION STATUS UNKNOWN: {attempt_id}. The response was lost and the "
                       "attempt record could not be read; do not abort or change the manifest. "
-                      "Inspect client.attempt(attempt_id) before retrying the same payload.")
+                      "Inspect client.attempt(attempt_id) before retrying the same payload."
+                      + (f" Exact request: {request_receipt['path']}." if request_receipt else ""))
                 raise exc
             if state.get("state") == "completed":
                 response = {"attempt": state, "recovered_after_lost_response": True}
@@ -3068,7 +3134,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                 break
             if state.get("state") != "open" or submission == 1:
                 print(f"SUBMISSION NOT CONFIRMED: {attempt_id} is {state.get('state', 'unknown')}. "
-                      "The exact payload remains safe to inspect/retry only while it is open.")
+                      "The exact payload remains safe to inspect/retry only while it is open."
+                      + (f" Exact request: {request_receipt['path']}." if request_receipt else ""))
                 raise exc
             print(f"SUBMISSION RESPONSE LOST: {attempt_id} is still open; retrying the exact "
                   "manifest and attempt id once.")
