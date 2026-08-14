@@ -1583,6 +1583,25 @@ def selftest():
     import contextlib
     import io
 
+    assert _parse_cli(["panel.py", "run", "spec.json", "--dry-run"]) == {
+        "command": "run", "path": "spec.json", "dry_run": True, "submit": False,
+    }
+    assert _parse_cli(["panel.py", "run", "-", "--submit"]) == {
+        "command": "run", "path": "-", "dry_run": False, "submit": True,
+    }
+    for bad_argv, expected in (
+            (["panel.py", "run", "spec.json", "--dryrun"], "unknown"),
+            (["panel.py", "run", "spec.json", "--dry-run", "--submit"], "mutually exclusive"),
+            (["panel.py", "run", "spec.json", "--submit", "--submit"], "duplicate"),
+            (["panel.py", "manifest.json", "--dry-run"], "exactly one"),
+            (["panel.py", "--selftest", "ignored"], "no additional"),
+    ):
+        try:
+            _parse_cli(bad_argv)
+            raise AssertionError("bad CLI tokens were silently accepted: %r" % (bad_argv,))
+        except SystemExit as exc:
+            assert expected in str(exc), (bad_argv, exc)
+
     global _open
     items = [
         # calibration: answer derivable ONLY in the ainglish arm (planted effect)
@@ -2562,6 +2581,29 @@ def selftest():
         assert _HARNESS_ATTEMPT_GATES[1] in events[0][2]["admissibility_gates"], \
             "the clean-transport assumption must be an explicit gate"
 
+        receipt_events = []
+        with tempfile.TemporaryDirectory() as receipt_dir:
+            receipted = _run_preregistered_panel(
+                good, attempt_spec, tag_reliant, _AttemptProbe(receipt_events),
+                receipt_dir=receipt_dir, receipt_stem="panel runspec.json")
+            request_paths = [name for name in os.listdir(receipt_dir)
+                             if name.endswith(".measurement.json")]
+            assert request_paths == [
+                "panel-runspec.json.attempt-selftest-attempt.measurement.json"
+            ], "a successful attempt must save one deterministic pre-submission request"
+            request_path = os.path.join(receipt_dir, request_paths[0])
+            with open(request_path, encoding="utf-8") as handle:
+                saved_request = json.load(handle)
+            filed_request = next(event[1] for event in receipt_events if event[0] == "measure")
+            assert saved_request == filed_request == receipted, \
+                "the saved request, submitted object and returned measurement must be identical"
+            warning = io.StringIO()
+            with contextlib.redirect_stdout(warning):
+                unsaved = _write_measurement_request(
+                    "unwritable", receipted, os.path.join(receipt_dir, "missing"), "runspec")
+            assert unsaved is None and "Submission will continue" in warning.getvalue(), \
+                "local receipt failure must warn without becoming a new filing gate"
+
         failed_events = []
         failed_probe = _AttemptProbe(failed_events)
         assert _run_preregistered_panel(bad, attempt_spec, coinflip, failed_probe) is None
@@ -2995,6 +3037,46 @@ def _write_cell_results(attempt_id, slug, rows, receipt_dir, receipt_stem):
     return {"path": path, "sha256": digest, "real_cells_recorded": len(rows)}
 
 
+def _write_measurement_request(attempt_id, measurement, receipt_dir, receipt_stem):
+    """Persist the exact JSON request object before its first submission attempt.
+
+    The register is authoritative after a successful filing, but a response-bearing rejection or
+    an unreconciled lost response can otherwise leave an expensive panel result only in terminal
+    scrollback. Saving is deliberately advisory: an unwritable directory warns but never turns a
+    valid experimental result into a new process gate.
+    """
+    if not receipt_dir:
+        return None
+    import tempfile
+
+    encoded = json.dumps(measurement, sort_keys=True, separators=(",", ":"),
+                         ensure_ascii=False).encode()
+    digest = hashlib.sha256(encoded).hexdigest()
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", receipt_stem).strip("-") or "runspec"
+    path = os.path.join(receipt_dir, f"{safe_stem}.attempt-{attempt_id}.measurement.json")
+    temporary = None
+    try:
+        fd, temporary = tempfile.mkstemp(prefix=f".{safe_stem}.measurement-", dir=receipt_dir)
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(encoded + b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    except OSError as exc:
+        print(f"MEASUREMENT REQUEST WARNING: could not save the pre-submission request in "
+              f"{receipt_dir}: {exc}. Submission will continue; preserve the printed payload.")
+        return None
+    finally:
+        if temporary:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+    print(f"MEASUREMENT REQUEST: {path} (sha256 {digest})")
+    return {"path": path, "sha256": digest}
+
+
 def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                              receipt_stem="runspec"):
     """Mint -> spend -> complete/abort, with no real reader call before the mint."""
@@ -3066,6 +3148,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
         return None
 
     measurement["attempt_id"] = attempt_id
+    request_receipt = _write_measurement_request(
+        attempt_id, measurement, receipt_dir, receipt_stem)
     response = None
     for submission in range(2):
         try:
@@ -3085,7 +3169,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
             except Exception:
                 print(f"SUBMISSION STATUS UNKNOWN: {attempt_id}. The response was lost and the "
                       "attempt record could not be read; do not abort or change the manifest. "
-                      "Inspect client.attempt(attempt_id) before retrying the same payload.")
+                      "Inspect client.attempt(attempt_id) before retrying the same payload."
+                      + (f" Exact request: {request_receipt['path']}." if request_receipt else ""))
                 raise exc
             if state.get("state") == "completed":
                 response = {"attempt": state, "recovered_after_lost_response": True}
@@ -3094,7 +3179,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                 break
             if state.get("state") != "open" or submission == 1:
                 print(f"SUBMISSION NOT CONFIRMED: {attempt_id} is {state.get('state', 'unknown')}. "
-                      "The exact payload remains safe to inspect/retry only while it is open.")
+                      "The exact payload remains safe to inspect/retry only while it is open."
+                      + (f" Exact request: {request_receipt['path']}." if request_receipt else ""))
                 raise exc
             print(f"SUBMISSION RESPONSE LOST: {attempt_id} is still open; retrying the exact "
                   "manifest and attempt id once.")
@@ -3227,30 +3313,79 @@ def submit_measurement(measurement, slug):
     print("SUBMITTED:", resp.decode()[:400])
 
 
-def main(argv):
-    if "--selftest" in argv:
-        selftest(); return 0
-    if "--demo-manifest" in argv:
-        print(DEMO_NOTE); return 0
-    if len(argv) < 2:
-        print(__doc__.strip().split("\n\n")[0])
-        print("\nusage: panel.py manifest.json            (items inline)"
-              "\n       panel.py run runspec.json [--dry-run] [--submit]   (items fetched by URL, digest-pinned)"
-              "\n       panel.py --demo-manifest | --selftest")
-        return 0
+def _usage():
+    return (__doc__.strip().split("\n\n")[0]
+            + "\n\nusage: panel.py manifest.json            (items inline)"
+              "\n       panel.py run runspec.json [--dry-run | --submit]   "
+              "(items fetched by URL, digest-pinned)"
+              "\n       panel.py --demo-manifest | --selftest"
+              "\n       panel.py --help")
+
+
+def _parse_cli(argv):
+    """Parse the deliberately small CLI, refusing every ignored or contradictory token.
+
+    This is kept local rather than delegated to an application framework because panel.py is a
+    served standalone instrument. A typo in ``--dry-run`` must never fall through to a paid real
+    run, and a stray flag must never be silently absent from the experiment an operator thought
+    they requested.
+    """
+    if len(argv) == 1 or (len(argv) == 2 and argv[1] in ("-h", "--help")):
+        return {"command": "help"}
+    if argv[1] in ("--selftest", "--demo-manifest"):
+        if len(argv) != 2:
+            raise SystemExit("REFUSING: %s takes no additional arguments." % argv[1])
+        return {"command": argv[1][2:].replace("-", "_")}
     if argv[1] == "run":
         if len(argv) < 3:
             raise SystemExit("ainglish-panel run needs a runspec path (or - for stdin).")
-        spec = json.loads(sys.stdin.read() if argv[2] == "-" else open(argv[2]).read())
+        path, flags = argv[2], argv[3:]
+        allowed = {"--dry-run", "--submit"}
+        unknown = [value for value in flags if value not in allowed]
+        if unknown:
+            raise SystemExit(
+                "REFUSING: unknown panel run argument(s): %s. Accepted: --dry-run or --submit."
+                % ", ".join(unknown))
+        duplicates = sorted({value for value in flags if flags.count(value) > 1})
+        if duplicates:
+            raise SystemExit("REFUSING: duplicate panel run argument(s): %s."
+                             % ", ".join(duplicates))
+        if "--dry-run" in flags and "--submit" in flags:
+            raise SystemExit(
+                "REFUSING: --dry-run and --submit are mutually exclusive; choose the free "
+                "preview or the real filing run.")
+        return {"command": "run", "path": path,
+                "dry_run": "--dry-run" in flags, "submit": "--submit" in flags}
+    if argv[1].startswith("-") and argv[1] != "-":
+        raise SystemExit("REFUSING: unknown panel command or option %r. Use --help." % argv[1])
+    if len(argv) != 2:
+        raise SystemExit(
+            "REFUSING: inline-manifest mode accepts exactly one path (or - for stdin); "
+            "unexpected argument(s): %s" % ", ".join(argv[2:]))
+    return {"command": "manifest", "path": argv[1]}
+
+
+def main(argv):
+    parsed = _parse_cli(argv)
+    if parsed["command"] == "selftest":
+        selftest(); return 0
+    if parsed["command"] == "demo_manifest":
+        print(DEMO_NOTE); return 0
+    if parsed["command"] == "help":
+        print(_usage())
+        return 0
+    if parsed["command"] == "run":
+        path = parsed["path"]
+        spec = json.loads(sys.stdin.read() if path == "-" else open(path).read())
         items, digest = fetch_items(spec["items_url"], spec.get("items_sha256"))
         manifest = dict(spec, items=items, items_sha256=digest)
-        dry = "--dry-run" in argv
+        dry = parsed["dry_run"]
         if "attempt" in spec:
             _attempt_settings(spec["attempt"])
         if dry:
             manifest["_dry_run"] = True
         if "attempt" in spec and not dry:
-            if "--submit" not in argv:
+            if not parsed["submit"]:
                 raise SystemExit("REFUSING before reader spend: this runspec declares an attempt, "
                                  "so a real run needs --submit to close it atomically with its "
                                  "measurement. Use --dry-run for the zero-cost preview.")
@@ -3263,8 +3398,8 @@ def main(argv):
                 base_url=os.environ.get("AINGLISH_BASE", "https://ainglish.org"),
                 colony_base=os.environ.get("COLONY_BASE", "https://thecolony.ai"),
             )
-            receipt_dir = os.getcwd() if argv[2] == "-" else os.path.dirname(os.path.abspath(argv[2]))
-            receipt_stem = "stdin-runspec" if argv[2] == "-" else os.path.basename(argv[2])
+            receipt_dir = os.getcwd() if path == "-" else os.path.dirname(os.path.abspath(path))
+            receipt_stem = "stdin-runspec" if path == "-" else os.path.basename(path)
             return 0 if _run_preregistered_panel(
                 manifest, spec, ask, client, receipt_dir, receipt_stem) is not None else 1
         m = run_panel(manifest, ask_fn=dry_reader(items, manifest) if dry else ask)
@@ -3274,10 +3409,11 @@ def main(argv):
             print("\nDRY RUN complete: pipeline + payload verified, zero API calls. The payload above "
                   "is stamped DRY-RUN inside its own manifest — not submittable as evidence.")
             return 0
-        if "--submit" in argv:
+        if parsed["submit"]:
             submit_measurement(m, spec["slug"])
         return 0
-    manifest = json.loads(sys.stdin.read() if argv[1] == "-" else open(argv[1]).read())
+    path = parsed["path"]
+    manifest = json.loads(sys.stdin.read() if path == "-" else open(path).read())
     result = run_panel(manifest)
     return 1 if result is None or _is_panel_refusal(result) else 0
 

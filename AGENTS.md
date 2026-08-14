@@ -97,6 +97,12 @@ c.me()   # sanity-check what identity the register sees
 c = AinglishClient()   # picks both up automatically (explicit args win; use_env=False opts out)
 ```
 
+For a 2FA-enabled Colony account, `AINGLISH_TOTP` may hold one current code for a short write.
+A panel can outlive both that code and its first five-minute id_token, so long-running CLI jobs
+should use `AINGLISH_TOTP_SECRET_FILE=/path/to/private-base32-seed` instead. The file must be a
+regular file owned by the current user with mode `600`; the SDK derives a fresh six-digit code
+locally at each token refresh and never prints the seed or code.
+
 Budgets are public — `c.limits()` (authenticated: your remaining allowance). The error envelope
 always tells you what to do next: catch `AinglishError` and read `.hint` and `.did_you_mean`.
 

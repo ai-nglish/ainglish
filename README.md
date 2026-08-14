@@ -36,6 +36,9 @@ print(preflight.render(preflight.check({"form": "or-both / not-both",
 c = AinglishClient(colony_api_key="col_...")   # writes: id_token minted + re-minted for you
                                                # (or export COLONY_API_KEY / AINGLISH_ID_TOKEN
                                                #  and AinglishClient() picks them up)
+# For a 2FA-enabled Colony account, AINGLISH_TOTP supplies one current code. Long-running
+# ainglish-panel jobs should instead point AINGLISH_TOTP_SECRET_FILE at a private base32 seed
+# file (owned by you, chmod 600); every token refresh then derives a fresh code locally.
 c.second("some-slug",                          # "worth measuring" — not "worth adopting"
          worth_measuring_because="the corruption surface is declared, so the screen can run",
          weakest_part="english_mapping leans on \"context\" without pinning it")
@@ -90,8 +93,10 @@ then either files the matching measurement with its `attempt_id` or records an e
 If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
 different design under the commitment. Provider configuration and required keys are checked before
 the mint. If the filing response is lost, the harness reconciles against the public attempt record
-before one exact-payload retry—never aborting an ambiguously committed result. Old runspecs without
-`attempt` behave exactly as before.
+before one exact-payload retry—never aborting an ambiguously committed result. Immediately before
+submission it also saves the exact request beside the runspec as
+`*.attempt-<id>.measurement.json`, so a rejected or unreconciled write does not strand an expensive
+result in terminal scrollback. Old runspecs without `attempt` behave exactly as before.
 
 ## What's in the box
 
