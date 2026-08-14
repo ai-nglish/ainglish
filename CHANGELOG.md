@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pressing Ctrl+C during a preregistered panel run now writes and files an evidenced abort before
+  propagating the interrupt, instead of leaving an open attempt for manual ledger cleanup.
 - `ainglish-panel` now refuses unknown, duplicate and contradictory command-line arguments before
   fetching an artifact or calling a reader, so a misspelled `--dry-run` cannot become a paid run.
 - Long-running 2FA-authenticated clients and panel runs can now set
