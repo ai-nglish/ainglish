@@ -138,6 +138,20 @@ def manifest_commitment(manifest):
     return hashlib.sha256(_canonical_json(manifest).encode("utf-8")).hexdigest()
 
 
+def _validate_attempt_manifest(manifest):
+    """Refuse manifests which the measurement endpoint cannot later accept."""
+    if not isinstance(manifest, dict):
+        raise ValueError("manifest must be a JSON object")
+    models = manifest.get("models")
+    if not isinstance(models, (list, tuple)) or not models or len(models) > 16:
+        raise ValueError(
+            "manifest.models must be a non-empty list of at most 16 model identifiers")
+    if any(not isinstance(model, str) or not model.strip() or len(model.strip()) > 80
+           for model in models):
+        raise ValueError(
+            "manifest.models entries must be non-empty strings of at most 80 characters")
+
+
 def _origin(url):
     p = urllib.parse.urlsplit(url)
     port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
@@ -972,6 +986,10 @@ class AinglishClient:
         attempt by including that ``attempt_id`` in the measurement payload, or abort it with an
         evidence receipt via :meth:`abort_attempt` if a declared gate fires.
         """
+        # The attempt API receives only this manifest's commitment, so it cannot inspect the
+        # roster itself. Mirror the measurement endpoint's manifest.models bounds here before an
+        # invalid commitment creates an obligation which can never be completed.
+        _validate_attempt_manifest(manifest)
         body = {
             "proposal_revision": proposal_revision or slug,
             "manifest_commitment": manifest_commitment(manifest),
@@ -1614,16 +1632,33 @@ def selftest():
     probe.attempt("attempt/id")
     assert sent == {"path": "/api/v1/attempts/attempt%2Fid", "params": None, "auth": False}, sent
     sent.clear()
-    probe.mint_attempt("some slug", {"metric": "token_delta"}, "mean token change",
+    attempt_manifest = {"metric": "token_delta", "models": ["cl100k_base"]}
+    probe.mint_attempt("some slug", attempt_manifest, "mean token change",
                        ["both tokenizers load"], {"items": 8})
     assert sent["path"] == "/api/v1/proposals/some%20slug/attempts", sent
     assert sent["payload"] == {
         "proposal_revision": "some slug",
-        "manifest_commitment": manifest_commitment({"metric": "token_delta"}),
+        "manifest_commitment": manifest_commitment(attempt_manifest),
         "estimand": "mean token change",
         "admissibility_gates": ["both tokenizers load"],
         "planned_sample": {"items": 8},
     }, sent
+    # Refuse before POSTing when the eventual measurement endpoint would reject the roster. The
+    # 80-character boundary is accepted; one more character is not.
+    sent.clear()
+    probe.mint_attempt("some slug", {"metric": "token_delta", "models": ["m" * 80]},
+                       "mean token change", ["both tokenizers load"], {"items": 8})
+    assert sent["payload"]["manifest_commitment"] == manifest_commitment(
+        {"metric": "token_delta", "models": ["m" * 80]})
+    for bad_models in ([], [""], ["m" * 81], [1], ["m"] * 17):
+        sent.clear()
+        try:
+            probe.mint_attempt("some slug", {"metric": "token_delta", "models": bad_models},
+                               "mean token change", ["both tokenizers load"], {"items": 8})
+            raise AssertionError("invalid manifest.models must refuse before mint")
+        except ValueError as exc:
+            assert "manifest.models" in str(exc)
+        assert sent == {}, sent
     sent.clear()
     probe.abort_attempt("attempt/id", "calibration floor", "a" * 64,
                         successor_attempt_id="replacement")

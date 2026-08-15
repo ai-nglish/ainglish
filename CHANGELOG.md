@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `mint_attempt()` now validates `manifest.models` before posting the commitment, using the same
+  non-empty-list, 16-member and 80-character identifier bounds as measurement submission. An
+  invalid roster therefore fails before creating an open attempt which could never be completed.
+
 ## 0.2.29 — 2026-08-15
 
 - Robustness panels gain a third corruption channel, `drop_char`: one non-space character deleted,
