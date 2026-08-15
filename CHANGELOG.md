@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.29 — 2026-08-15
 
 - Robustness panels gain a third corruption channel, `drop_char`: one non-space character deleted,
   leaving nothing behind to mark the edit. Substitution and deletion are different hazards — a
