@@ -548,6 +548,16 @@ def corrupt(text, key, channel):
     same corrupted bytes. Channels:
       drop_token   — remove one whitespace-delimited token
       corrupt_char — replace one non-space character with 'x' ('z' if it was already 'x')
+      drop_char    — DELETE one non-space character, leaving no marker that anything was removed
+    drop_char exists because substitution and deletion are not the same hazard, and a construct
+    whose claim is about deletion cannot be tested by a channel that only substitutes. A
+    substituted character is loud — `~5` becomes `x5`, which is not a valid alternative reading of
+    anything. A deleted one can be SILENT: `~5` becomes `5`, a well-formed claim that means
+    something different, which is precisely the failure class approximation markers exist to
+    prevent. Measured on corrupt_char alone, such a construct reports a null it could not have
+    failed to report (reticuli, robustness row on approx(N), 2026-08-15: all 102 marker-bearing
+    cells at ceiling in both arms because no corruption in the channel's range could reach the
+    claim). A metric must be able to express the hazard the construct claims to fix.
     Length-truncation is deliberately NOT offered: the protocol requires the fractional-cut
     control alongside that channel, and a channel this harness cannot control for is a channel it
     must not run."""
@@ -573,7 +583,18 @@ def corrupt(text, key, channel):
             return text
         i = chars[h % len(chars)]
         return text[:i] + ("z" if text[i] == "x" else "x") + text[i + 1:]
-    raise SystemExit(f"unknown corruption channel {channel!r} — declare drop_token or corrupt_char")
+    if channel == "drop_char":
+        # One non-space character removed. Unlike corrupt_char this leaves no evidence of itself:
+        # the result may be a perfectly well-formed string carrying a different claim. Whitespace
+        # is excluded for the same reason drop_token deletes a span rather than re-joining — a
+        # deleted space merges two tokens, which is a second, different edit.
+        chars = [i for i, c in enumerate(text) if not c.isspace()]
+        if not chars:
+            return text  # a no-op — run_robustness REFUSES these before spending inference
+        i = chars[h % len(chars)]
+        return text[:i] + text[i + 1:]
+    raise SystemExit(
+        f"unknown corruption channel {channel!r} — declare drop_token, corrupt_char or drop_char")
 
 
 def _same_arm_calibration_ids(items):
@@ -719,7 +740,8 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
         print(f"REFUSING to run: duplicate item id(s) across real + calibration sets: {dupes}.")
         return None
     # Precompute EVERY corruption and refuse no-ops BEFORE inference: drop_token cannot corrupt a
-    # single-token arm, corrupt_char cannot corrupt whitespace-only text — the "corrupted" cell
+    # single-token arm, corrupt_char and drop_char cannot corrupt whitespace-only text — the
+    # "corrupted" cell
     # would be byte-identical to baseline, and a no-op cannot estimate degradation.
     corrupted_text = {}
     for item in items:
@@ -2062,6 +2084,23 @@ def selftest():
         "actual robustness thinnings must be compared with the emitted interval"
     assert corrupt("alpha beta gamma", "k1", "drop_token") == corrupt("alpha beta gamma", "k1", "drop_token")
     assert corrupt("ab", "k", "corrupt_char") in ("xb", "ax")
+    # drop_char: deterministic, removes exactly one non-space character, and — the property it
+    # exists for — can turn a marked claim into a well-formed DIFFERENT claim with nothing left
+    # behind to flag the edit, which corrupt_char structurally cannot do.
+    assert corrupt("alpha beta", "k9", "drop_char") == corrupt("alpha beta", "k9", "drop_char")
+    _dc = corrupt("approx(5) minutes", "k2", "drop_char")
+    assert len(_dc) == len("approx(5) minutes") - 1 and _dc != "approx(5) minutes"
+    assert sum(1 for c in _dc if not c.isspace()) == \
+        sum(1 for c in "approx(5) minutes" if not c.isspace()) - 1, "exactly one non-space char goes"
+    assert any(corrupt("~5 min", f"key{i}", "drop_char") == "5 min" for i in range(40)), \
+        "the silent-deletion hazard must be REACHABLE: some seed turns ~5 into a valid different claim"
+    assert all(corrupt("~5 min", f"key{i}", "corrupt_char") != "5 min" for i in range(40)), \
+        "and substitution must never reach it — that asymmetry is why drop_char exists"
+    try:
+        corrupt("alpha beta", "k", "no_such_channel")
+        raise AssertionError("an undeclared corruption channel must refuse, not silently no-op")
+    except SystemExit:
+        pass
     assert bootstrap_censored_mean([(-100.0, False), (100.0, False)], seed=3)[0] <= 0.0 \
         <= bootstrap_censored_mean([(-100.0, False), (100.0, False)], seed=3)[1]
 

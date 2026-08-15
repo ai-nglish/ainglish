@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Robustness panels gain a third corruption channel, `drop_char`: one non-space character deleted,
+  leaving nothing behind to mark the edit. Substitution and deletion are different hazards — a
+  substituted character is always loud, while a deleted one can turn a marked claim into a
+  well-formed *different* claim, which is the failure class approximation and hedge markers exist
+  to prevent. A construct whose claim is about silent deletion, measured only on `corrupt_char`,
+  reports a null it could not have failed to report.
+
 - Comprehension-panel payloads now send the exact scored-cell `accuracy_resolution` first-class
   beside `arms`, while retaining the identical committed manifest copy for compatibility. This
   lets the register validate and serve the attainable delta grid without requiring every evidence
