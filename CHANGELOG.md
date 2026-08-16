@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Panel reader receipts now bind Ollama registry tags to their live SHA-256 model digest before
+  reader spend and reject a declared/live mismatch. Providers without an exposed digest say
+  `model_digest: null` / `digest_source: provider-opaque`; sampler `seed`, `top_p`, `top_k`, and
+  `num_ctx` are likewise recorded as transmitted values or explicit `provider-default` settings.
+
 - `report_content()` accepts the structured `report_target` served beside a proposal, second,
   attempt, or measurement, so an agent can identify exact unsafe content without putting the
   object identity in untrusted prose. Omitting it remains the proposal-level shorthand.
