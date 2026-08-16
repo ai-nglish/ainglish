@@ -63,6 +63,8 @@ except Exception:  # single-file use
 DEFAULT_BASE = "https://ainglish.org"
 AUDIENCE = "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j"  # ainglish.org's Colony client_id
 USER_AGENT = "ainglish-python/%s" % _V
+MAX_MANIFEST_BYTES = 20_000
+MAX_ATTEMPT_ESTIMAND_CHARS = 2_000
 
 
 def _canonical_json(value):
@@ -139,7 +141,7 @@ def manifest_commitment(manifest):
 
 
 def _validate_attempt_manifest(manifest):
-    """Refuse manifests which the measurement endpoint cannot later accept."""
+    """Return canonical bytes, refusing manifests the measurement endpoint cannot accept."""
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be a JSON object")
     models = manifest.get("models")
@@ -150,6 +152,12 @@ def _validate_attempt_manifest(manifest):
            for model in models):
         raise ValueError(
             "manifest.models entries must be non-empty strings of at most 80 characters")
+    canonical = _canonical_json(manifest).encode("utf-8")
+    if len(canonical) > MAX_MANIFEST_BYTES:
+        raise ValueError(
+            "manifest is too large (20 KB max); reference bulky test sets by immutable URL "
+            "and sha256 instead of inlining them")
+    return canonical
 
 
 def _origin(url):
@@ -997,13 +1005,17 @@ class AinglishClient:
         attempt by including that ``attempt_id`` in the measurement payload, or abort it with an
         evidence receipt via :meth:`abort_attempt` if a declared gate fires.
         """
-        # The attempt API receives only this manifest's commitment, so it cannot inspect the
-        # roster itself. Mirror the measurement endpoint's manifest.models bounds here before an
-        # invalid commitment creates an obligation which can never be completed.
-        _validate_attempt_manifest(manifest)
+        # The attempt API currently receives only this manifest's commitment, so it cannot inspect
+        # the roster or byte length itself. Mirror the measurement endpoint's bounds here before
+        # an invalid commitment creates an obligation which can never be completed.
+        canonical = _validate_attempt_manifest(manifest)
+        if not isinstance(estimand, str) or not estimand.strip():
+            raise ValueError("estimand must be a non-empty string")
+        if len(estimand.strip()) > MAX_ATTEMPT_ESTIMAND_CHARS:
+            raise ValueError("estimand must be at most 2000 characters")
         body = {
             "proposal_revision": proposal_revision or slug,
-            "manifest_commitment": manifest_commitment(manifest),
+            "manifest_commitment": hashlib.sha256(canonical).hexdigest(),
             "estimand": estimand,
             "admissibility_gates": admissibility_gates,
             "planned_sample": planned_sample,
@@ -1687,6 +1699,30 @@ def selftest():
             raise AssertionError("invalid manifest.models must refuse before mint")
         except ValueError as exc:
             assert "manifest.models" in str(exc)
+        assert sent == {}, sent
+    # The exact server cap is measured over canonical UTF-8 bytes, not Python characters or
+    # pretty-printed JSON. The boundary remains mintable; one extra canonical byte refuses before
+    # the network call, while the experiment can still move a bulky set behind URL + sha256.
+    manifest_shell = {"models": ["m"], "test_set": ""}
+    shell_bytes = len(_canonical_json(manifest_shell).encode("utf-8"))
+    at_cap = {"models": ["m"], "test_set": "x" * (MAX_MANIFEST_BYTES - shell_bytes)}
+    assert len(_canonical_json(at_cap).encode("utf-8")) == MAX_MANIFEST_BYTES
+    sent.clear()
+    probe.mint_attempt("some slug", at_cap, "x" * MAX_ATTEMPT_ESTIMAND_CHARS,
+                       ["all items load"], {"items": 1})
+    assert sent["payload"]["manifest_commitment"] == manifest_commitment(at_cap)
+    for bad_manifest, bad_estimand, expected in (
+            ({"models": ["m"], "test_set": at_cap["test_set"] + "x"}, "ok", "20 KB"),
+            (attempt_manifest, "x" * (MAX_ATTEMPT_ESTIMAND_CHARS + 1), "2000"),
+            (attempt_manifest, "   ", "non-empty"),
+            (attempt_manifest, 123, "non-empty")):
+        sent.clear()
+        try:
+            probe.mint_attempt("some slug", bad_manifest, bad_estimand,
+                               ["all items load"], {"items": 1})
+            raise AssertionError("unfileable attempt input must refuse before mint")
+        except ValueError as exc:
+            assert expected in str(exc), (expected, str(exc))
         assert sent == {}, sent
     sent.clear()
     probe.abort_attempt("attempt/id", "calibration floor", "a" * 64,
