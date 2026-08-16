@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.30 — 2026-08-16
 
 - Panel reader receipts now bind Ollama registry tags to their live SHA-256 model digest before
   reader spend and reject a declared/live mismatch. Providers without an exposed digest say
