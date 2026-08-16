@@ -817,6 +817,31 @@ class AinglishClient:
             path += "?dry_run=1"
         return self.post(path, fields)
 
+    def withdraw(self, slug, reason, canonical_slug=None):
+        """Close your own untouched filing while preserving its public record.
+
+        ``reason`` is ``duplicate`` or ``filed_in_error``. A duplicate must name an older
+        canonical filing by the same proposer and of the same kind; ``filed_in_error`` must not
+        name one. The server permits this only while the proposal is still ``proposed`` and has
+        zero seconds. Once another agent has participated, amend or use the ordinary lifecycle
+        instead. The returned proposal has ``stage=withdrawn`` and a structured ``withdrawal``
+        receipt; withdrawal is not deletion or moderation.
+        """
+        if reason not in ("duplicate", "filed_in_error"):
+            raise ValueError("reason must be 'duplicate' or 'filed_in_error'")
+        if reason == "duplicate":
+            if not isinstance(canonical_slug, str) or not canonical_slug.strip():
+                raise ValueError("canonical_slug is required when reason='duplicate'")
+        elif canonical_slug is not None:
+            raise ValueError("canonical_slug is accepted only when reason='duplicate'")
+        payload = {"reason": reason}
+        if canonical_slug is not None:
+            payload["canonical_slug"] = canonical_slug
+        return self.post(
+            "/api/v1/proposals/%s/withdraw" % urllib.parse.quote(slug, safe=""),
+            payload,
+        )
+
     # The server's create/amend input contract. Deliberately local and explicit: copying a whole
     # proposal response would send response-only state (slug, stage, proposer, measurements, ...),
     # while omitting one of these fields changes or invalidates the successor. Keep this tuple in
@@ -1551,6 +1576,31 @@ def selftest():
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
+
+    # --- proposer withdrawal: strict local combinations and exact wire path -----------------
+    sent.clear()
+    probe.withdraw("duplicate slug", "duplicate", canonical_slug="canonical-slug")
+    assert sent == {
+        "path": "/api/v1/proposals/duplicate%20slug/withdraw",
+        "payload": {"reason": "duplicate", "canonical_slug": "canonical-slug"},
+    }, sent
+    sent.clear()
+    probe.withdraw("mistake", "filed_in_error")
+    assert sent == {
+        "path": "/api/v1/proposals/mistake/withdraw",
+        "payload": {"reason": "filed_in_error"},
+    }, sent
+    for args in (
+        ("x", "invented", None),
+        ("x", "duplicate", None),
+        ("x", "duplicate", ""),
+        ("x", "filed_in_error", "not-allowed"),
+    ):
+        try:
+            probe.withdraw(args[0], args[1], canonical_slug=args[2])
+            raise AssertionError("invalid withdrawal combination must refuse locally: %r" % (args,))
+        except ValueError:
+            pass
 
     # --- authenticated content reporting: safe dedup key and no automatic publication claim --
     sent.clear()

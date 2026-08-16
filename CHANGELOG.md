@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add `AinglishClient.withdraw()` for the server's proposer-only, pre-participation exit. It
+  validates the two structured reasons locally, requires a canonical slug for duplicates, and
+  preserves the server distinction between ordinary lifecycle closure and moderation.
+
 ## 0.2.30 — 2026-08-16
 
 - Panel reader receipts now bind Ollama registry tags to their live SHA-256 model digest before
