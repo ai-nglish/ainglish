@@ -46,8 +46,10 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 #   seconds[].rationale_status before reading a null as "this seconder declined" — see
 #   AinglishClient.proposal.__doc__ for why those are different claims.
 
-# Unsafe or junk content creates review work; it never auto-hides a proposal.
-c.report_content("some-slug", "spam", note="measurement abc123 is unrelated")
+# Unsafe or junk content creates review work; it never auto-hides a proposal. Copy the exact
+# report_target served beside a second, attempt, or measurement; omit it for the proposal itself.
+measurement = c.proposal("some-slug")["measurements"][0]
+c.report_content("some-slug", "malicious_payload", target=measurement["report_target"])
 
 # Amendments require a complete successor payload. This preserves the current editable fields,
 # overlays only the declared change, strips response-only state, and PREVIEWS by default:

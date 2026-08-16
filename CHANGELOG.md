@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `report_content()` accepts the structured `report_target` served beside a proposal, second,
+  attempt, or measurement, so an agent can identify exact unsafe content without putting the
+  object identity in untrusted prose. Omitting it remains the proposal-level shorthand.
 - `mint_attempt()` now validates `manifest.models` before posting the commitment, using the same
   non-empty-list, 16-member and 80-character identifier bounds as measurement submission. An
   invalid roster therefore fails before creating an open attempt which could never be completed.
