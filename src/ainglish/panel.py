@@ -29,7 +29,10 @@ Adapters: a panel entry is {"name", "provider", "model", "precision"?} — provi
 anthropic (native /v1/messages), openrouter, groq, ollama — or set {"base_url", "api", "api_key_env"}
 explicitly for anything else OpenAI-compatible (vllm, llama.cpp, any gateway). Sampling settings
 are provider-aware and ride in the receipt: OpenAI-compatible readers default to temperature=0;
-native Anthropic omits the deprecated parameter unless the manifest explicitly supplies one. Pure
+native Anthropic omits the deprecated parameter unless the manifest explicitly supplies one.
+Ollama readers are bound to the live model digest before spend; providers that expose no weight
+digest say so explicitly. Seed/top-p/top-k/context settings are either transmitted and recorded or
+recorded as ``provider-default`` rather than disappearing into an unstated default. Pure
 stdlib. A panelist whose key env is unset refuses at startup rather than silently 401-ing mid-run.
 "precision" labels flow into per_member results, so a panel disagreement is a diagnosis (WHICH
 precision diverged), and into the manifest spec (name@precision) so replications re-run the same pool.
@@ -218,6 +221,7 @@ PRESETS = {
 # visible answer at 64 and completed at 512. Default to enough headroom for current reasoning
 # readers; an operator can lower it per entry, and the effective value rides in the receipt.
 TRANSPORT_BOUNDS = {"max_tokens": 1024}
+SAMPLER_KEYS = ("seed", "top_p", "top_k", "num_ctx")
 # One least-privilege constant feeds both the Colony SDK and stdlib exchange paths so they cannot
 # drift. Ainglish has no reputation gate, so write tokens need identity and profile only.
 AINGLISH_OIDC_SCOPE = "openid profile"
@@ -269,9 +273,163 @@ def temperature_for(endpoint):
     return value
 
 
+def sampler_settings(endpoint):
+    """Effective non-temperature sampler settings, including typed provider defaults.
+
+    This harness speaks OpenAI-compatible chat or native Anthropic. Ollama's OpenAI-compatible
+    endpoint officially accepts ``seed`` and ``top_p`` but not ``top_k`` or ``num_ctx``; the latter
+    must be baked into a Modelfile/native provider configuration and are therefore recorded as
+    provider defaults. A declared value that cannot reach the selected wire refuses instead of
+    becoming receipt theatre.
+    """
+    provider = endpoint.get("provider", "")
+    api = endpoint.get("api", PRESETS.get(provider, {}).get("api", "openai"))
+    out = {key: "provider-default" for key in SAMPLER_KEYS}
+
+    if "seed" in endpoint:
+        value = endpoint["seed"]
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: seed must be an integer.")
+        if api != "openai":
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: seed is not transmitted "
+                             "by the native Anthropic adapter; omit it or use a transport that "
+                             "supports a declared seed.")
+        out["seed"] = value
+
+    if "top_p" in endpoint:
+        value = endpoint["top_p"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: top_p must be a number "
+                             "from 0 through 1.")
+        out["top_p"] = value
+
+    if "top_k" in endpoint:
+        value = endpoint["top_k"]
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: top_k must be a positive integer.")
+        if api != "anthropic":
+            detail = ("Ollama's OpenAI-compatible chat endpoint does not accept top_k; bake it "
+                      "into a digest-pinned Modelfile") if provider == "ollama" else (
+                          "the OpenAI-compatible adapter does not portably transmit top_k")
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: {detail}, or omit it so "
+                             "the receipt records provider-default.")
+        out["top_k"] = value
+
+    if "num_ctx" in endpoint:
+        value = endpoint["num_ctx"]
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: num_ctx must be a positive integer.")
+        detail = ("Ollama's OpenAI-compatible API has no per-request num_ctx field; create and "
+                  "digest-pin a Modelfile with PARAMETER num_ctx") if provider == "ollama" else (
+                      "the selected adapter does not portably transmit num_ctx")
+        raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: {detail}, or omit it so the "
+                         "receipt records provider-default.")
+    return out
+
+
+def request_sampling(endpoint):
+    """Only settings that the selected adapter actually places on the wire."""
+    settings = sampler_settings(endpoint)
+    sent = {key: value for key, value in settings.items() if value != "provider-default"}
+    temperature = temperature_for(endpoint)
+    if temperature is not None:
+        sent["temperature"] = temperature
+    return sent
+
+
 def transport_settings(endpoint):
     """Every answer-affecting transport setting, in the shape stamped into the manifest."""
-    return {**bounds_for(endpoint), "temperature": temperature_for(endpoint)}
+    return {**bounds_for(endpoint), "temperature": temperature_for(endpoint),
+            **sampler_settings(endpoint)}
+
+
+def _normal_model_digest(value, label="model_digest"):
+    """Normalize a SHA-256 model edition to one unambiguous wire spelling."""
+    if not isinstance(value, str):
+        raise SystemExit(f"{label} must be a sha256:<64 lowercase-hex> string.")
+    digest = value.strip().lower()
+    if digest.startswith("sha256:"):
+        digest = digest[7:]
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        raise SystemExit(f"{label} must be a sha256:<64 lowercase-hex> string.")
+    return "sha256:" + digest
+
+
+def _ollama_native_base(endpoint):
+    """Map an Ollama OpenAI-compatible /v1 base to the same daemon's native API root."""
+    resolved = resolve(endpoint)
+    parts = urllib.parse.urlsplit(str(resolved["base_url"]))
+    path = parts.path.rstrip("/")
+    if path.endswith("/v1"):
+        path = path[:-3]
+    host = parts.hostname or ""
+    if ":" in host and not host.startswith("["):
+        host = "[" + host + "]"
+    if parts.port is not None:
+        host += ":" + str(parts.port)
+    return urllib.parse.urlunsplit((parts.scheme, host, path, "", "")).rstrip("/")
+
+
+def ollama_model_digest(endpoint, fetch_fn=_fetch):
+    """Resolve the live registry tag through Ollama's documented /api/tags digest field."""
+    resolved = resolve(endpoint)
+    base = _ollama_native_base(endpoint)
+    key_env = resolved.get("api_key_env") or ""
+    key = os.environ.get(key_env, "") if key_env else ""
+    headers = {"User-Agent": USER_AGENT}
+    if key:
+        _require_secure_credential_url(base, f"panel entry {resolved.get('name', '?')!r} digest lookup")
+        headers["Authorization"] = f"Bearer {key}"
+    req = urllib.request.Request(base + "/api/tags", headers=headers)
+    try:
+        payload = fetch_fn(req)
+    except Exception as exc:
+        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: could not resolve Ollama "
+                         f"model digest before reader spend ({type(exc).__name__}: {exc}).") from None
+    models = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(models, list):
+        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: Ollama /api/tags returned no "
+                         "models array; refusing an unbound reader instrument.")
+    wanted = str(resolved.get("model") or "")
+    candidates = []
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        names = {str(model.get(key) or "") for key in ("name", "model")}
+        if wanted in names or (":" not in wanted and wanted + ":latest" in names):
+            candidates.append(model)
+    if len(candidates) != 1:
+        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: Ollama /api/tags matched "
+                         f"{len(candidates)} models for {wanted!r}; pull/name the exact model before spend.")
+    return _normal_model_digest(candidates[0].get("digest"), "Ollama model digest")
+
+
+def prepare_reader_instruments(manifest, fetch_fn=_fetch):
+    """Bind every reader to a typed weight edition before any model call.
+
+    Ollama exposes a content digest, so absence or mismatch refuses. Hosted/custom providers that
+    expose no digest through this adapter carry an explicit null/provider-opaque receipt and may
+    not smuggle an unverifiable operator-declared digest into the manifest.
+    """
+    for endpoint in manifest.get("panel", []):
+        provider = resolve(endpoint).get("provider", "")
+        declared = endpoint.get("model_digest")
+        if provider == "ollama":
+            live = ollama_model_digest(endpoint, fetch_fn=fetch_fn)
+            if declared is not None and _normal_model_digest(declared) != live:
+                raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: declared model_digest "
+                                 f"{_normal_model_digest(declared)} does not match live Ollama "
+                                 f"digest {live}. Refusing before reader spend.")
+            endpoint["model_digest"] = live
+            endpoint["digest_source"] = "ollama:/api/tags"
+        else:
+            if declared is not None:
+                raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: provider {provider or 'custom'!r} "
+                                 "does not expose a digest through this adapter; remove the unverifiable "
+                                 "model_digest or add a provider-specific verifier.")
+            endpoint["model_digest"] = None
+            endpoint["digest_source"] = "provider-opaque"
+    return manifest
 
 
 def reader_receipt(endpoint):
@@ -294,6 +452,9 @@ def reader_receipt(endpoint):
         if url_parts.port is not None:
             host += ":" + str(url_parts.port)
         out["base_url"] = urllib.parse.urlunsplit((url_parts.scheme, host, url_parts.path, "", ""))
+    out["model_digest"] = resolved.get("model_digest")
+    out["digest_source"] = resolved.get("digest_source") or (
+        "unresolved-dry-run" if resolved.get("provider") == "ollama" else "provider-opaque")
     out.update(transport_settings(endpoint))
     return out
 
@@ -317,8 +478,7 @@ def chat(endpoint, prompt):
         except ValueError as exc:
             raise SystemExit(f"REFUSING: {exc}") from None
     bounds = bounds_for(endpoint)
-    temperature = temperature_for(endpoint)
-    sampling = {} if temperature is None else {"temperature": temperature}
+    sampling = request_sampling(endpoint)
     if ep.get("api", "openai") == "anthropic":
         body = {"model": ep["model"], **sampling, **bounds,
                 "messages": [{"role": "user", "content": prompt}]}
@@ -1096,6 +1256,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
             return None
         try:
             _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
+            if ask_fn is ask and not manifest.get("_dry_run"):
+                prepare_reader_instruments(manifest)
         except SystemExit as exc:
             print(exc)
             return None
@@ -1161,6 +1323,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
 
     try:
         _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
+        if ask_fn is ask and not manifest.get("_dry_run"):
+            prepare_reader_instruments(manifest)
     except SystemExit as exc:
         print(exc)
         return None
@@ -1797,6 +1961,41 @@ def selftest():
     except SystemExit:
         pass
 
+    # A mutable Ollama tag is not a model edition. Resolve it through the documented /api/tags
+    # digest before spend, stamp the receipt, and fail closed when a declared edition moved.
+    digest_hex = "a" * 64
+    digest_requests = []
+
+    def fake_tags(req):
+        digest_requests.append(req.full_url)
+        return {"models": [{"name": "m:latest", "model": "m:latest", "digest": digest_hex}]}
+
+    bound = {"panel": [{"name": "local", "provider": "ollama", "model": "m"}]}
+    prepare_reader_instruments(bound, fetch_fn=fake_tags)
+    assert digest_requests == ["http://localhost:11434/api/tags"]
+    assert bound["panel"][0]["model_digest"] == "sha256:" + digest_hex
+    assert bound["panel"][0]["digest_source"] == "ollama:/api/tags"
+    bound_receipt = reader_receipt(bound["panel"][0])
+    assert bound_receipt["model_digest"] == "sha256:" + digest_hex
+    try:
+        prepare_reader_instruments(
+            {"panel": [{"name": "moved", "provider": "ollama", "model": "m",
+                        "model_digest": "sha256:" + "b" * 64}]}, fetch_fn=fake_tags)
+        raise AssertionError("a declared/live Ollama digest mismatch reached reader spend")
+    except SystemExit as exc:
+        assert "does not match live Ollama digest" in str(exc)
+    opaque = {"panel": [{"name": "hosted", "provider": "openrouter", "model": "vendor/model"}]}
+    prepare_reader_instruments(opaque, fetch_fn=lambda _req: {})
+    assert reader_receipt(opaque["panel"][0])["model_digest"] is None
+    assert reader_receipt(opaque["panel"][0])["digest_source"] == "provider-opaque"
+    try:
+        prepare_reader_instruments(
+            {"panel": [{"name": "opaque-claim", "provider": "openrouter", "model": "vendor/model",
+                        "model_digest": "sha256:" + digest_hex}]})
+        raise AssertionError("an unverifiable hosted model digest entered the receipt")
+    except SystemExit as exc:
+        assert "does not expose a digest" in str(exc)
+
     # urllib's default handler forwards Authorization/x-api-key across origins. The request must
     # be stopped before a redirect can replay a provider key (or a credential in a 307 body).
     assert _origin("https://api.openai.com/v1") == _origin("https://API.OPENAI.COM:443/v2")
@@ -1872,6 +2071,10 @@ def selftest():
             "native Anthropic must omit the parameter current models reject as deprecated"
         assert reader_receipt({"name": "a", "provider": "anthropic", "model": "m"})["temperature"] is None, \
             "omission is still explicit in the re-runnable reader receipt"
+        default_sampler = reader_receipt({"name": "o", "provider": "ollama", "model": "m"})
+        assert {key: default_sampler[key] for key in SAMPLER_KEYS} == {
+            key: "provider-default" for key in SAMPLER_KEYS}, \
+            "every undeclared sampler default must be typed rather than silently omitted"
 
         _open = _capture(_ok_anthropic)
         chat({"name": "a", "provider": "anthropic", "model": "m", "temperature": 0.4}, "hi")
@@ -1886,6 +2089,26 @@ def selftest():
         _open = _capture(_ok_openai)
         chat({"name": "o", "provider": "ollama", "model": "m", "max_tokens": 4096}, "hi")
         assert sent["body"]["max_tokens"] == 4096, "a declared bound must override the default"
+
+        _open = _capture(_ok_openai)
+        chat({"name": "o", "provider": "ollama", "model": "m", "seed": 17,
+              "top_p": 0.85}, "hi")
+        assert sent["body"]["seed"] == 17 and sent["body"]["top_p"] == 0.85, \
+            "declared portable sampler settings must reach the OpenAI-compatible wire"
+        explicit_receipt = reader_receipt(
+            {"name": "o", "provider": "ollama", "model": "m", "seed": 17, "top_p": 0.85})
+        assert explicit_receipt["seed"] == 17 and explicit_receipt["top_p"] == 0.85
+
+        _open = _capture(_ok_anthropic)
+        chat({"name": "a", "provider": "anthropic", "model": "m", "top_k": 32}, "hi")
+        assert sent["body"]["top_k"] == 32, "native Anthropic top_k must reach the wire"
+
+        for unsupported in ({"top_k": 40}, {"num_ctx": 8192}):
+            try:
+                sampler_settings({"name": "o", "provider": "ollama", "model": "m", **unsupported})
+                raise AssertionError(f"unsupported Ollama OpenAI setting was silently recorded: {unsupported}")
+            except SystemExit as exc:
+                assert "provider-default" in str(exc) or "Modelfile" in str(exc)
 
         # Truncation must never be graded — on either transport. The fragment here CONTAINS a valid
         # option, so before the check it graded as a CORRECT answer: a transport fault could raise
@@ -2993,6 +3216,7 @@ def _validate_real_reader_configuration(manifest, ask_fn, context="attempt mint"
             resolved = resolve(endpoint)
             bounds = bounds_for(endpoint)
             temperature_for(endpoint)
+            sampler_settings(endpoint)
         except SystemExit as exc:
             raise SystemExit(f"REFUSING before {context}: {exc}") from None
         name = resolved.get("name", "?")
@@ -3131,6 +3355,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
 
     settings = _attempt_settings(spec["attempt"])
     _validate_real_reader_configuration(manifest, ask_fn)
+    if ask_fn is ask:
+        prepare_reader_instruments(manifest)
     planned = _planned_panel_manifest(manifest)
     opened = client.mint_attempt(
         spec["slug"], planned,

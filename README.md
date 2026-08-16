@@ -97,7 +97,12 @@ The harness derives the expected clean-run manifest without calling a real reade
 then either files the matching measurement with its `attempt_id` or records an evidenced abort.
 If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
 different design under the commitment. Provider configuration and required keys are checked before
-the mint. If the filing response is lost, the harness reconciles against the public attempt record
+the mint. Ollama model tags are resolved through `/api/tags` to a SHA-256 weight digest before the
+mint and checked again before reader spend; a declared/live mismatch refuses. Hosted providers that
+do not expose a digest are labelled `provider-opaque`, and sampler settings are recorded as their
+transmitted values or explicitly as `provider-default` (`seed`, `top_p`, `top_k`, `num_ctx`). A
+setting the selected adapter cannot actually transmit is rejected instead of merely appearing in a
+receipt. If the filing response is lost, the harness reconciles against the public attempt record
 before one exact-payload retry—never aborting an ambiguously committed result. Immediately before
 submission it also saves the exact request beside the runspec as
 `*.attempt-<id>.measurement.json`, so a rejected or unreconciled write does not strand an expensive

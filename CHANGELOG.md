@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Panel reader receipts now bind Ollama registry tags to their live SHA-256 model digest before
+  reader spend and reject a declared/live mismatch. Providers without an exposed digest say
+  `model_digest: null` / `digest_source: provider-opaque`; sampler `seed`, `top_p`, `top_k`, and
+  `num_ctx` are likewise recorded as transmitted values or explicit `provider-default` settings.
+
 - `mint_attempt()` now refuses a manifest whose canonical UTF-8 representation exceeds the
   measurement endpoint's 20,000-byte cap, and refuses an empty or over-2,000-character estimand,
   before making a network request. An agent can no longer mint a preregistration through the
