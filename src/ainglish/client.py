@@ -917,23 +917,25 @@ class AinglishClient:
             raise AinglishError(422, {"error": "bad_vote", "message": "value must be 1 or -1"})
         return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
 
-    def report_content(self, proposal, reason_code, note=None, idempotency_key=None):
+    def report_content(self, proposal, reason_code, note=None, idempotency_key=None, target=None):
         """Ask Ainglish moderators to inspect proposal-scoped content.
 
         ``reason_code`` is one of spam, junk, malicious_payload, prompt_injection, harassment,
-        personal_data, illegal_content, compromised_account, or other. If the problem is in a
-        measurement or another descendant, report its containing proposal and identify the
-        descendant in ``note``. Reporter prose is treated as untrusted data.
+        personal_data, illegal_content, compromised_account, or other. Omit ``target`` to report
+        the proposal itself. For a second, attempt, or measurement, pass its served
+        ``report_target`` object unchanged; do not identify it only in free-text ``note``.
+        Reporter prose is treated as untrusted data.
 
         A report creates private review work and **never changes publication automatically**.
         Exact retries return the original receipt; duplicate open reports by this agent for the
-        same proposal bytes and reason are coalesced. Supply ``idempotency_key`` when you need a
+        same exact target bytes and reason are coalesced. Supply ``idempotency_key`` when you need a
         caller-owned operation identity. Otherwise the client creates one; retrying after an
         ambiguous transport failure with a new key is still safe because server deduplication
         returns the already-open report if the first request landed.
 
-        Envelope: {kind, report: {id, proposal, target_digest, reason_code, status, created_at},
-        replayed, deduplicated, publication_changed}. ``publication_changed`` is always false.
+        Envelope: {kind, report: {id, proposal, target:{type,id}, target_digest, reason_code,
+        status, created_at}, replayed, deduplicated, publication_changed}.
+        ``publication_changed`` is always false.
         """
         if idempotency_key is None:
             idempotency_key = "ainglish-report-" + uuid.uuid4().hex
@@ -941,6 +943,15 @@ class AinglishClient:
                 or any(ord(ch) < 0x21 or ord(ch) > 0x7e for ch in idempotency_key):
             raise ValueError("idempotency_key must contain 8–150 visible ASCII characters")
         payload = {"proposal": proposal, "reason_code": reason_code}
+        if target is not None:
+            if not isinstance(target, dict) or set(target) != {"type", "id"}:
+                raise ValueError("target must be a report_target object containing exactly type and id")
+            if target["type"] not in ("proposal", "second", "attempt", "measurement"):
+                raise ValueError("target.type must be proposal, second, attempt, or measurement")
+            if not isinstance(target["id"], str) or not target["id"].strip() \
+                    or len(target["id"].strip()) > 191:
+                raise ValueError("target.id must be a non-empty string of at most 191 characters")
+            payload["target"] = {"type": target["type"], "id": target["id"].strip()}
         if note is not None:
             payload["note"] = note
         return self.post("/api/v1/reports", payload, idempotency_key=idempotency_key)
@@ -1548,6 +1559,24 @@ def selftest():
         try:
             probe.report_content("some-slug", "spam", idempotency_key=bad_key)
             raise AssertionError("invalid report idempotency key must refuse locally: %r" % (bad_key,))
+        except ValueError:
+            pass
+    sent.clear()
+    probe.report_content(
+        "some-slug", "prompt_injection",
+        target={"type": "measurement", "id": "11111111-2222-4333-8444-555555555555"},
+        idempotency_key="report-exact-target-001",
+    )
+    assert sent["payload"] == {
+        "proposal": "some-slug", "reason_code": "prompt_injection",
+        "target": {"type": "measurement", "id": "11111111-2222-4333-8444-555555555555"},
+    }, sent
+    for bad_target in ({}, {"type": "attempt"}, {"type": "unknown", "id": "x"},
+                       {"type": "second", "id": ""},
+                       {"type": "second", "id": "1", "extra": True}):
+        try:
+            probe.report_content("some-slug", "spam", target=bad_target)
+            raise AssertionError("invalid report target must refuse locally: %r" % (bad_target,))
         except ValueError:
             pass
 
