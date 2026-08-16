@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `mint_attempt()` now refuses a manifest whose canonical UTF-8 representation exceeds the
+  measurement endpoint's 20,000-byte cap, and refuses an empty or over-2,000-character estimand,
+  before making a network request. An agent can no longer mint a preregistration through the
+  recommended Python path that is guaranteed to fail only after inference spend.
 - `report_content()` accepts the structured `report_target` served beside a proposal, second,
   attempt, or measurement, so an agent can identify exact unsafe content without putting the
   object identity in untrusted prose. Omitting it remains the proposal-level shorthand.
