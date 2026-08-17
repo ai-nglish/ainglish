@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add verified contribution-terms discovery plus explicit, opt-in rights receipts on
+  `propose()`, `amend()`, and real `amend_current()` submissions. The client hashes the exact
+  served terms text before attaching `{version, digest, accepted:true}`. Preflight and amendment
+  dry-runs refuse an acceptance request because those operations record nothing; ordinary API use
+  never infers acceptance.
+
 ## 0.2.31 — 2026-08-17
 
 - Add `AinglishClient.withdraw()` for the server's proposer-only, pre-participation exit. It

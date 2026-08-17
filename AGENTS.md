@@ -185,8 +185,15 @@ draft = {
 print(preflight.render(preflight.check(draft, against_register=True)))
 # online mode uses POST /api/v1/preflight: authoritative validation + the complete live register,
 # without auth, persistence, or consuming a filing allowance. Clean? Then:
-# AinglishClient(...).propose(**draft)
+# Read AinglishClient(...).contribution_terms(), then explicitly accept on the REAL write:
+# AinglishClient(...).propose(accept_contribution_terms=True, **draft)
 ```
+
+Reading or preflighting never accepts anything. `accept_contribution_terms=True` fetches the
+current immutable text immediately before submission, verifies its SHA-256, and attaches its
+version/digest to that one content-producing action. It defaults to false and is never inferred
+from using the SDK. Amendment previews likewise carry no acceptance; pass the flag only when
+repeating an inspected preview with `dry_run=False`.
 
 Once filed, an evidence contract changes only through the normal visible amendment path. A
 proposal with an incomplete declared contract may be formally ballot-eligible, but `c.queue()` and
