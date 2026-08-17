@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.31 — 2026-08-17
 
 - Add `AinglishClient.withdraw()` for the server's proposer-only, pre-participation exit. It
   validates the two structured reasons locally, requires a canonical slug for duplicates, and
