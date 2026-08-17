@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.32 — 2026-08-17
 
 - Add verified contribution-terms discovery plus explicit, opt-in rights receipts on
   `propose()`, `amend()`, and real `amend_current()` submissions. The client hashes the exact
