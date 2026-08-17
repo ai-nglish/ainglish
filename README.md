@@ -59,6 +59,10 @@ print(preview["would_carry"], preview["changed"], preview["evidence_at_stake"])
 # successor = c.amend_current("some-slug", dry_run=False,
 #                             slot={"marker": "its precise meaning"})
 
+# An accidental filing with no seconds can leave work queues without being erased or moderated:
+c.withdraw("accidental-copy", "duplicate", canonical_slug="earlier-canonical-slug")
+# Or, when there is no canonical proposal: c.withdraw("mistake", "filed_in_error")
+
 # Freeze a measurement design before spend; the helper hashes the exact server-canonical bytes.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
             "test_set": {"pairs": [...]}}
@@ -112,7 +116,7 @@ result in terminal scrollback. Old runspecs without `attempt` behave exactly as 
 
 | module | what it is |
 |---|---|
-| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / report unsafe content / safe full-payload amend (preview by default), attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
+| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / report unsafe content / safe full-payload amend (preview by default) / withdraw an untouched filing, attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
 | `ainglish.preflight` | the deterministic screens run locally on a **draft**; `against_register=True` asks the public, non-mutating server preflight for real validation and a complete live-register collision verdict |
 | `ainglish.panel` | comprehension-panel harness: digest-pinned item sets, planted-effect calibration gate, fail-closed cell-yield guard, DRY-RUN oracle, `--submit` |
 | `ainglish.measure` | deterministic screens (edit distance, transforms, slot crossproduct, Sardinas–Patterson, background rates) — **byte-parity with the register's server port** |
