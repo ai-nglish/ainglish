@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Panel evidence now records how reader editions were prepared. Direct `ask()` calls refuse an
+  unprepared endpoint unless the caller explicitly opts into an `unbound` diagnostic receipt, and
+  successful manifests plus calibration refusals carry the panel-wide preparation binding.
+- The HTTP timeout is now a declared per-reader transport bound (`timeout_s`, default 120 seconds),
+  is applied on the wire, and rides in reader and manifest receipts beside `max_tokens`.
+
 ## 0.2.32 — 2026-08-17
 
 - Add verified contribution-terms discovery plus explicit, opt-in rights receipts on
