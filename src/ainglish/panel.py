@@ -65,6 +65,8 @@ REQUEST_TIMEOUT = 120
 # Statuses that mean "the far side is busy or broken", as opposed to "you asked wrongly".
 FAULT_STATUS = frozenset({429, 500, 502, 503, 504})
 PANEL_REFUSAL_KIND = "ainglish.panel.refusal.v1"
+MAX_ABORT_RECEIPT_BYTES = 20_000
+MAX_ABORT_TRANSCRIPT_EXCERPT_BYTES = 4_096
 
 
 def _panel_refusal(stage, cause, message, calibration_cells_attempted,
@@ -1409,8 +1411,11 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
                                 attempted_cells["calibration"], 0,
                                 {"yield_guard": str(abort), "transport_faults": faults},
                             )
-                        print(message)
-                        return None
+                        return _panel_refusal(
+                            "real", "transport_or_yield", message,
+                            attempted_cells["calibration"], attempted_cells["real"],
+                            {"yield_guard": str(abort), "transport_faults": faults},
+                        )
                     out.append((item["id"], arm, ep["name"], answer))
                     if stage == "real" and cell_results is not None:
                         expected = item.get("answer")
@@ -2875,12 +2880,62 @@ def selftest():
 
         failed_events = []
         failed_probe = _AttemptProbe(failed_events)
-        assert _run_preregistered_panel(bad, attempt_spec, coinflip, failed_probe) is None
+        with tempfile.TemporaryDirectory() as abort_receipt_dir:
+            assert _run_preregistered_panel(
+                bad, attempt_spec, coinflip, failed_probe,
+                receipt_dir=abort_receipt_dir, receipt_stem="panel runspec.json") is None
+            abort_paths = [name for name in os.listdir(abort_receipt_dir)
+                           if name.endswith(".abort.json")]
+            assert abort_paths == [
+                "panel-runspec.json.attempt-selftest-attempt.abort.json"
+            ]
+            with open(os.path.join(abort_receipt_dir, abort_paths[0]), "rb") as handle:
+                saved_abort = handle.read()
+            assert saved_abort == failed_probe.aborts[-1]["preflight_receipt"].encode(), \
+                "the server-bound receipt string and locally saved receipt must be byte-identical"
         assert failed_events[0][0] == "mint" and failed_events[-1][0] == "abort", \
             "a gated run must close its visible obligation as aborted"
         assert not any(e[0] == "measure" for e in failed_events), \
             "an aborted attempt must never file a measurement"
         assert failed_probe.aborts[-1]["failed_gate"] == "panel harness refused at calibration"
+        assert failed_probe.aborts[-1]["failed_gate_kind"] == "harness_refuse"
+        failed_document = json.loads(failed_probe.aborts[-1]["preflight_receipt"])
+        assert failed_document["failed_gate_kind"] == "harness_refuse", \
+            "the typed disjunct must be inside the evidence bytes too"
+        assert failed_document["details"]["transcript"]["kind"] == \
+            "ainglish.panel.transcript-summary.v1", \
+            "transcript bytes need a bounded, digest-bearing public representation"
+
+        overflow_events = []
+        overflow_probe = _AttemptProbe(overflow_events)
+        _abort_panel_attempt(
+            overflow_probe, "selftest-attempt", "selftest", "harness_error", "huge details",
+            {"transcript": "x" * 50_000, "diagnostic_blob": "y" * 50_000})
+        overflow_text = overflow_probe.aborts[-1]["preflight_receipt"]
+        assert len(overflow_text.encode()) <= MAX_ABORT_RECEIPT_BYTES
+        assert json.loads(overflow_text)["details"]["kind"] == \
+            "ainglish.panel.abort-details-summary.v1", \
+            "an oversized diagnostic must summarize rather than strand the open attempt"
+        assert _exception_failed_gate_kind(
+            urllib.error.HTTPError("u", 400, "bad input", {}, None)) == "harness_error"
+        assert _exception_failed_gate_kind(
+            urllib.error.HTTPError("u", 503, "busy", {}, None)) == "reader_transport"
+
+        timeout_events = []
+        timeout_probe = _AttemptProbe(timeout_events)
+
+        def timeout_reader(*_args):
+            raise TransportFault("timeout")
+
+        assert _run_preregistered_panel(good, attempt_spec, timeout_reader, timeout_probe) is None
+        assert timeout_probe.aborts[-1]["failed_gate_kind"] == "reader_timeout", \
+            "a recorded reader timeout must not collapse into generic refusal prose"
+
+        yield_events = []
+        yield_probe = _AttemptProbe(yield_events)
+        assert _run_preregistered_panel(good, attempt_spec, lambda *_args: None, yield_probe) is None
+        assert yield_probe.aborts[-1]["failed_gate_kind"] == "yield_guard_withhold", \
+            "a no-answer yield refusal with no transport cause must name the guard disjunct"
 
         divergent_events = []
         divergent_probe = _AttemptProbe(divergent_events)
@@ -2897,6 +2952,7 @@ def selftest():
         assert divergent_events[-1][0] == "abort"
         assert "diverged" in divergent_events[-1][1]["failed_gate"], \
             "an observed transport receipt must abort, not alter the preregistered manifest"
+        assert divergent_probe.aborts[-1]["failed_gate_kind"] == "preflight_mismatch"
         assert not any(e[0] == "measure" for e in divergent_events)
 
         exit_events = []
@@ -2912,6 +2968,7 @@ def selftest():
             assert "configuration changed" in str(exc)
         assert exit_events[0][0] == "mint" and exit_events[-1][0] == "abort", \
             "a normal harness SystemExit after mint must terminalise its obligation"
+        assert exit_probe.aborts[-1]["failed_gate_kind"] == "harness_error"
 
         interrupt_events = []
         interrupt_probe = _AttemptProbe(interrupt_events)
@@ -2928,6 +2985,7 @@ def selftest():
             "Ctrl+C after mint must terminalise its visible obligation before propagating"
         assert interrupt_probe.aborts[-1]["failed_gate"] == \
             "panel run interrupted before measurement emission"
+        assert interrupt_probe.aborts[-1]["failed_gate_kind"] == "operator_interrupt"
         assert not any(e[0] == "measure" for e in interrupt_events), \
             "an interrupted reader run must never file a measurement"
 
@@ -3257,25 +3315,99 @@ class _Transcript:
         return self._buffer.getvalue()
 
 
-def _abort_panel_attempt(client, attempt_id, slug, failed_gate, details, receipt_dir=None,
-                         receipt_stem="runspec"):
+def _panel_refusal_failed_gate_kind(refusal):
+    """Map the structured refusal surface to the server's closed abort vocabulary."""
+    if not _is_panel_refusal(refusal):
+        return "no_measurement"
+    if refusal.get("cause") != "transport_or_yield":
+        return "harness_refuse"
+
+    faults = (refusal.get("details") or {}).get("transport_faults") or {}
+    reasons = set()
+
+    def collect(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if isinstance(child, int) and not isinstance(child, bool) and child > 0 \
+                        and (key == "timeout" or key == "unreachable" or key.startswith("http_")):
+                    reasons.add(key)
+                else:
+                    collect(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                collect(child)
+
+    collect(faults)
+    if "timeout" in reasons:
+        return "reader_timeout"
+    if reasons:
+        return "reader_transport"
+    return "yield_guard_withhold"
+
+
+def _exception_failed_gate_kind(exc):
+    if isinstance(exc, TransportFault):
+        return "reader_timeout" if exc.reason == "timeout" else "reader_transport"
+    if isinstance(exc, (socket.timeout, TimeoutError)):
+        return "reader_timeout"
+    if isinstance(exc, urllib.error.HTTPError):
+        return "reader_transport" if exc.code in FAULT_STATUS else "harness_error"
+    if isinstance(exc, urllib.error.URLError):
+        return "reader_transport"
+    return "harness_error"
+
+
+def _abort_panel_attempt(client, attempt_id, slug, failed_gate_kind, failed_gate, details,
+                         receipt_dir=None, receipt_stem="runspec"):
+    receipt_details = dict(details)
+    transcript = receipt_details.get("transcript")
+    if isinstance(transcript, str):
+        transcript_bytes = transcript.encode()
+        excerpt = transcript_bytes[:MAX_ABORT_TRANSCRIPT_EXCERPT_BYTES].decode(
+            "utf-8", errors="ignore")
+        receipt_details["transcript"] = {
+            "kind": "ainglish.panel.transcript-summary.v1",
+            "sha256": hashlib.sha256(transcript_bytes).hexdigest(),
+            "utf8_bytes": len(transcript_bytes),
+            "truncated": len(transcript_bytes) > MAX_ABORT_TRANSCRIPT_EXCERPT_BYTES,
+            "prefix": excerpt,
+        }
     receipt = {
         "kind": "ainglish.panel.abort-receipt.v1",
         "attempt_id": attempt_id,
         "proposal": slug,
+        "failed_gate_kind": failed_gate_kind,
         "failed_gate": failed_gate,
-        "details": details,
+        "details": receipt_details,
     }
-    encoded = json.dumps(receipt, sort_keys=True, separators=(",", ":"),
-                         ensure_ascii=False).encode()
+    receipt_text = json.dumps(receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    encoded = receipt_text.encode()
+    if len(encoded) > MAX_ABORT_RECEIPT_BYTES:
+        full_details = json.dumps(
+            receipt_details, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+        receipt["details"] = {
+            "kind": "ainglish.panel.abort-details-summary.v1",
+            "sha256": hashlib.sha256(full_details).hexdigest(),
+            "utf8_bytes": len(full_details),
+            "keys": sorted(receipt_details),
+            "note": "Full diagnostic details exceeded the public abort-receipt byte budget; "
+                    "the typed gate and content digest remain authoritative.",
+        }
+        receipt_text = json.dumps(
+            receipt, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        encoded = receipt_text.encode()
+    if len(encoded) > MAX_ABORT_RECEIPT_BYTES:
+        raise RuntimeError("abort receipt metadata exceeded the 20,000-byte server limit")
     digest = hashlib.sha256(encoded).hexdigest()
     if receipt_dir:
         safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", receipt_stem).strip("-") or "runspec"
         path = os.path.join(receipt_dir, f"{safe_stem}.attempt-{attempt_id}.abort.json")
         with open(path, "wb") as handle:
-            handle.write(encoded + b"\n")
+            handle.write(encoded)
         print(f"ABORT RECEIPT: {path} (sha256 {digest})")
-    client.abort_attempt(attempt_id, failed_gate=failed_gate, preflight_receipt_hash=digest)
+    client.abort_attempt(
+        attempt_id, failed_gate=failed_gate, failed_gate_kind=failed_gate_kind,
+        preflight_receipt=receipt_text)
     print(f"ATTEMPT ABORTED: {attempt_id} — {failed_gate}")
 
 
@@ -3379,6 +3511,7 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
             measurement = run_panel(manifest, ask_fn=ask_fn, cell_results=cell_results)
     except KeyboardInterrupt:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             "operator_interrupt",
                              "panel run interrupted before measurement emission",
                              {"exception": "KeyboardInterrupt",
                               "message": "operator interrupted the run",
@@ -3387,6 +3520,7 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
         raise
     except (Exception, SystemExit) as exc:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             _exception_failed_gate_kind(exc),
                              "panel harness raised before measurement emission",
                              {"exception": type(exc).__name__, "message": str(exc),
                               "transcript": transcript.text()},
@@ -3397,13 +3531,15 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     ) if cell_results is not None else None)
     if _is_panel_refusal(measurement):
         _abort_panel_attempt(client, attempt_id, spec["slug"],
-                             "panel harness refused at calibration",
+                             _panel_refusal_failed_gate_kind(measurement),
+                             "panel harness refused at %s" % measurement.get("stage", "unknown stage"),
                              {"refusal": measurement, "cell_results": cell_receipt,
                               "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         return None
     if measurement is None:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             "no_measurement",
                              "panel harness emitted no measurement",
                              {"cell_results": cell_receipt, "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
@@ -3412,6 +3548,7 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     actual = manifest_commitment(measurement["manifest"])
     if actual != expected:
         _abort_panel_attempt(client, attempt_id, spec["slug"],
+                             "preflight_mismatch",
                              "filed manifest diverged from preregistered clean-run manifest",
                              {"expected_manifest_commitment": expected,
                               "actual_manifest_commitment": actual,

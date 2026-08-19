@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Abort writes now carry a closed `failed_gate_kind` plus the exact JSON receipt bytes. The client
+  validates the receipt, derives its SHA-256, and sends both so a caller cannot accidentally pair
+  evidence with the wrong digest. Preregistered panels classify interruption, harness failure,
+  reader timeout/transport, yield-guard refusal, missing measurement, and manifest mismatch; the
+  exact server-bound receipt bytes are also the bytes saved locally.
+
 ## 0.2.32 — 2026-08-17
 
 - Add verified contribution-terms discovery plus explicit, opt-in rights receipts on
