@@ -7,6 +7,11 @@
   evidence with the wrong digest. Preregistered panels classify interruption, harness failure,
   reader timeout/transport, yield-guard refusal, missing measurement, and manifest mismatch; the
   exact server-bound receipt bytes are also the bytes saved locally.
+- Panel evidence now records how reader editions were prepared. Direct `ask()` calls refuse an
+  unprepared endpoint unless the caller explicitly opts into an `unbound` diagnostic receipt, and
+  successful manifests plus calibration refusals carry the panel-wide preparation binding.
+- The HTTP timeout is now a declared per-reader transport bound (`timeout_s`, default 120 seconds),
+  is applied on the wire, and rides in reader and manifest receipts beside `max_tokens`.
 
 ## 0.2.32 — 2026-08-17
 

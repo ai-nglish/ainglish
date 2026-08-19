@@ -61,16 +61,16 @@ import urllib.parse
 import urllib.request
 
 NEUTRAL_EPS = 1e-9
-REQUEST_TIMEOUT = 120
 # Statuses that mean "the far side is busy or broken", as opposed to "you asked wrongly".
 FAULT_STATUS = frozenset({429, 500, 502, 503, 504})
 PANEL_REFUSAL_KIND = "ainglish.panel.refusal.v1"
 MAX_ABORT_RECEIPT_BYTES = 20_000
 MAX_ABORT_TRANSCRIPT_EXCERPT_BYTES = 4_096
+_INSTRUMENT_PREPARATION_KEY = "_ainglish_instrument_preparation"
 
 
 def _panel_refusal(stage, cause, message, calibration_cells_attempted,
-                   real_cells_attempted=0, details=None):
+                   real_cells_attempted=0, details=None, instrument_preparation=None):
     """Return and print a refusal as data, without making it look like a measurement.
 
     A calibration failure used to be represented only by prose plus ``None``. That was safe for
@@ -89,6 +89,8 @@ def _panel_refusal(stage, cause, message, calibration_cells_attempted,
     }
     if details:
         receipt["details"] = details
+    if instrument_preparation is not None:
+        receipt["instrument_preparation"] = instrument_preparation
     print(message)
     print(json.dumps(receipt, indent=1))
     return receipt
@@ -183,11 +185,13 @@ class TransportFault(Exception):
         self.reason = reason
 
 
-def _fetch(req):
+def _fetch(req, timeout=None):
     """One HTTP round trip. Transport faults are translated; nothing else is swallowed."""
     sensitive = any(k.casefold() in ("authorization", "x-api-key") for k, _v in req.header_items())
+    if timeout is None:
+        timeout = TRANSPORT_BOUNDS["timeout_s"]
     try:
-        with _open(req, timeout=REQUEST_TIMEOUT, sensitive=sensitive) as r:
+        with _open(req, timeout=timeout, sensitive=sensitive) as r:
             return json.loads(r.read())
     except urllib.error.HTTPError as e:   # subclass of URLError, so it must be caught first
         if e.code in FAULT_STATUS:
@@ -222,7 +226,9 @@ PRESETS = {
 # spends its budget thinking before it emits the fixed option: a live Gemma control returned no
 # visible answer at 64 and completed at 512. Default to enough headroom for current reasoning
 # readers; an operator can lower it per entry, and the effective value rides in the receipt.
-TRANSPORT_BOUNDS = {"max_tokens": 1024}
+# timeout_s is a wire bound too: increasing it changes which slow cells survive, so it must be
+# committed beside max_tokens rather than hiding in a module constant.
+TRANSPORT_BOUNDS = {"max_tokens": 1024, "timeout_s": 120}
 SAMPLER_KEYS = ("seed", "top_p", "top_k", "num_ctx")
 # One least-privilege constant feeds both the Colony SDK and stdlib exchange paths so they cannot
 # drift. Ainglish has no reputation gate, so write tokens need identity and profile only.
@@ -431,7 +437,39 @@ def prepare_reader_instruments(manifest, fetch_fn=_fetch):
                                  "model_digest or add a provider-specific verifier.")
             endpoint["model_digest"] = None
             endpoint["digest_source"] = "provider-opaque"
+        endpoint[_INSTRUMENT_PREPARATION_KEY] = {
+            "entry_point": "prepare_reader_instruments",
+            "binding": endpoint["digest_source"],
+        }
     return manifest
+
+
+def _reader_label(endpoint):
+    return str(endpoint.get("name", "?")) + (
+        "@" + str(endpoint["precision"]) if endpoint.get("precision") else "")
+
+
+def instrument_preparation_receipt(panel, unbound_entry_point="run_panel(custom ask_fn)"):
+    """Describe how the whole panel acquired its reader-edition bindings.
+
+    A panel is bound only when every reader passed through ``prepare_reader_instruments``. Mixed
+    preparation is intentionally reported as unbound: one unchecked reader is enough to make the
+    panel-level instrument unreconstructable.
+    """
+    bindings = []
+    for endpoint in panel:
+        marker = endpoint.get(_INSTRUMENT_PREPARATION_KEY)
+        if not isinstance(marker, dict) or marker.get("binding") in (None, "unbound"):
+            entry_point = (marker.get("entry_point") if isinstance(marker, dict) else None)
+            return {"entry_point": entry_point or unbound_entry_point, "binding": "unbound"}
+        bindings.append({"reader": _reader_label(endpoint),
+                         "digest_source": marker["binding"]})
+    return {"entry_point": "prepare_reader_instruments", "binding": bindings}
+
+
+def _manifest_unbound_entry_point(manifest):
+    return manifest.get("_instrument_unbound_entry_point") or (
+        "dry-run" if manifest.get("_dry_run") else "run_panel(custom ask_fn)")
 
 
 def reader_receipt(endpoint):
@@ -454,9 +492,16 @@ def reader_receipt(endpoint):
         if url_parts.port is not None:
             host += ":" + str(url_parts.port)
         out["base_url"] = urllib.parse.urlunsplit((url_parts.scheme, host, url_parts.path, "", ""))
-    out["model_digest"] = resolved.get("model_digest")
-    out["digest_source"] = resolved.get("digest_source") or (
-        "unresolved-dry-run" if resolved.get("provider") == "ollama" else "provider-opaque")
+    preparation = endpoint.get(_INSTRUMENT_PREPARATION_KEY)
+    if not isinstance(preparation, dict):
+        preparation = {"entry_point": "not-prepared", "binding": "unbound"}
+    if preparation.get("binding") == "unbound":
+        out["model_digest"] = None
+        out["digest_source"] = "unbound"
+    else:
+        out["model_digest"] = resolved.get("model_digest")
+        out["digest_source"] = resolved.get("digest_source") or "unbound"
+    out["instrument_preparation"] = dict(preparation)
     out.update(transport_settings(endpoint))
     return out
 
@@ -482,23 +527,23 @@ def chat(endpoint, prompt):
     bounds = bounds_for(endpoint)
     sampling = request_sampling(endpoint)
     if ep.get("api", "openai") == "anthropic":
-        body = {"model": ep["model"], **sampling, **bounds,
+        body = {"model": ep["model"], **sampling, "max_tokens": bounds["max_tokens"],
                 "messages": [{"role": "user", "content": prompt}]}
         headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT,
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
         req = urllib.request.Request(ep["base_url"].rstrip("/") + "/v1/messages",
                                      json.dumps(body).encode(), headers)
-        data = _fetch(req)
+        data = _fetch(req, timeout=bounds["timeout_s"])
         return ("".join(b.get("text", "") for b in data.get("content", [])),
                 data.get("stop_reason") == "max_tokens")
-    body = {"model": ep["model"], **sampling, **bounds,
+    body = {"model": ep["model"], **sampling, "max_tokens": bounds["max_tokens"],
             "messages": [{"role": "user", "content": prompt}]}
     headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
     if key:
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(ep["base_url"].rstrip("/") + "/chat/completions",
                                  json.dumps(body).encode(), headers)
-    data = _fetch(req)
+    data = _fetch(req, timeout=bounds["timeout_s"])
     choice = data["choices"][0]
     return choice["message"]["content"], choice.get("finish_reason") == "length"
 
@@ -536,8 +581,22 @@ def Absent(reason):
     return absence_module().Absent(reason)
 
 
-def ask(endpoint, text, question, options):
-    """Present one item arm and force a choice from the fixed options."""
+def ask(endpoint, text, question, options, allow_unbound=False):
+    """Present one item arm and force a choice from the fixed options.
+
+    Direct loops must prepare their readers just like ``run_panel`` does. The explicit escape
+    hatch is for diagnostics whose author accepts that the resulting read cannot identify a
+    weight edition; it stamps that limitation into ``reader_receipt(endpoint)``.
+    """
+    preparation = endpoint.get(_INSTRUMENT_PREPARATION_KEY)
+    if not isinstance(preparation, dict):
+        if not allow_unbound:
+            raise SystemExit(
+                f"panel entry {endpoint.get('name', '?')!r}: reader instrument was not prepared. "
+                "Call prepare_reader_instruments({'panel': [endpoint]}) before ask(), or pass "
+                "allow_unbound=True for a diagnostic read whose receipt says unbound.")
+        endpoint[_INSTRUMENT_PREPARATION_KEY] = {
+            "entry_point": "ask(allow_unbound=True)", "binding": "unbound"}
     prompt = (f"Read this message written by one agent to another:\n\n---\n{text}\n---\n\n"
               f"Question: {question}\nAnswer with EXACTLY one of these options and nothing else: "
               + " | ".join(options))
@@ -1121,6 +1180,8 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
 
     spec["models"] = [_labelled(p_) for p_ in panel]
     spec["readers"] = [reader_receipt(p_) for p_ in panel]
+    spec["instrument_preparation"] = instrument_preparation_receipt(
+        panel, _manifest_unbound_entry_point(manifest))
     spec["corruption"] = {"channel": channel,
                           "note": "one span-preserving event per cell, absolute not proportional, "
                                   "seeded per (seed,item,arm); no-op corruptions refuse pre-spend; "
@@ -1410,11 +1471,15 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
                                 "calibration", "transport_or_yield", message,
                                 attempted_cells["calibration"], 0,
                                 {"yield_guard": str(abort), "transport_faults": faults},
+                                instrument_preparation=instrument_preparation_receipt(
+                                    panel, _manifest_unbound_entry_point(manifest)),
                             )
                         return _panel_refusal(
                             "real", "transport_or_yield", message,
                             attempted_cells["calibration"], attempted_cells["real"],
                             {"yield_guard": str(abort), "transport_faults": faults},
+                            instrument_preparation=instrument_preparation_receipt(
+                                panel, _manifest_unbound_entry_point(manifest)),
                         )
                     out.append((item["id"], arm, ep["name"], answer))
                     if stage == "real" and cell_results is not None:
@@ -1483,6 +1548,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
                 attempted_cells["calibration"], 0,
                 {"reader": ep["name"], "missing_cells": [list(cell) for cell in missing],
                  "transport_faults": faults},
+                instrument_preparation=instrument_preparation_receipt(
+                    panel, _manifest_unbound_entry_point(manifest)),
             )
     cacc, _ = score(calib_rows, calib)
     other_arm = "english" if planted_arm != "english" else "ainglish"
@@ -1498,6 +1565,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
             attempted_cells["calibration"], 0,
             {"planted_arm": planted_arm, "detectable": detectable,
              "other": undetectable, "gap": gap, "min_gap": calibration_min_gap},
+            instrument_preparation=instrument_preparation_receipt(
+                panel, _manifest_unbound_entry_point(manifest)),
         )
     print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — panel can "
           f"detect. ctl(planted-items) passes. {len(real) * len(panel)} real cells to go.")
@@ -1677,6 +1746,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
         spec["items"] = items
     spec["models"] = [labelled(p_) for p_ in panel]
     spec["readers"] = [reader_receipt(p_) for p_ in panel]
+    spec["instrument_preparation"] = instrument_preparation_receipt(
+        panel, _manifest_unbound_entry_point(manifest))
     spec["item_counts"] = {"real": len(real), "calibration": len(calib)}
     if accuracy_resolution is not None:
         spec["accuracy_resolution"] = accuracy_resolution
@@ -1942,6 +2013,9 @@ def selftest():
     assert _is_panel_refusal(incomplete)
     assert incomplete["stage"] == "calibration" and incomplete["cause"] == "transport_or_yield"
     assert incomplete["real_cells_attempted"] == 0
+    assert incomplete["instrument_preparation"] == {
+        "entry_point": "run_panel(custom ask_fn)", "binding": "unbound"}, \
+        "calibration refusals must disclose that a custom reader path skipped edition binding"
     assert not (set(incomplete_calls) & real_texts), \
         "a reader missing one calibration arm must be refused before all real spend"
 
@@ -1982,6 +2056,10 @@ def selftest():
     assert bound["panel"][0]["digest_source"] == "ollama:/api/tags"
     bound_receipt = reader_receipt(bound["panel"][0])
     assert bound_receipt["model_digest"] == "sha256:" + digest_hex
+    assert instrument_preparation_receipt(bound["panel"]) == {
+        "entry_point": "prepare_reader_instruments",
+        "binding": [{"reader": "local", "digest_source": "ollama:/api/tags"}],
+    }
     try:
         prepare_reader_instruments(
             {"panel": [{"name": "moved", "provider": "ollama", "model": "m",
@@ -2048,6 +2126,7 @@ def selftest():
         def fake(req, timeout=None, sensitive=False):
             sent["body"] = json.loads(req.data)
             sent["sensitive"] = sensitive
+            sent["timeout"] = timeout
             return _Resp(payload)
         return fake
 
@@ -2056,7 +2135,7 @@ def selftest():
     real_open, had_key = _open, "ANTHROPIC_API_KEY" in os.environ
     os.environ.setdefault("ANTHROPIC_API_KEY", "selftest")
     try:
-        bodies, sensitivities = {}, {}
+        bodies, sensitivities, timeouts = {}, {}, {}
         for label, entry, payload in (
             ("openai-compatible", {"name": "o", "provider": "ollama", "model": "m"}, _ok_openai),
             ("anthropic", {"name": "a", "provider": "anthropic", "model": "m"}, _ok_anthropic),
@@ -2065,11 +2144,15 @@ def selftest():
             assert chat(entry, "hi") == ("yes", False), f"{label}: clean completion"
             bodies[label] = sent["body"]
             sensitivities[label] = sent["sensitive"]
+            timeouts[label] = sent["timeout"]
         assert sensitivities["anthropic"] is True, "x-api-key requests must use the guarded opener"
-        for bound, default in TRANSPORT_BOUNDS.items():
-            for label, body in bodies.items():
-                assert body.get(bound) == default, \
-                    f"{label} request body dropped the declared bound {bound!r}"
+        for label, body in bodies.items():
+            assert body.get("max_tokens") == TRANSPORT_BOUNDS["max_tokens"], \
+                f"{label} request body dropped the declared max_tokens bound"
+            assert "timeout_s" not in body, \
+                f"{label} leaked the harness timeout into a provider request body"
+            assert timeouts[label] == TRANSPORT_BOUNDS["timeout_s"], \
+                f"{label} did not apply the declared timeout to the HTTP request"
         assert bodies["openai-compatible"]["temperature"] == 0, \
             "OpenAI-compatible direct classifiers retain deterministic sampling by default"
         assert "temperature" not in bodies["anthropic"], \
@@ -2092,8 +2175,15 @@ def selftest():
 
         # "Declared" is decoration unless the declared value reaches the wire.
         _open = _capture(_ok_openai)
-        chat({"name": "o", "provider": "ollama", "model": "m", "max_tokens": 4096}, "hi")
+        chat({"name": "o", "provider": "ollama", "model": "m", "max_tokens": 4096,
+              "timeout_s": 7}, "hi")
         assert sent["body"]["max_tokens"] == 4096, "a declared bound must override the default"
+        assert sent["timeout"] == 7 and "timeout_s" not in sent["body"], \
+            "a declared timeout must reach urllib, not the provider JSON body"
+        bounded_receipt = reader_receipt(
+            {"name": "o", "provider": "ollama", "model": "m", "timeout_s": 7})
+        assert bounded_receipt["timeout_s"] == 7, \
+            "the effective request timeout must ride in the reader receipt"
 
         _open = _capture(_ok_openai)
         chat({"name": "o", "provider": "ollama", "model": "m", "seed": 17,
@@ -2115,6 +2205,24 @@ def selftest():
             except SystemExit as exc:
                 assert "provider-default" in str(exc) or "Modelfile" in str(exc)
 
+        # The direct adapter path used to bypass prepare_reader_instruments() entirely. Exercise
+        # the behavioural gate and prove refusal happens before the fake wire sees a request.
+        direct = {"name": "direct", "provider": "ollama", "model": "m"}
+        sent.clear()
+        _open = _capture(_ok_openai)
+        try:
+            ask(direct, "text", "q?", ["yes", "no"])
+            raise AssertionError("an unprepared direct ask reached the reader")
+        except SystemExit as exc:
+            assert "reader instrument was not prepared" in str(exc)
+        assert sent == {}, "unprepared ask() must refuse before opening the transport"
+        assert ask(direct, "text", "q?", ["yes", "no"], allow_unbound=True) == "yes"
+        direct_receipt = reader_receipt(direct)
+        assert direct_receipt["model_digest"] is None
+        assert direct_receipt["digest_source"] == "unbound"
+        assert direct_receipt["instrument_preparation"] == {
+            "entry_point": "ask(allow_unbound=True)", "binding": "unbound"}
+
         # Truncation must never be graded — on either transport. The fragment here CONTAINS a valid
         # option, so before the check it graded as a CORRECT answer: a transport fault could raise
         # an arm's accuracy. That is why this is a dead cell and not merely a wrong one.
@@ -2126,7 +2234,8 @@ def selftest():
              {"content": [{"text": "process-ran, and the reason is"}], "stop_reason": "max_tokens"}),
         ):
             _open = _capture(payload)
-            _cut = ask(entry, "text", "q?", ["process-ran", "cannot tell"])
+            _cut = ask(entry, "text", "q?", ["process-ran", "cannot tell"],
+                       allow_unbound=True)
             assert is_absent(_cut) and getattr(_cut, "reason", None) == "truncated", \
                 f"{label}: a bound-truncated read must be a TYPED dead cell, not a scored answer (got {_cut!r})"
 
@@ -2137,7 +2246,7 @@ def selftest():
         _open = _capture(
             {"choices": [{"message": {"content": "cannot tell"}, "finish_reason": "stop"}]})
         assert ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?",
-                   ["yes", "no", "cannot tell"]) == "cannot tell", \
+                   ["yes", "no", "cannot tell"], allow_unbound=True) == "cannot tell", \
             "an exact longer option must not be captured by an earlier substring option"
     finally:
         _open = real_open
@@ -2214,6 +2323,9 @@ def selftest():
 
     m = run_panel(good, ask_fn=tag_reliant)
     assert m is not None and m["value"] > 0, "calibrated tag-reliant panel must find the recovery effect"
+    assert m["manifest"]["instrument_preparation"] == {
+        "entry_point": "run_panel(custom ask_fn)", "binding": "unbound"}, \
+        "a custom reader loop must never look digest-bound in a successful manifest"
     # --- panel_neff is a claim, not a headcount ------------------------------------------------
     # It used to be emitted as len(panel): a roster count wearing an error-structure statistic's
     # name. The harness now refuses to auto-fill it and reports the roster count under its own name.
@@ -2739,11 +2851,13 @@ def selftest():
     # (1) The pinned regression: '' with finish_reason 'stop' — the exact input the served
     # v0.2.15 graded dead-by-guard and live-by-scorer SIMULTANEOUSLY. ask() must type it.
     _open = _capture({"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]})
-    clean_stop = ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?", ["yes", "no"])
+    clean_stop = ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?",
+                     ["yes", "no"], allow_unbound=True)
     assert isinstance(clean_stop, _ecg_m.Absent) and clean_stop.reason == "empty_stop", \
         f"a clean-stop empty must be TYPED absence, got {clean_stop!r}"
     _open = _capture({"choices": [{"message": {"content": "truncat"}, "finish_reason": "length"}]})
-    cut = ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?", ["yes", "no"])
+    cut = ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?",
+              ["yes", "no"], allow_unbound=True)
     assert isinstance(cut, _ecg_m.Absent) and cut.reason == "truncated", \
         "truncation and clean-stop must be DISTINGUISHABLE absences, not one bare None"
     # Both consumers, one verdict: the guard counts it dead AND the scorer's live filter drops it.
@@ -3245,6 +3359,9 @@ def _planned_panel_manifest(manifest):
 
     preview = dict(manifest)
     preview["_dry_run"] = True
+    # This preview stands in for the upcoming custom reader path; preserve that receipt identity
+    # while retaining the ordinary dry-run label for a user-invoked, non-preregistered preview.
+    preview["_instrument_unbound_entry_point"] = "run_panel(custom ask_fn)"
     with contextlib.redirect_stdout(io.StringIO()):
         measurement = run_panel(preview, ask_fn=dry_reader(preview["items"], preview))
     if measurement is None or _is_panel_refusal(measurement):
