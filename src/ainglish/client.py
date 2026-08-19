@@ -65,6 +65,17 @@ AUDIENCE = "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j"  # ainglish.org's Colony cl
 USER_AGENT = "ainglish-python/%s" % _V
 MAX_MANIFEST_BYTES = 20_000
 MAX_ATTEMPT_ESTIMAND_CHARS = 2_000
+MAX_PREFLIGHT_RECEIPT_BYTES = 20_000
+FAILED_GATE_KINDS = (
+    "harness_refuse",
+    "yield_guard_withhold",
+    "reader_timeout",
+    "reader_transport",
+    "preflight_mismatch",
+    "operator_interrupt",
+    "harness_error",
+    "no_measurement",
+)
 CONTRIBUTION_TERMS_PATH = "/api/v1/legal/contribution-terms"
 
 
@@ -175,6 +186,39 @@ def manifest_commitment(manifest):
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be a JSON object")
     return hashlib.sha256(_canonical_json(manifest).encode("utf-8")).hexdigest()
+
+
+def _prepare_abort_receipt(receipt):
+    """Return exact JSON text plus its digest; never reserialize caller-owned text/bytes."""
+    if isinstance(receipt, dict):
+        try:
+            text = json.dumps(receipt, sort_keys=True, separators=(",", ":"),
+                              ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("preflight_receipt must contain only finite JSON values: %s" % exc) \
+                from None
+    elif isinstance(receipt, bytes):
+        try:
+            text = receipt.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ValueError("preflight_receipt bytes must be valid UTF-8 JSON") from None
+    elif isinstance(receipt, str):
+        text = receipt
+    else:
+        raise ValueError("preflight_receipt must be a JSON object, exact JSON string, or UTF-8 bytes")
+
+    try:
+        decoded = json.loads(text)
+        encoded = text.encode("utf-8")
+    except (json.JSONDecodeError, UnicodeEncodeError):
+        raise ValueError("preflight_receipt must be valid UTF-8 JSON whose root is an object") \
+            from None
+    if not isinstance(decoded, dict):
+        raise ValueError("preflight_receipt JSON root must be an object, not a scalar or array")
+    if not encoded or len(encoded) > MAX_PREFLIGHT_RECEIPT_BYTES:
+        raise ValueError("preflight_receipt must contain 1–20,000 UTF-8 bytes")
+
+    return text, hashlib.sha256(encoded).hexdigest()
 
 
 def _validate_attempt_manifest(manifest):
@@ -1136,16 +1180,29 @@ class AinglishClient:
         path = "/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe="")
         return self.post(path, body)
 
-    def abort_attempt(self, attempt_id, failed_gate, preflight_receipt_hash,
+    def abort_attempt(self, attempt_id, failed_gate, preflight_receipt, *, failed_gate_kind,
                       successor_attempt_id=None):
-        """Close an open attempt as aborted, preserving the declared gate and evidence digest.
+        """Close an open attempt with typed failure and dereferenceable evidence bytes.
 
-        Returns ``{attempt: {...}}``. If a redesigned attempt replaces it, mint that first and
-        pass its immutable id as ``successor_attempt_id``.
+        ``failed_gate_kind`` is one of :data:`FAILED_GATE_KINDS`. ``preflight_receipt`` may be a
+        JSON object (encoded deterministically), an exact JSON string, or exact UTF-8 JSON bytes.
+        The SDK derives the SHA-256 itself and submits both the text and digest, eliminating a
+        caller-side mismatch. Returns ``{attempt: {...}}``; its ``preflight_receipt.url`` retrieves
+        the exact accepted bytes. If a redesign replaces it, mint that attempt first and pass its
+        immutable id as ``successor_attempt_id``.
         """
+        if failed_gate_kind not in FAILED_GATE_KINDS:
+            raise ValueError("failed_gate_kind must be one of: %s" % ", ".join(FAILED_GATE_KINDS))
+        if not isinstance(failed_gate, str) or not failed_gate.strip():
+            raise ValueError("failed_gate must be a non-empty string")
+        if len(failed_gate.strip()) > 160:
+            raise ValueError("failed_gate must be at most 160 characters")
+        receipt_text, receipt_hash = _prepare_abort_receipt(preflight_receipt)
         body = {
+            "failed_gate_kind": failed_gate_kind,
             "failed_gate": failed_gate,
-            "preflight_receipt_hash": preflight_receipt_hash,
+            "preflight_receipt_hash": receipt_hash,
+            "preflight_receipt": receipt_text,
         }
         if successor_attempt_id is not None:
             body["successor_attempt_id"] = successor_attempt_id
@@ -1934,11 +1991,31 @@ def selftest():
             assert expected in str(exc), (expected, str(exc))
         assert sent == {}, sent
     sent.clear()
-    probe.abort_attempt("attempt/id", "calibration floor", "a" * 64,
-                        successor_attempt_id="replacement")
+    exact_abort_receipt = '{\n "kind":"ainglish.test.abort", "note":"café ↔ exact"\n}'
+    probe.abort_attempt(
+        "attempt/id", "calibration floor", exact_abort_receipt,
+        failed_gate_kind="harness_refuse", successor_attempt_id="replacement")
     assert sent == {"path": "/api/v1/attempts/attempt%2Fid/abort", "payload": {
-        "failed_gate": "calibration floor", "preflight_receipt_hash": "a" * 64,
+        "failed_gate_kind": "harness_refuse", "failed_gate": "calibration floor",
+        "preflight_receipt_hash": hashlib.sha256(exact_abort_receipt.encode()).hexdigest(),
+        "preflight_receipt": exact_abort_receipt,
         "successor_attempt_id": "replacement"}}, sent
+    for bad_kind, bad_receipt, expected in (
+            ("made_up", {}, "failed_gate_kind"),
+            ("harness_refuse", [], "JSON object"),
+            ("harness_refuse", "not json", "valid UTF-8 JSON"),
+            ("harness_refuse", b"\xff", "valid UTF-8"),
+            ("harness_refuse", {"value": float("nan")}, "finite JSON"),
+            ("harness_refuse", {"padding": "x" * MAX_PREFLIGHT_RECEIPT_BYTES}, "20,000"),
+    ):
+        sent.clear()
+        try:
+            probe.abort_attempt("attempt/id", "gate", bad_receipt,
+                                failed_gate_kind=bad_kind)
+            raise AssertionError("invalid abort receipt must refuse before POST")
+        except ValueError as exc:
+            assert expected in str(exc), (expected, str(exc))
+        assert sent == {}, sent
 
     # --- stable page traversal, including every failure that could otherwise loop silently -----
     class _Paged(AinglishClient):

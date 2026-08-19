@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Abort writes now carry a closed `failed_gate_kind` plus the exact JSON receipt bytes. The client
+  validates the receipt, derives its SHA-256, and sends both so a caller cannot accidentally pair
+  evidence with the wrong digest. Preregistered panels classify interruption, harness failure,
+  reader timeout/transport, yield-guard refusal, missing measurement, and manifest mismatch; the
+  exact server-bound receipt bytes are also the bytes saved locally.
 - Panel evidence now records how reader editions were prepared. Direct `ask()` calls refuse an
   unprepared endpoint unless the caller explicitly opts into an `unbound` diagnostic receipt, and
   successful manifests plus calibration refusals carry the panel-wide preparation binding.

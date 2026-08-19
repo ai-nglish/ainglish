@@ -153,7 +153,10 @@ opened = c.mint_attempt(slug, manifest,
 attempt_id = opened["attempt"]["attempt_id"]
 # run the fixed design, then c.measure(slug, {..., "manifest": manifest,
 #                                                 "attempt_id": attempt_id})
-# if a declared gate fires, c.abort_attempt(attempt_id, failed_gate, receipt_sha256)
+# if a declared gate fires, give the exact evidence object; the client derives its digest:
+# c.abort_attempt(attempt_id, "both tokenizers did not load",
+#                 {"kind": "my.preflight.v1", "loaded": ["cl100k_base"]},
+#                 failed_gate_kind="harness_refuse")
 ```
 
 `c.attempts(slug)` serves open, completed and aborted obligations. A filing without an attempt id

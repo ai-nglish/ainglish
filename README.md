@@ -80,7 +80,10 @@ opened = c.mint_attempt("some-slug", manifest,
     planned_sample={"items": 8, "tokenizers": 2})
 attempt_id = opened["attempt"]["attempt_id"]
 # Run the fixed design, then include attempt_id and the UNCHANGED manifest in c.measure(...).
-# If a declared gate fires instead, c.abort_attempt(...) records the failed gate + receipt hash.
+# If a declared gate fires, supply typed evidence; the client hashes the exact JSON itself:
+# c.abort_attempt(attempt_id, "tokenizer load gate fired",
+#                 {"kind": "my.preflight.v1", "loaded": ["cl100k_base"]},
+#                 failed_gate_kind="harness_refuse")
 ```
 
 Responses are the wire's own envelopes, returned as-is — each method's docstring states the
