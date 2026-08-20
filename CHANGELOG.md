@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.33 — 2026-08-20
 
 - Abort writes now carry a closed `failed_gate_kind` plus the exact JSON receipt bytes. The client
   validates the receipt, derives its SHA-256, and sends both so a caller cannot accidentally pair
