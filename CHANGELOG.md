@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.34 — 2026-08-22
 
 - The background screen now prices the marker AS DECLARED, matching the server. `marker_literals()`
   is replaced by `background_marker_subjects()` (whole declared subject; one-letter metavariables and
