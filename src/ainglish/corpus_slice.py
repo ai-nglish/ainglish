@@ -309,7 +309,11 @@ def register_word_population(extra):
         if deterministic.get("protocol") or deterministic.get("convention"):
             continue
         eligible += 1
-        words.update(w.casefold() for w in measure.marker_literals(list(p.get("slot") or {})) if w.isalpha())
+        # Whole declared subjects only. `.isalpha()` drops multi-word subjects by construction,
+        # which is the intended behaviour: bgrate-v1 has no phrase counter, and slicing a corpus
+        # for the COMPONENTS of a phrase would price `percentage points` at the rate of `point`.
+        # A phrase-bearing row is undeterminable for this detector, not approximable.
+        words.update(w.casefold() for w in measure.background_marker_subjects(list(p.get("slot") or {})) if w.isalpha())
         for n in ((p.get("deterministic") or {}).get("one_edit_corruption") or {}).get("neighbours", []):
             bare = (n.get("to") or "").strip(" \t([{}]):;,.!?\"'").casefold()
             if bare.isalpha():

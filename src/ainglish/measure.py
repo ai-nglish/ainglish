@@ -216,26 +216,60 @@ def is_background_word(form):
     return bool(word) and word in BACKGROUND_WORDS
 
 
-def marker_literals(slot_keys):
-    """The marker LITERALS inside declared surfaces — what background_collisions must be FED.
+def background_marker_subjects(slot_keys):
+    """The subjects a background-rate report may honestly price — parity with
+    DeterministicMetrics::backgroundMarkerSubjects.
 
-    Parity with DeterministicMetrics::markerLiterals. Both ports had the same input bug: the screen
-    was handed raw slot keys, so `about <N>` (placeholder attached) matched no word list and the most
-    ordinary English word in the register reported clean. Placeholders are the variable part and are
-    never the marker; multi-word residue is tested whole AND per token (`MUST NOT` collides through
-    `must`). Note the standing asymmetry: hits are real, a clean result proves nothing — a fixed word
-    list can establish membership and cannot establish non-membership.
+    Placeholders are the variable part and are never the marker; what remains is the literal an
+    author asks readers to recognise. A corpus rate's subject is the marker AS DECLARED: the earlier
+    port of this function also emitted the component words of a multi-word marker, which made
+    `percentage points` inherit the published rate of `point` — a safe-direction overstatement that
+    is still the wrong number. Phrase-aware counting does not exist in bgrate-v1, so a multi-word
+    subject is reported UNDETERMINABLE by the caller rather than silently replaced by its parts.
+
+    Note the standing asymmetry, unchanged: hits are real, a clean result proves nothing — a fixed
+    word list can establish membership and cannot establish non-membership.
     """
     out = []
     for key in slot_keys:
-        bare = re.sub(r"\s+", " ", re.sub(r"<[^>]*>", " ", key or "")).strip()
-        if not bare:
-            continue
-        parts = bare.split(" ")
-        for cand in [bare] + (parts if len(parts) > 1 else []):
-            cand = cand.strip(" \t([{}]):;,.!?\"'")
-            if cand and cand not in out:
-                out.append(cand)
+        subject = re.sub(r"<[^>]*>", " ", key or "")
+        # X/Y/S are metavariables in the register's declared templates, not marker words. ONE
+        # uppercase ASCII letter only, so normative markers such as MUST survive.
+        subject = re.sub(r"^\s*[A-Z]\s+(?=\S)", "", subject)
+        # Arrows connect placeholder values inside a marker; they are not rate subjects.
+        subject = re.sub(r"[\u2190-\u21FF]", " ", subject)
+        subject = re.sub(r"\s+", " ", subject).strip()
+        subject = subject.strip(" \t([{}]):;,.!?\"'")
+        if subject and subject not in out:
+            out.append(subject)
+    return out
+
+
+def background_screen(slot_keys, has_slot=True):
+    """The server's tri-state background screen, ported whole (DeterministicMetrics::blockFor).
+
+    Returns {status, collisions, undeterminable:{markers, reason}|None}. `status` is one of
+    computed / partial / undeterminable. A caller that reports only `collisions` reproduces the
+    defect this split exists to kill: an empty list means "no hits" and "could not look" alike.
+    """
+    subjects = background_marker_subjects(slot_keys)
+    markers, undeterminable, reason = [], [], None
+    if not has_slot or not slot_keys:
+        reason = ("no declared or derived slot exists; the prose form is not substituted as a marker")
+    elif not subjects:
+        reason = ("the declared slot contains no recoverable literal after placeholders; "
+                  "the prose form is not substituted as a marker")
+    else:
+        for subject in subjects:
+            (undeterminable if re.search(r"\s", subject) else markers).append(subject)
+        if undeterminable:
+            reason = ("bgrate-v1 measures whole word tokens, not multi-word phrases; component rates "
+                      "are not substituted for " + ", ".join("`%s`" % m for m in undeterminable))
+    collisions = background_collisions(markers)
+    status = "computed" if reason is None else ("undeterminable" if not markers else "partial")
+    out = {"status": status, "collisions": collisions}
+    if reason is not None:
+        out["undeterminable"] = {"markers": undeterminable, "reason": reason}
     return out
 
 
@@ -519,12 +553,24 @@ def selftest():
     assert any(h["via"] == "identity" for h in background_collisions(["now"])), "a marker that IS a common word collides at identity (anchored deixis chooses this knowingly)"
     # the input bug both ports shared: the screen is fed slot KEYS, and a key carries its placeholder
     assert background_collisions(["about <N>"]) == [], "the raw key matches no word list — this is why it must be reduced first"
-    assert marker_literals(["about <N>"]) == ["about"], "placeholder stripped, literal recovered"
-    assert marker_literals(["still(<as-of>)"]) == ["still"]
-    assert marker_literals(["<claim>"]) == [], "a placeholder alone is not a marker"
-    assert marker_literals(["MUST NOT <x>"]) == ["MUST NOT", "MUST", "NOT"], "whole and per-token"
-    assert [h["collides_with"] for h in background_collisions(marker_literals(["about <N>"])) if h["via"] == "identity"] == ["about"]
-    assert background_collisions(marker_literals(["<claim> \u22a5(<instrument>)"])) == [], "symbol markers must not gain false hits from placeholder stripping"
+    assert background_marker_subjects(["about <N>"]) == ["about"], "placeholder stripped, subject recovered"
+    assert background_marker_subjects(["still(<as-of>)"]) == ["still"]
+    assert background_marker_subjects(["<claim>"]) == [], "a placeholder alone is not a marker"
+    assert background_marker_subjects(["X proxy(<M>)"]) == ["proxy"], "a one-letter metavariable is template scaffolding, not the subject"
+    assert background_marker_subjects(["MUST NOT <x>"]) == ["MUST NOT"], "the declared phrase stays WHOLE — components are not substituted (parity with the server)"
+    assert [h["collides_with"] for h in background_collisions(background_marker_subjects(["about <N>"])) if h["via"] == "identity"] == ["about"]
+    assert background_collisions(background_marker_subjects(["<claim> \u22a5(<instrument>)"])) == [], "symbol markers must not gain false hits from placeholder stripping"
+    # The tri-state: a multi-word subject is UNDETERMINABLE, never its component rate. Both halves
+    # of this pair are the receipts the server serves, so a port drift here is a differential bug.
+    mn = background_screen(["MUST NOT <x>"])
+    assert mn["status"] == "undeterminable" and mn["collisions"] == [], "MUST NOT is a phrase: bgrate-v1 cannot price it"
+    assert mn["undeterminable"]["markers"] == ["MUST NOT"], "the phrase is named, not silently dropped"
+    assert "must" not in json.dumps(mn), "component words must NOT leak back in as collisions"
+    pp = background_screen(["percentage points"])
+    assert pp["status"] == "undeterminable" and pp["undeterminable"]["markers"] == ["percentage points"], "`percentage points` must not inherit the rate of `point`"
+    assert background_screen([], has_slot=False)["status"] == "undeterminable", "a slotless row cannot be screened; prose is not a marker"
+    assert background_screen(["now"])["status"] == "computed", "a single-word subject is priceable"
+    assert any(h["via"] == "identity" for h in background_screen(["now"])["collisions"]), "and its hits still surface"
     assert list(proposal_markers({"kind": "notational", "form": "<claim> [c=<0..1>; \u22a5 <falsifier>]",
                                   "english_mapping": "confidence and falsifier"})) == ["c=", "\u22a5"], \
         "embedded assignment and glyph markers must be harvested"
@@ -910,7 +956,8 @@ def register_screen(base="https://ainglish.org", proposals=None):
     canary_caught = slot_crossproduct(CANARY)["gates"] and transform_screen(CANARY)["has_transform_collision"]
     x = slot_crossproduct(union)
     t = transform_screen(union)
-    background = background_collisions(marker_literals(list(union)))
+    bg = background_screen(list(union))
+    background = bg["collisions"]
     if not canary_caught:
         print("CANARY FAILED: the planted known-bad pair was NOT caught — every verdict from this "
               "run is suppressed (the instrument failed its positive control, not the register).")
@@ -934,15 +981,18 @@ def register_screen(base="https://ainglish.org", proposals=None):
     if background:
         for hit in background:
             print(f"  BACKGROUND: {hit['marker']!r} --{hit['via']}--> {hit['collides_with']!r}")
-    else:
+    elif bg["status"] == "computed":
         print("  background: no fixed-list collisions (a resolution floor, not proof of absence)")
+    if bg["status"] != "computed":
+        print(f"  background: {bg['status'].upper()} — {bg['undeterminable']['reason']}")
     if x.get("prefix_pairs"):
         for pp in x["prefix_pairs"]:
             print(f"  PREFIX: {pp['prefix']!r} nests inside {pp['of']!r}"
                   + (" (meanings differ — longest-match rule applies)" if pp["meanings_differ"] else " (alias)"))
     print(f"  canary: {'caught' if canary_caught else 'MISSED — verdicts suppressed'}")
     result = {"union_size": len(union), "covered": covered, "canary_caught": canary_caught,
-              "crossproduct": x, "transforms": t, "background_collisions": background}
+              "crossproduct": x, "transforms": t, "background_collisions": background,
+              "background_screen": bg}
     # Never truncate serialized JSON: `--register` is both a human report and an agent interface,
     # and a clipped object is neither valid JSON nor an honest complete record.
     print(json.dumps(result, indent=1, ensure_ascii=False))
@@ -959,7 +1009,7 @@ def main(argv):
         # parity on hand-picked cases catches transcription errors; only fuzz catches a misreading.
         slot = json.loads(sys.stdin.read())
         print(json.dumps({"crossproduct": slot_crossproduct(slot), "transforms": transform_screen(slot),
-                          "background_collisions": background_collisions(marker_literals(list(slot)))},
+                          "background_screen": background_screen(list(slot))},
                          sort_keys=True))
         return 0
     if "--background-rate" in argv:
