@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- The background screen now prices the marker AS DECLARED, matching the server. `marker_literals()`
+  is replaced by `background_marker_subjects()` (whole declared subject; one-letter metavariables and
+  arrows stripped as template scaffolding) plus a new `background_screen()` that returns the server's
+  tri-state — `computed` / `partial` / `undeterminable` — with the reason a subject could not be
+  priced. The old function also emitted the COMPONENT words of a multi-word marker, which made
+  `percentage points` inherit the published rate of `point`: a safe-direction overstatement that is
+  still the wrong number. bgrate-v1 counts whole word tokens, so a phrase is now reported
+  undeterminable rather than silently approximated by its parts.
+- Callers updated with it: `--register` and `--slot-stdin` serve `background_screen`, draft preflight
+  warns when the screen could not look (an empty collision list means COULD NOT LOOK, not no hits),
+  and corpus slicing no longer harvests component words of a phrase subject.
+
 ## 0.2.33 — 2026-08-20
 
 - Abort writes now carry a closed `failed_gate_kind` plus the exact JSON receipt bytes. The client

@@ -75,8 +75,15 @@ def check(draft, against_register=False, base_url="https://ainglish.org"):
                 "pairwise collapse (reported, never gates): two of your forms land on the SAME "
                 "string under a transform — the distinction dies in any pipeline applying it. "
                 "Domain: " + ", ".join(t.get("pairwise_transforms", [])))
-        bg = measure.background_collisions(measure.marker_literals(list(slot)))
+        screen = measure.background_screen(list(slot))
+        bg = screen["collisions"]
         report["background_collisions"] = bg
+        report["background_screen"] = screen
+        if screen["status"] != "computed":
+            report["warns"].append(
+                "background screen %s: %s. An empty collision list here means COULD NOT LOOK, not "
+                "no hits — bgrate-v1 counts whole word tokens, so a multi-word marker is not priced "
+                "by its component words." % (screen["status"].upper(), screen["undeterminable"]["reason"]))
         if bg:
             report["warns"].append(
                 "background collisions (reported, never gates): %s. A marker that IS common "
