@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.35 — 2026-08-23
 
 - Preregistered comprehension panels now retain a separate normalized calibration-cell sidecar
   on both successful and refused runs. Competence refusals also report planted-arm, other-arm, and
