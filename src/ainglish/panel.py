@@ -18,7 +18,9 @@ POST /api/v1/proposals/{slug}/measurements — with the methodology enforced by 
                          the other) are the panel's positive control. Every reader receives both arms
                          of every calibration item; byte-identical arms refuse before spend. A panel
                          that cannot detect the planted difference is not measuring, and the harness
-                         REFUSES to emit a measurement — ctl() applied to the panel itself.
+                         REFUSES to emit a measurement — ctl() applied to the panel itself. Separate
+                         normalized calibration-cell receipts and per-reader refusal summaries make
+                         that failure diagnosable without converting it into construct evidence.
   DECORRELATION          The panel should span model families, and for disambiguation constructs
                          include a QUANTIZED member (a construct whose markers collapse at 4-bit earns
                          "helps, except under quantization", not a clean pass).
@@ -1277,7 +1279,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
     return measurement
 
 
-def run_panel(manifest, ask_fn=ask, cell_results=None):
+def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None):
     if not isinstance(manifest, dict):
         print("REFUSING to run: the panel manifest must be one JSON object.")
         return None
@@ -1454,6 +1456,39 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
 
     attempted_cells = {"calibration": 0, "real": 0}
 
+    def record_result(result_sink, item, arm, reader, answer):
+        if result_sink is None:
+            return
+        expected = item.get("answer")
+        normal_answer = None if is_absent(answer) else str(answer)
+        record = {
+            "kind": "ainglish.panel.cell-result.v1",
+            "item_id": item["id"],
+            "arm": arm,
+            "reader": reader,
+            "answer": normal_answer,
+            "expected": expected,
+            "correct": (None if not normal_answer or not expected else
+                        normal_answer.casefold() == str(expected).casefold()),
+        }
+        reason = getattr(answer, "reason", None)
+        if reason:
+            record["absence_reason"] = reason
+        strata = {
+            key: item[key] for key in (
+                "cell", "condition", "marker", "class", "consequence_class", "scenario_id",
+            )
+            if key in item and isinstance(item[key], (str, int, bool))
+        }
+        if isinstance(item.get("strata"), dict):
+            strata.update({
+                str(key): value for key, value in item["strata"].items()
+                if isinstance(value, (str, int, bool))
+            })
+        if strata:
+            record["strata"] = strata
+        result_sink.append(record)
+
     def run_items(subset, both_arms=False, stage="real"):
         """Ask every panelist every item in subset. Rows, or a refusal if calibration aborted.
 
@@ -1484,6 +1519,12 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
                         per_arm[fault.reason] = per_arm.get(fault.reason, 0) + 1
                         answer = None
                     note_truncation(truncations, ep["name"], arm, answer)
+                    result_sink = (calibration_results if stage == "calibration"
+                                   else cell_results if stage == "real" else None)
+                    # Persist the attempted cell before the yield guard decides whether this
+                    # answer ends the run. The triggering dead cell is part of the paid audit
+                    # trail even though it can never enter scoring.
+                    record_result(result_sink, item, arm, ep["name"], answer)
                     try:
                         guard.observe(ep["name"], arm,
                                       None if is_absent(answer) else str(answer), answer)
@@ -1506,37 +1547,6 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
                                 panel, _manifest_unbound_entry_point(manifest)),
                         )
                     out.append((item["id"], arm, ep["name"], answer))
-                    if stage == "real" and cell_results is not None:
-                        expected = item.get("answer")
-                        normal_answer = None if is_absent(answer) else str(answer)
-                        record = {
-                            "kind": "ainglish.panel.cell-result.v1",
-                            "item_id": item["id"],
-                            "arm": arm,
-                            "reader": ep["name"],
-                            "answer": normal_answer,
-                            "expected": expected,
-                            "correct": (None if not normal_answer or not expected else
-                                        normal_answer.casefold() == str(expected).casefold()),
-                        }
-                        reason = getattr(answer, "reason", None)
-                        if reason:
-                            record["absence_reason"] = reason
-                        strata = {
-                            key: item[key] for key in (
-                                "cell", "condition", "marker", "class", "consequence_class",
-                                "scenario_id",
-                            )
-                            if key in item and isinstance(item[key], (str, int, bool))
-                        }
-                        if isinstance(item.get("strata"), dict):
-                            strata.update({
-                                str(key): value for key, value in item["strata"].items()
-                                if isinstance(value, (str, int, bool))
-                            })
-                        if strata:
-                            record["strata"] = strata
-                        cell_results.append(record)
         return out
 
     # --- calibration EXECUTES first, and gates before a single real item is bought ------------
@@ -1578,6 +1588,19 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
     cacc, _ = score(calib_rows, calib)
     other_arm = "english" if planted_arm != "english" else "ainglish"
     detectable, undetectable = cacc.get(planted_arm), cacc.get(other_arm)
+    calibration_by_reader = {}
+    for ep in panel:
+        reader_acc, _ = score(
+            [row for row in calib_rows if row[2] == ep["name"]], calib,
+        )
+        reader_detectable = reader_acc.get(planted_arm)
+        reader_other = reader_acc.get(other_arm)
+        calibration_by_reader[ep["name"]] = {
+            "detectable": reader_detectable,
+            "other": reader_other,
+            "gap": (None if reader_detectable is None or reader_other is None
+                    else reader_detectable - reader_other),
+        }
     if detectable is None or undetectable is None or (detectable - undetectable) < calibration_min_gap:
         gap = None if detectable is None or undetectable is None else detectable - undetectable
         message = (f"CALIBRATION FAILED: planted-effect gap {detectable} vs {undetectable} — this "
@@ -1588,7 +1611,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None):
             "calibration", "competence", message,
             attempted_cells["calibration"], 0,
             {"planted_arm": planted_arm, "detectable": detectable,
-             "other": undetectable, "gap": gap, "min_gap": calibration_min_gap},
+             "other": undetectable, "gap": gap, "min_gap": calibration_min_gap,
+             "by_reader": calibration_by_reader},
             instrument_preparation=instrument_preparation_receipt(
                 panel, _manifest_unbound_entry_point(manifest)),
         )
@@ -1994,14 +2018,20 @@ def selftest():
         return tag_reliant(ep, text, q, options)
 
     dual_cells = []
+    dual_calibration_cells = []
     dual = run_panel(dict(good, items=dual_items), ask_fn=calibration_probe,
-                     cell_results=dual_cells)
+                     cell_results=dual_cells, calibration_results=dual_calibration_cells)
     assert dual is not None
     assert len(dual_cells) == len([item for item in dual_items if not item.get("calibration")]) * 2
     assert all(row["kind"] == "ainglish.panel.cell-result.v1" and
                row["answer"] is not None and isinstance(row["correct"], bool)
                for row in dual_cells), \
         "the sidecar source must retain every normalized real-cell verdict and no calibration row"
+    assert len(dual_calibration_cells) == len(calibration_texts) * len(good["panel"])
+    assert all(row["kind"] == "ainglish.panel.cell-result.v1" and
+               row["answer"] is not None and isinstance(row["correct"], bool)
+               for row in dual_calibration_cells), \
+        "the calibration sidecar source must retain every normalized positive-control verdict"
     expected_calibration_calls = sorted(
         (reader["name"], text)
         for reader in good["panel"] for text in calibration_texts.values()
@@ -2297,11 +2327,17 @@ def selftest():
 
     # …and a dead cell must reach the yield guard, which is what makes it safe not to grade it:
     # an all-truncated run emits nothing rather than a delta over an empty denominator.
-    truncated = run_panel(good, ask_fn=lambda *a: None)
+    truncated_cells = []
+    truncated = run_panel(
+        good, ask_fn=lambda *a: None, calibration_results=truncated_cells,
+    )
     assert _is_panel_refusal(truncated), \
         "a panel whose every read is bound-truncated must emit a refusal, not a measurement"
     assert truncated["stage"] == "calibration" and truncated["cause"] == "transport_or_yield"
     assert truncated["real_cells_attempted"] == 0
+    assert len(truncated_cells) == truncated["calibration_cells_attempted"] == 8
+    assert all(row["answer"] is None and row["correct"] is None for row in truncated_cells), \
+        "the cell that triggers the yield guard is paid evidence and must remain in the receipt"
 
     # --- transport faults: a cell, with a cause, not a dead run --------------------------------
     # _fetch's taxonomy. The NARROWNESS is the load-bearing half: a 400 or a 401 is the operator's
@@ -2745,10 +2781,18 @@ def selftest():
 
     bad = dict(good, panel=[{"name": "flip-a"}, {"name": "flip-b"}])
     refused_cells = []
-    incompetent = run_panel(bad, ask_fn=coinflip, cell_results=refused_cells)
+    refused_calibration_cells = []
+    incompetent = run_panel(
+        bad, ask_fn=coinflip, cell_results=refused_cells,
+        calibration_results=refused_calibration_cells,
+    )
     assert _is_panel_refusal(incompetent) and incompetent["cause"] == "competence", \
         "a coin-flipping panel must FAIL the calibration gate with a competence receipt"
     assert refused_cells == [], "a calibration refusal must prove zero real rows in the sidecar"
+    assert len(refused_calibration_cells) == len([i for i in items if i.get("calibration")]) * 4, \
+        "a competence refusal must preserve every bought calibration cell for diagnosis"
+    assert set(incompetent["details"]["by_reader"]) == {"flip-a", "flip-b"}, \
+        "the public refusal must show which declared readers could not detect the known effect"
 
     # …and it must fail BEFORE buying a single real item. The gate used to be scored last, so a
     # blind panel paid for the whole run before saying it was blind. Asserting "returns None" does
@@ -3021,6 +3065,17 @@ def selftest():
             assert request_paths == [
                 "panel-runspec.json.attempt-selftest-attempt.measurement.json"
             ], "a successful attempt must save one deterministic pre-submission request"
+            cell_paths = sorted(name for name in os.listdir(receipt_dir)
+                                if name.endswith(".cells.json"))
+            assert cell_paths == [
+                "panel-runspec.json.attempt-selftest-attempt.calibration.cells.json",
+                "panel-runspec.json.attempt-selftest-attempt.cells.json",
+            ], "a successful comprehension attempt must preserve calibration and real cells"
+            with open(os.path.join(receipt_dir, cell_paths[0]), encoding="utf-8") as handle:
+                calibration_document = json.load(handle)
+            assert calibration_document["kind"] == \
+                "ainglish.panel.calibration-cell-results.v1"
+            assert calibration_document["calibration_cells_recorded"] == 16
             request_path = os.path.join(receipt_dir, request_paths[0])
             with open(request_path, encoding="utf-8") as handle:
                 saved_request = json.load(handle)
@@ -3047,6 +3102,18 @@ def selftest():
             ]
             with open(os.path.join(abort_receipt_dir, abort_paths[0]), "rb") as handle:
                 saved_abort = handle.read()
+            cell_paths = sorted(name for name in os.listdir(abort_receipt_dir)
+                                if name.endswith(".cells.json"))
+            assert cell_paths == [
+                "panel-runspec.json.attempt-selftest-attempt.calibration.cells.json",
+                "panel-runspec.json.attempt-selftest-attempt.cells.json",
+            ]
+            with open(os.path.join(abort_receipt_dir, cell_paths[0]), encoding="utf-8") as handle:
+                calibration_document = json.load(handle)
+            with open(os.path.join(abort_receipt_dir, cell_paths[1]), encoding="utf-8") as handle:
+                real_document = json.load(handle)
+            assert calibration_document["calibration_cells_recorded"] == 16
+            assert real_document["real_cells_recorded"] == 0
             assert saved_abort == failed_probe.aborts[-1]["preflight_receipt"].encode(), \
                 "the server-bound receipt string and locally saved receipt must be byte-identical"
         assert failed_events[0][0] == "mint" and failed_events[-1][0] == "abort", \
@@ -3058,6 +3125,11 @@ def selftest():
         failed_document = json.loads(failed_probe.aborts[-1]["preflight_receipt"])
         assert failed_document["failed_gate_kind"] == "harness_refuse", \
             "the typed disjunct must be inside the evidence bytes too"
+        assert failed_document["details"]["calibration_cell_results"][
+            "calibration_cells_recorded"] == 16
+        assert set(failed_document["details"]["refusal"]["details"]["by_reader"]) == \
+            {"flip-a", "flip-b"}, \
+            "the persisted abort must retain the declared-reader calibration diagnosis"
         assert failed_document["details"]["transcript"]["kind"] == \
             "ainglish.panel.transcript-summary.v1", \
             "transcript bytes need a bounded, digest-bearing public representation"
@@ -3570,32 +3642,38 @@ def _abort_panel_attempt(client, attempt_id, slug, failed_gate_kind, failed_gate
     print(f"ATTEMPT ABORTED: {attempt_id} — {failed_gate}")
 
 
-def _write_cell_results(attempt_id, slug, rows, receipt_dir, receipt_stem):
+def _write_cell_results(attempt_id, slug, rows, receipt_dir, receipt_stem, stage="real"):
     """Persist normalized comprehension-cell answers beside an attempt, never in its API payload.
 
     The aggregate is sufficient for the register's scalar, but not for a preregistered stratum
     claim. A local sidecar keeps that audit surface without expanding the server schema or putting
-    observed answers inside the preregistered manifest commitment. Calibration rows are omitted;
-    a calibration refusal therefore produces an explicit zero-row receipt.
+    observed answers inside the preregistered manifest commitment. Calibration uses its own
+    sidecar: a competence refusal otherwise says only that the pooled gate failed, concealing
+    which declared reader or arm could not read the known effect.
     """
+    if stage not in ("real", "calibration"):
+        raise ValueError("cell-result stage must be real or calibration")
+    count_key = "real_cells_recorded" if stage == "real" else "calibration_cells_recorded"
     if not receipt_dir:
         return None
     document = {
-        "kind": "ainglish.panel.cell-results.v1",
+        "kind": ("ainglish.panel.cell-results.v1" if stage == "real"
+                 else "ainglish.panel.calibration-cell-results.v1"),
         "attempt_id": attempt_id,
         "proposal": slug,
-        "real_cells_recorded": len(rows),
+        count_key: len(rows),
         "rows": rows,
     }
     encoded = json.dumps(document, sort_keys=True, separators=(",", ":"),
                          ensure_ascii=False).encode()
     digest = hashlib.sha256(encoded).hexdigest()
     safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", receipt_stem).strip("-") or "runspec"
-    path = os.path.join(receipt_dir, f"{safe_stem}.attempt-{attempt_id}.cells.json")
+    suffix = "cells.json" if stage == "real" else "calibration.cells.json"
+    path = os.path.join(receipt_dir, f"{safe_stem}.attempt-{attempt_id}.{suffix}")
     with open(path, "wb") as handle:
         handle.write(encoded + b"\n")
-    print(f"CELL RESULTS: {path} ({len(rows)} real cell(s), sha256 {digest})")
-    return {"path": path, "sha256": digest, "real_cells_recorded": len(rows)}
+    print(f"{stage.upper()} CELL RESULTS: {path} ({len(rows)} {stage} cell(s), sha256 {digest})")
+    return {"path": path, "sha256": digest, count_key: len(rows)}
 
 
 def _write_measurement_request(attempt_id, measurement, receipt_dir, receipt_stem):
@@ -3665,34 +3743,55 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     # and a complete-quartet estimator, so a flat answer sidecar would misstate its sampling unit;
     # leave that path unchanged until it has a quartet-shaped receipt of its own.
     cell_results = [] if manifest.get("metric") != "robustness_delta" else None
+    calibration_results = [] if cell_results is not None else None
+
+    def write_cell_receipts():
+        calibration_receipt = (_write_cell_results(
+            attempt_id, spec["slug"], calibration_results, receipt_dir, receipt_stem,
+            stage="calibration",
+        ) if calibration_results is not None else None)
+        real_receipt = (_write_cell_results(
+            attempt_id, spec["slug"], cell_results, receipt_dir, receipt_stem,
+        ) if cell_results is not None else None)
+        return calibration_receipt, real_receipt
+
     try:
         with contextlib.redirect_stdout(transcript):
-            measurement = run_panel(manifest, ask_fn=ask_fn, cell_results=cell_results)
+            measurement = run_panel(
+                manifest, ask_fn=ask_fn, cell_results=cell_results,
+                calibration_results=calibration_results,
+            )
     except KeyboardInterrupt:
+        calibration_receipt, cell_receipt = write_cell_receipts()
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "operator_interrupt",
                              "panel run interrupted before measurement emission",
                              {"exception": "KeyboardInterrupt",
                               "message": "operator interrupted the run",
+                              "calibration_cell_results": calibration_receipt,
+                              "cell_results": cell_receipt,
                               "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         raise
     except (Exception, SystemExit) as exc:
+        calibration_receipt, cell_receipt = write_cell_receipts()
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              _exception_failed_gate_kind(exc),
                              "panel harness raised before measurement emission",
                              {"exception": type(exc).__name__, "message": str(exc),
+                              "calibration_cell_results": calibration_receipt,
+                              "cell_results": cell_receipt,
                               "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         raise
-    cell_receipt = (_write_cell_results(
-        attempt_id, spec["slug"], cell_results, receipt_dir, receipt_stem
-    ) if cell_results is not None else None)
+    calibration_receipt, cell_receipt = write_cell_receipts()
     if _is_panel_refusal(measurement):
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              _panel_refusal_failed_gate_kind(measurement),
                              "panel harness refused at %s" % measurement.get("stage", "unknown stage"),
-                             {"refusal": measurement, "cell_results": cell_receipt,
+                             {"refusal": measurement,
+                              "calibration_cell_results": calibration_receipt,
+                              "cell_results": cell_receipt,
                               "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         return None
@@ -3700,7 +3799,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "no_measurement",
                              "panel harness emitted no measurement",
-                             {"cell_results": cell_receipt, "transcript": transcript.text()},
+                             {"calibration_cell_results": calibration_receipt,
+                              "cell_results": cell_receipt, "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         return None
 
@@ -3711,6 +3811,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                              "filed manifest diverged from preregistered clean-run manifest",
                              {"expected_manifest_commitment": expected,
                               "actual_manifest_commitment": actual,
+                              "calibration_cell_results": calibration_receipt,
+                              "cell_results": cell_receipt,
                               "transcript": transcript.text()},
                              receipt_dir, receipt_stem)
         return None

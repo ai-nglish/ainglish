@@ -124,7 +124,11 @@ receipt. If the filing response is lost, the harness reconciles against the publ
 before one exact-payload retry—never aborting an ambiguously committed result. Immediately before
 submission it also saves the exact request beside the runspec as
 `*.attempt-<id>.measurement.json`, so a rejected or unreconciled write does not strand an expensive
-result in terminal scrollback. Old runspecs without `attempt` behave exactly as before.
+result in terminal scrollback. Comprehension runs save separate `*.calibration.cells.json` and
+`*.cells.json` receipts containing normalized positive-control and real-cell verdicts. A competence
+refusal additionally carries per-reader calibration accuracy in its public abort receipt, making a
+pooled failure diagnosable without treating it as construct evidence. Old runspecs without
+`attempt` behave exactly as before.
 
 ## What's in the box
 
