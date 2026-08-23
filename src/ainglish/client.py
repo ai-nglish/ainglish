@@ -770,6 +770,15 @@ class AinglishClient:
         """One attempt by immutable id. A flat attempt row plus its `proposal` slug."""
         return self.get("/api/v1/attempts/" + urllib.parse.quote(attempt_id, safe=""))
 
+    def attempt_manifest(self, attempt_id):
+        """The exact immutable manifest stored when an attempt was minted.
+
+        Commitment-only legacy attempts return the server's explicit 404 error rather than an
+        inferred or reconstructed document. The attempt receipt exposes the content digest and
+        byte length before callers retrieve this endpoint.
+        """
+        return self.get("/api/v1/attempts/%s/manifest" % urllib.parse.quote(attempt_id, safe=""))
+
     def protocols(self):
         """Metric definitions. Envelope: {kind, replication_threshold, metrics: {name: {...}}}
         plus decorrelation axes, tokenizer classes, and the reference corpus summary."""
@@ -1153,18 +1162,22 @@ class AinglishClient:
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
 
     def mint_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
-                     proposal_revision=None):
+                     proposal_revision=None, *, store_manifest=True):
         """Preregister an exact measurement design before reader/tokenizer spend.
 
         ``manifest`` is the SAME object that will later ride in ``measure(..., payload)``. This
-        method computes its server-compatible sha256 commitment; do not mutate it after mint.
-        Returns the wire envelope ``{attempt: {attempt_id, state, pin, ...}}``. Complete the
-        attempt by including that ``attempt_id`` in the measurement payload, or abort it with an
-        evidence receipt via :meth:`abort_attempt` if a declared gate fires.
+        method computes its server-compatible sha256 commitment and, by default, sends the object
+        so the register can retain the canonical bytes behind an immutable URL. Do not mutate it
+        after mint. ``store_manifest=False`` is a temporary compatibility escape hatch for an old
+        commitment-only server; such an attempt is intrinsically less auditable.
+
+        Returns the wire envelope ``{attempt: {attempt_id, state, pin, manifest, ...}}``. Complete
+        the attempt by including that ``attempt_id`` in the measurement payload, or abort it with
+        an evidence receipt via :meth:`abort_attempt` if a declared gate fires.
         """
-        # The attempt API currently receives only this manifest's commitment, so it cannot inspect
-        # the roster or byte length itself. Mirror the measurement endpoint's bounds here before
-        # an invalid commitment creates an obligation which can never be completed.
+        # Refuse locally as well as server-side before an invalid commitment creates an obligation
+        # that can never be completed. This also keeps store_manifest=False safe against a legacy
+        # server that sees only the commitment.
         canonical = _validate_attempt_manifest(manifest)
         if not isinstance(estimand, str) or not estimand.strip():
             raise ValueError("estimand must be a non-empty string")
@@ -1177,6 +1190,10 @@ class AinglishClient:
             "admissibility_gates": admissibility_gates,
             "planned_sample": planned_sample,
         }
+        if not isinstance(store_manifest, bool):
+            raise ValueError("store_manifest must be true or false")
+        if store_manifest:
+            body["manifest"] = manifest
         path = "/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe="")
         return self.post(path, body)
 
@@ -1939,6 +1956,10 @@ def selftest():
     probe.attempt("attempt/id")
     assert sent == {"path": "/api/v1/attempts/attempt%2Fid", "params": None, "auth": False}, sent
     sent.clear()
+    probe.attempt_manifest("attempt/id")
+    assert sent == {"path": "/api/v1/attempts/attempt%2Fid/manifest", "params": None,
+                    "auth": False}, sent
+    sent.clear()
     attempt_manifest = {"metric": "token_delta", "models": ["cl100k_base"]}
     probe.mint_attempt("some slug", attempt_manifest, "mean token change",
                        ["both tokenizers load"], {"items": 8})
@@ -1949,7 +1970,18 @@ def selftest():
         "estimand": "mean token change",
         "admissibility_gates": ["both tokenizers load"],
         "planned_sample": {"items": 8},
+        "manifest": attempt_manifest,
     }, sent
+    sent.clear()
+    probe.mint_attempt("some slug", attempt_manifest, "mean token change",
+                       ["both tokenizers load"], {"items": 8}, store_manifest=False)
+    assert "manifest" not in sent["payload"], sent
+    try:
+        probe.mint_attempt("some slug", attempt_manifest, "mean token change",
+                           ["both tokenizers load"], {"items": 8}, store_manifest="yes")
+        raise AssertionError("non-boolean store_manifest must refuse")
+    except ValueError as exc:
+        assert "store_manifest" in str(exc)
     # Refuse before POSTing when the eventual measurement endpoint would reject the roster. The
     # 80-character boundary is accepted; one more character is not.
     sent.clear()
