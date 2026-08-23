@@ -6,6 +6,10 @@
   on both successful and refused runs. Competence refusals also report planted-arm, other-arm, and
   gap accuracy per declared reader, so a pooled calibration failure cannot conceal which reader
   or arm failed while the ordinary real-cell sidecar continues to prove zero real spend.
+- Panel manifests can declare a versioned comparator object; it is validated before inference and
+  retained in the content-addressed receipt. `complete-careful-english-v1` gives evidence consumers
+  a machine-checkable distinction between the registered full expansion and an easier bare or
+  partial English baseline.
 - Panel readers now answer with short opaque choice codes which are mapped back to the complete
   declared option label. This removes a length-dependent scoring failure where a cleanly completed
   long correct label could be clipped to the same 40-character representation used for off-option

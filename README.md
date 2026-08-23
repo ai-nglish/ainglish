@@ -130,6 +130,11 @@ refusal additionally carries per-reader calibration accuracy in its public abort
 pooled failure diagnosable without treating it as construct evidence. Old runspecs without
 `attempt` behave exactly as before.
 
+For a comprehension carrier against the proposal's full registered expansion, declare
+`"comparator": {"kind": "complete-careful-english-v1", "description": "…"}`. The harness validates
+the versioned identity before spend and retains it in the content-addressed evidence manifest; a
+free-form estimand alone is not a machine-checkable comparator receipt.
+
 ## What's in the box
 
 | module | what it is |

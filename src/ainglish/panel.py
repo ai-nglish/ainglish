@@ -912,6 +912,25 @@ def _validate_panel_declarations(manifest, panel):
               f"(the roster size); got {neff!r}. No coercion and no reader spend.")
         return None
 
+    comparator = manifest.get("comparator")
+    if comparator is not None:
+        if not isinstance(comparator, dict) or set(comparator) - {"kind", "description"}:
+            print("REFUSING to run: comparator must be an object containing kind and optional "
+                  "description only. No reader cell was bought.")
+            return None
+        kind = comparator.get("kind")
+        description = comparator.get("description")
+        if (not isinstance(kind, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*-v[1-9][0-9]*", kind)
+                or len(kind) > 80):
+            print("REFUSING to run: comparator.kind must be a lowercase versioned identifier "
+                  "such as complete-careful-english-v1 (max 80 characters). No reader cell was bought.")
+            return None
+        if description is not None and (not isinstance(description, str)
+                                        or not description.strip() or len(description) > 500):
+            print("REFUSING to run: comparator.description must be a non-empty string of at most "
+                  "500 characters when supplied. No reader cell was bought.")
+            return None
+
     return planted_arm, min_gap
 
 
@@ -1180,7 +1199,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
                          "sign_flipped": (sval < 0) != (value < 0) and value != 0,
                          "outside_interval": sval < lo or sval > hi})
 
-    spec = {k: manifest[k] for k in ("construct", "metric", "seed") if k in manifest}
+    spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
     spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
         json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
     if manifest.get("items_url"):
@@ -1783,7 +1802,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             },
         }
 
-    spec = {k: manifest[k] for k in ("construct", "metric", "seed") if k in manifest}
+    spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
     spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
         json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
     if manifest.get("items_url"):
@@ -1974,6 +1993,13 @@ def selftest():
                                  f"invalid calibration_min_gap {bad_gap!r}")
     assert_pre_spend_refusal(dict(good, planted_arm="baseline"),
                              "planted_arm must name one of the two measured arms")
+    for bad_comparator in ("careful", {}, {"kind": "not-versioned"},
+                           {"kind": "complete-careful-english-v1", "extra": True},
+                           {"kind": "complete-careful-english-v1", "description": ""}):
+        assert_pre_spend_refusal(
+            dict(good, comparator=bad_comparator),
+            f"malformed comparator {bad_comparator!r} must not buy reader cells",
+        )
     assert_pre_spend_refusal(dict(good, metric="not_a_panel_metric"),
                              "an unsupported metric must not buy a comprehension panel")
     malformed_items = [dict(item) for item in items]
@@ -2400,6 +2426,14 @@ def selftest():
     assert any("timeout" in r for arms in tf["per_cell"].values() for r in arms.values()), tf
 
     m = run_panel(good, ask_fn=tag_reliant)
+    compared = run_panel(dict(good, comparator={
+        "kind": "complete-careful-english-v1",
+        "description": "The proposal's complete registered careful-English mapping.",
+    }), ask_fn=tag_reliant)
+    assert compared["manifest"]["comparator"] == {
+        "kind": "complete-careful-english-v1",
+        "description": "The proposal's complete registered careful-English mapping.",
+    }, "the comparator identity must survive into the content-addressed evidence manifest"
     assert m is not None and m["value"] > 0, "calibrated tag-reliant panel must find the recovery effect"
     assert m["manifest"]["instrument_preparation"] == {
         "entry_point": "run_panel(custom ask_fn)", "binding": "unbound"}, \
@@ -3313,6 +3347,10 @@ DEMO_NOTE = """{
   "construct": "wit-class-and-pred-class-witness-and-settle-axes",
   "slug": "wit-class-and-pred-class-witness-and-settle-axes",
   "metric": "comprehension_accuracy_delta",
+  "comparator": {
+    "kind": "complete-careful-english-v1",
+    "description": "The proposal's complete registered careful-English mapping."
+  },
   "seed": 7,
   "planted_arm": "ainglish",
   "panel": [
