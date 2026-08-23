@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Panel readers now answer with short opaque choice codes which are mapped back to the complete
+  declared option label. This removes a length-dependent scoring failure where a cleanly completed
+  long correct label could be clipped to the same 40-character representation used for off-option
+  diagnostics. Item validation now requires 2..26 unique non-empty choices and an answer that names
+  one of them, and reader receipts declare the `opaque-choice-v1` answer protocol.
 - `mint_attempt()` now sends the validated manifest by default so a v2 register can store its
   canonical bytes, validate the declared design at mint time, and return an immutable retrieval
   receipt. `attempt_manifest()` retrieves those bytes as JSON. Callers can explicitly set

@@ -67,6 +67,8 @@ PANEL_REFUSAL_KIND = "ainglish.panel.refusal.v1"
 MAX_ABORT_RECEIPT_BYTES = 20_000
 MAX_ABORT_TRANSCRIPT_EXCERPT_BYTES = 4_096
 _INSTRUMENT_PREPARATION_KEY = "_ainglish_instrument_preparation"
+ANSWER_PROTOCOL = "opaque-choice-v1"
+_CHOICE_CODES = tuple(chr(code) for code in range(ord("A"), ord("Z") + 1))
 
 
 def _panel_refusal(stage, cause, message, calibration_cells_attempted,
@@ -502,6 +504,10 @@ def reader_receipt(endpoint):
         out["model_digest"] = resolved.get("model_digest")
         out["digest_source"] = resolved.get("digest_source") or "unbound"
     out["instrument_preparation"] = dict(preparation)
+    # The answer-binding protocol is part of the reader instrument. A result produced when the
+    # model copied a long option label is not byte-for-byte comparable with one produced when it
+    # selected a short opaque code, even when the underlying item and model are identical.
+    out["answer_protocol"] = ANSWER_PROTOCOL
     out.update(transport_settings(endpoint))
     return out
 
@@ -597,9 +603,13 @@ def ask(endpoint, text, question, options, allow_unbound=False):
                 "allow_unbound=True for a diagnostic read whose receipt says unbound.")
         endpoint[_INSTRUMENT_PREPARATION_KEY] = {
             "entry_point": "ask(allow_unbound=True)", "binding": "unbound"}
+    if not isinstance(options, list) or not (2 <= len(options) <= len(_CHOICE_CODES)):
+        raise ValueError(f"options must contain 2..{len(_CHOICE_CODES)} choices")
+    choice_map = {_CHOICE_CODES[index]: option for index, option in enumerate(options)}
+    choices = "\n".join(f"{code}: {option}" for code, option in choice_map.items())
     prompt = (f"Read this message written by one agent to another:\n\n---\n{text}\n---\n\n"
-              f"Question: {question}\nAnswer with EXACTLY one of these options and nothing else: "
-              + " | ".join(options))
+              f"Question: {question}\nChoices:\n{choices}\n"
+              "Answer with EXACTLY one choice code and nothing else.")
     out, truncated = chat(endpoint, prompt)
     if truncated:
         # Hit the token bound before answering. Scoring that as a wrong answer is the empty-cell
@@ -608,23 +618,22 @@ def ask(endpoint, text, question, options, allow_unbound=False):
         # as live and the yield guard never gets to weigh it. Typed absence — a fault is
         # referred to the guard with its reason, never graded.
         return Absent("truncated")
-    out = out.strip().casefold()
+    out = out.strip()
     if not out:
         # A clean stop that said NOTHING ('' with finish_reason 'stop'). Before is_absent
         # existed this fell through to the off-option return below as '' — dead to the yield
         # guard, live-wrong to the scorer, simultaneously (Rosetta's receipt on the served
         # v0.2.15). Absence is one question with one answer now.
         return Absent("empty_stop")
-    # The prompt requires one exact option, so grade that contract exactly. Substring matching
-    # makes overlapping labels order-dependent: with ["yes", "no", "cannot tell"], the valid
-    # answer "cannot tell" contains "no" and was therefore scored as "no". The served control
-    # and wit/pred item sets both contain this ordinary option shape, so this is measurement logic,
-    # not merely tolerant parsing. Anything else remains an off-option answer and is scored as
-    # such; accepting explanatory prose would need an unambiguous, separately specified parser.
-    exact = {str(o).strip().casefold(): o for o in options}
-    if out in exact:
-        return exact[out]
-    return out[:40]  # off-option answer counts as wrong and inflates entropy — as it should
+    # Bind the model to a one-byte answer code, then recover the COMPLETE declared label. Asking a
+    # reader to echo a long label made the old 40-character off-option diagnostic indistinguishable
+    # from a clipped correct answer. Opaque codes also keep overlapping labels unambiguous. Anything
+    # except one exact code remains off-option and is scored as wrong; explanatory prose is not a
+    # separately specified parser.
+    code = out.upper()
+    if code in choice_map:
+        return choice_map[code]
+    return out[:40]  # bounded off-option diagnostic; never used for a valid choice
 
 
 def note_truncation(store, reader, cell, answer):
@@ -844,9 +853,24 @@ def _validate_item_block(items, label):
                 print(f"REFUSING to run: {label}[{position}].{key} must be a string. "
                       "No reader cell was bought.")
                 return False
-        if not isinstance(item["options"], list) or not item["options"]:
-            print(f"REFUSING to run: {label}[{position}].options must be a non-empty list. "
+        if not isinstance(item["options"], list) or not (2 <= len(item["options"]) <= len(_CHOICE_CODES)):
+            print(f"REFUSING to run: {label}[{position}].options must contain 2.."
+                  f"{len(_CHOICE_CODES)} choices. "
                   "No reader cell was bought.")
+            return False
+        if any(not isinstance(option, str) or not option.strip() for option in item["options"]):
+            print(f"REFUSING to run: {label}[{position}].options must contain non-empty strings. "
+                  "No reader cell was bought.")
+            return False
+        normalized = [option.strip().casefold() for option in item["options"]]
+        if len(set(normalized)) != len(normalized):
+            print(f"REFUSING to run: {label}[{position}].options must be unique after trimming "
+                  "and case-folding. No reader cell was bought.")
+            return False
+        answer = str(item["answer"]).strip().casefold()
+        if answer not in normalized:
+            print(f"REFUSING to run: {label}[{position}].answer must name exactly one declared "
+                  "option. No reader cell was bought.")
             return False
     return True
 
@@ -2209,7 +2233,8 @@ def selftest():
         # the behavioural gate and prove refusal happens before the fake wire sees a request.
         direct = {"name": "direct", "provider": "ollama", "model": "m"}
         sent.clear()
-        _open = _capture(_ok_openai)
+        _open = _capture(
+            {"choices": [{"message": {"content": "A"}, "finish_reason": "stop"}]})
         try:
             ask(direct, "text", "q?", ["yes", "no"])
             raise AssertionError("an unprepared direct ask reached the reader")
@@ -2222,6 +2247,9 @@ def selftest():
         assert direct_receipt["digest_source"] == "unbound"
         assert direct_receipt["instrument_preparation"] == {
             "entry_point": "ask(allow_unbound=True)", "binding": "unbound"}
+        assert direct_receipt["answer_protocol"] == ANSWER_PROTOCOL
+        assert "A: yes" in sent["body"]["messages"][0]["content"]
+        assert "B: no" in sent["body"]["messages"][0]["content"]
 
         # Truncation must never be graded — on either transport. The fragment here CONTAINS a valid
         # option, so before the check it graded as a CORRECT answer: a transport fault could raise
@@ -2239,15 +2267,29 @@ def selftest():
             assert is_absent(_cut) and getattr(_cut, "reason", None) == "truncated", \
                 f"{label}: a bound-truncated read must be a TYPED dead cell, not a scored answer (got {_cut!r})"
 
-        # Option labels can overlap. "cannot tell" contains the shorter valid option "no", and
-        # the old substring parser returned whichever option appeared first in the manifest.
-        # Exercise the real adapter/parser path because a direct equality assertion would miss a
-        # future reintroduction in ask().
+        # Labels can overlap or exceed the old bounded diagnostic. The reader selects an opaque
+        # code and ask() recovers the full label without requiring the model to copy it faithfully.
         _open = _capture(
-            {"choices": [{"message": {"content": "cannot tell"}, "finish_reason": "stop"}]})
+            {"choices": [{"message": {"content": "C"}, "finish_reason": "stop"}]})
         assert ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?",
                    ["yes", "no", "cannot tell"], allow_unbound=True) == "cannot tell", \
-            "an exact longer option must not be captured by an earlier substring option"
+            "an opaque code must recover the declared overlapping label"
+
+        shared = "a correct answer whose first forty characters are deliberately identical: "
+        long_options = [shared + "alpha", shared + "beta"]
+        _open = _capture(
+            {"choices": [{"message": {"content": "B"}, "finish_reason": "stop"}]})
+        assert ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?",
+                   long_options, allow_unbound=True) == long_options[1], \
+            "a clean long choice must survive as the complete declared option"
+        assert "A: " + long_options[0] in sent["body"]["messages"][0]["content"]
+        assert "B: " + long_options[1] in sent["body"]["messages"][0]["content"]
+
+        _open = _capture(
+            {"choices": [{"message": {"content": shared}, "finish_reason": "stop"}]})
+        assert ask({"name": "o", "provider": "ollama", "model": "m"}, "text", "q?",
+                   long_options, allow_unbound=True) == shared[:40], \
+            "copied prose is still an off-option diagnostic, not a valid choice"
     finally:
         _open = real_open
         if not had_key:
