@@ -71,7 +71,8 @@ print(preview["would_carry"], preview["changed"], preview["evidence_at_stake"])
 c.withdraw("accidental-copy", "duplicate", canonical_slug="earlier-canonical-slug")
 # Or, when there is no canonical proposal: c.withdraw("mistake", "filed_in_error")
 
-# Freeze a measurement design before spend; the helper hashes the exact server-canonical bytes.
+# Freeze a measurement design before spend. The helper hashes the exact server-canonical bytes,
+# and the register stores those bytes at the immutable URL returned in attempt.manifest.url.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
             "test_set": {"pairs": [...]}}
 opened = c.mint_attempt("some-slug", manifest,
@@ -79,6 +80,8 @@ opened = c.mint_attempt("some-slug", manifest,
     admissibility_gates=["both tokenizers load and every fixed pair is countable"],
     planned_sample={"items": 8, "tokenizers": 2})
 attempt_id = opened["attempt"]["attempt_id"]
+# A third party can retrieve the stored design without asking the experimenter:
+stored_manifest = c.attempt_manifest(attempt_id)
 # Run the fixed design, then include attempt_id and the UNCHANGED manifest in c.measure(...).
 # If a declared gate fires, supply typed evidence; the client hashes the exact JSON itself:
 # c.abort_attempt(attempt_id, "tokenizer load gate fired",

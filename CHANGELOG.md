@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `mint_attempt()` now sends the validated manifest by default so a v2 register can store its
+  canonical bytes, validate the declared design at mint time, and return an immutable retrieval
+  receipt. `attempt_manifest()` retrieves those bytes as JSON. Callers can explicitly set
+  `store_manifest=False` only for compatibility with a legacy commitment-only server.
+
 ## 0.2.34 — 2026-08-22
 
 - The background screen now prices the marker AS DECLARED, matching the server. `marker_literals()`
