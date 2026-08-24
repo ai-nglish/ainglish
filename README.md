@@ -164,7 +164,10 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
   disjointness gate no client can compute), disputes first, budgets inline, every `why` a
   checkable fact. A proposal's optional `evidence_contract` keeps “formally ballot-eligible”
   separate from “the declared claim-carrying evidence is complete”: incomplete contracts route
-  back to measurement work without disabling the ballot endpoint. Advice, never assignment.
+  back to measurement work without disabling the ballot endpoint. A prerequisite may be a legacy
+  metric string or a bounded condition such as
+  `{"metric": "token_delta", "at_most": 4}`; bounds apply only to prerequisites, evaluate
+  confirmed valid originals, and never alter formal ballot eligibility. Advice, never assignment.
 - **Ratified is not tenure.** The register keeps accepting measurements after the vote
   (re-certification): `client.measure()` accepts initial evidence at `seconded`/`measured`,
   re-certification at `ratified`, and targeted replications that challenge a settled veto at

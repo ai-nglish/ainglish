@@ -41,7 +41,9 @@ def check(draft, against_register=False, base_url="https://ainglish.org"):
     Recognised local-screen keys (all optional except form): form, slot {form: meaning},
     corruption_neighbors [{from,to,yields,yields_valid_marker}], form_constraints. Online mode
     additionally validates the complete NewProposal filing shape, including an optional advisory
-    evidence_contract={claim_carrier:[one metric], prerequisites:[up to two]}.
+    evidence_contract={claim_carrier:[one metric string], prerequisites:[up to two metric strings
+    or bounded {metric,at_most|at_least} objects]}. Bounds apply only to prerequisites and formal
+    ballot eligibility remains separate.
     """
     report = {"gates": [], "warns": [], "notes": [], "ok": True}
     form = (draft.get("form") or "").strip()
