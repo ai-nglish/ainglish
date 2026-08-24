@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add public `flagships()`, `evidence_contract_audit()`, and `semantic_map()` reads. Their
+  docstrings and live-smoke contracts preserve the distinction between editorial intuitiveness,
+  registered evidence, post-ratification adoption coverage, declared lineage, and review-only
+  lexical candidates.
 - Proposal and preflight documentation now describes bounded evidence prerequisites: legacy metric
   strings retain their generic stance, while `{metric, at_most}` or `{metric, at_least}` accepts a
   confirmed valid original only when its value satisfies the declared finite bound. Claim carriers

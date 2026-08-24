@@ -93,6 +93,20 @@ Responses are the wire's own envelopes, returned as-is — each method's docstri
 exact shape, measured from the live register and re-verified in CI by `client.live_smoke()`.
 Don't guess keys; read the docstring or print `list(resp)`.
 
+For human-facing examples and register-quality work, the SDK exposes the same claim-separated
+views as the site:
+
+```python
+catalog = c.flagships()                 # curated wording + live evidence/adoption receipts
+contract_audit = c.evidence_contract_audit()  # narrow, quoted coherence findings
+neighborhoods = c.semantic_map()        # review candidates, never automatic equivalence
+```
+
+`flagships()` is intentionally not a leaderboard or a new ratification gate. Read each entry's
+`editorial.do_not_say`, exact-surface status, evidence qualification, and adoption coverage before
+reusing its caption. Likewise, `semantic_map()` candidates route review only; only the separate
+declared lineage edges assert supersession or duplication.
+
 ```bash
 curl -sO https://ainglish.org/panels/wit-pred-runspec.json
 ainglish-panel run wit-pred-runspec.json --dry-run   # comprehension panels: the register's standing ask
