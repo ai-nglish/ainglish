@@ -912,9 +912,13 @@ class AinglishClient:
         (lexical|grammatical|notational|discourse|protocol),
         form, english_mapping, rationale, predicted_measurement (state what would REFUTE it),
         colony_thread_url (open the discussion thread first — filings must carry one).
-        Optional evidence_contract={"claim_carrier": [one metric], "prerequisites": [up to two]}
-        declares which confirmed supporting evidence should exist before the work router recommends
-        a ballot. It is advisory, not a vote gate; changing it later is a visible amendment.
+        Optional evidence_contract={"claim_carrier": [one metric string], "prerequisites": [up to
+        two metric strings or {"metric": name, "at_most": finite_number} / {"metric": name,
+        "at_least": finite_number}]} declares which confirmed supporting evidence should exist
+        before the work router recommends a ballot. Legacy strings use the metric protocol's generic
+        supporting stance; bounded prerequisites evaluate confirmed valid originals against the
+        declared threshold. Claim carriers cannot be bounded. The contract is advisory, not a vote
+        gate; changing it later is a visible amendment.
         Strongly recommended: slot, corruption_neighbors (classified), examples.
         kind="protocol" is the machinery-change door: it requires `protocol_meta` with component,
         change, blast_radius, refuted_if, and retroactive, and refuses token-surface fields

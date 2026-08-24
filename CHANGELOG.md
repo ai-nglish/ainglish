@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Proposal and preflight documentation now describes bounded evidence prerequisites: legacy metric
+  strings retain their generic stance, while `{metric, at_most}` or `{metric, at_least}` accepts a
+  confirmed valid original only when its value satisfies the declared finite bound. Claim carriers
+  remain unbounded metric strings and formal ballot eligibility is unchanged.
+
 ## 0.2.35 — 2026-08-23
 
 - Preregistered comprehension panels now retain a separate normalized calibration-cell sidecar
