@@ -233,7 +233,13 @@ PRESETS = {
 # timeout_s is a wire bound too: increasing it changes which slow cells survive, so it must be
 # committed beside max_tokens rather than hiding in a module constant.
 TRANSPORT_BOUNDS = {"max_tokens": 1024, "timeout_s": 120}
-SAMPLER_KEYS = ("seed", "top_p", "top_k", "num_ctx")
+SAMPLER_KEYS = ("seed", "top_p", "top_k", "num_ctx", "reasoning_effort")
+# Reasoning readers (Qwen3, Gemma 4 …) spend the whole token bound thinking and never reach the
+# option list on the OpenAI-compatible wire; the model-side switches (Modelfile `think`, a
+# `/no_think` system prompt) do NOT reach that path. `reasoning_effort` is the one control that
+# does, so it is transmitted and stamped like every other answer-affecting setting — a direct
+# classifier read and a reasoning read are different instruments and must not share a receipt.
+REASONING_EFFORT_VALUES = ("none", "minimal", "low", "medium", "high")
 # One least-privilege constant feeds both the Colony SDK and stdlib exchange paths so they cannot
 # drift. Ainglish has no reputation gate, so write tokens need identity and profile only.
 AINGLISH_OIDC_SCOPE = "openid profile"
@@ -327,6 +333,15 @@ def sampler_settings(endpoint):
                              "the receipt records provider-default.")
         out["top_k"] = value
 
+    if "reasoning_effort" in endpoint:
+        value = endpoint["reasoning_effort"]
+        if not isinstance(value, str) or value not in REASONING_EFFORT_VALUES:
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: reasoning_effort must be one of "
+                             f"{', '.join(REASONING_EFFORT_VALUES)}.")
+        if api != "openai":
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: reasoning_effort is transmitted only "
+                             "by the OpenAI-compatible adapter; omit it so the receipt records provider-default.")
+        out["reasoning_effort"] = value
     if "num_ctx" in endpoint:
         value = endpoint["num_ctx"]
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -2240,6 +2255,20 @@ def selftest():
         assert reader_receipt({"name": "a", "provider": "anthropic", "model": "m"})["temperature"] is None, \
             "omission is still explicit in the re-runnable reader receipt"
         default_sampler = reader_receipt({"name": "o", "provider": "ollama", "model": "m"})
+        # reasoning_effort: rides the OpenAI-compatible wire and the receipt; refused on Anthropic;
+        # provider-default when unstated (the instrument must say whether the reader reasoned).
+        sent = request_sampling({"name": "r", "provider": "ollama", "model": "m", "reasoning_effort": "none"})
+        assert sent.get("reasoning_effort") == "none", sent
+        assert transport_settings({"name": "r", "provider": "ollama", "model": "m"})["reasoning_effort"] == "provider-default"
+        for bad in ({"reasoning_effort": "off"}, {"reasoning_effort": 0}):
+            try:
+                sampler_settings({"name": "r", "provider": "ollama", "model": "m", **bad}); raise AssertionError("accepted %r" % bad)
+            except SystemExit as exc:
+                assert "reasoning_effort must be one of" in str(exc)
+        try:
+            sampler_settings({"name": "r", "provider": "anthropic", "model": "m", "reasoning_effort": "low"}); raise AssertionError("anthropic accepted reasoning_effort")
+        except SystemExit as exc:
+            assert "OpenAI-compatible adapter" in str(exc)
         assert {key: default_sampler[key] for key in SAMPLER_KEYS} == {
             key: "provider-default" for key in SAMPLER_KEYS}, \
             "every undeclared sampler default must be typed rather than silently omitted"

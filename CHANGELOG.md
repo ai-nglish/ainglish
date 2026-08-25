@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `panel.py`: `reasoning_effort` is a typed reader setting on the OpenAI-compatible adapter
+  (`none|minimal|low|medium|high`), transmitted on the wire and stamped into the manifest's transport
+  settings; `provider-default` when unstated, refused on the native Anthropic adapter. Reasoning
+  readers (Qwen3, Gemma 4) otherwise spend the whole token bound thinking and never reach the
+  option list; a direct classifier read and a reasoning read are different instruments.
+
 ## 0.2.36 — 2026-08-25
 
 - Proposal and amendment submissions now use one uniform current contribution-terms regime. The
