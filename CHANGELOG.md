@@ -7,6 +7,10 @@
   settings; `provider-default` when unstated, refused on the native Anthropic adapter. Reasoning
   readers (Qwen3, Gemma 4) otherwise spend the whole token bound thinking and never reach the
   option list; a direct classifier read and a reasoning read are different instruments.
+- `panel.py`: an `interpretation_entropy_delta` payload now reports its `arms` in the metric's own
+  unit — per-arm mean entropies in bits plus `max_bits` (log2 of live answers per item-arm cell, the
+  panel's ceiling) — with the accuracies kept as a labelled diagnostic. Previously the arms were
+  accuracies beside a value in bits, so the server's resolution bound read the wrong quantity.
 
 ## 0.2.36 — 2026-08-25
 

@@ -1787,6 +1787,22 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     arms = {"english": round(acc["english"], 4) if acc["english"] is not None else None,
             "ainglish": round(acc["ainglish"], 4) if acc["ainglish"] is not None else None,
             "chance": round(sum(1 / len(i["options"]) for i in real) / len(real), 4) if real else None}
+    if metric == "interpretation_entropy_delta":
+        # The arms of an ENTROPY row are the per-arm mean entropies in bits, not accuracies — the
+        # server's resolution bound reads arms in the metric's own unit. max_bits is the panel's
+        # ceiling: log2 of the mean number of live answers per (item, arm) cell, which is what a
+        # counterbalanced roster actually offers each cell; declared so "both arms at the ceiling"
+        # is judged against this panel, not a fixed constant.
+        cells = {}
+        for r in real_rows:
+            if not is_absent(r[3]):
+                cells[(r[0], r[1])] = cells.get((r[0], r[1]), 0) + 1
+        import math as _m
+        mean_live = (sum(cells.values()) / len(cells)) if cells else 1.0
+        arms = {"english": round(ent["english"], 4) if ent["english"] is not None else None,
+                "ainglish": round(ent["ainglish"], 4) if ent["ainglish"] is not None else None,
+                "max_bits": round(_m.log2(max(1.0, mean_live)), 4),
+                "accuracy": {"english": arms["english"], "ainglish": arms["ainglish"], "chance": arms["chance"]}}
 
     # Accuracy is discrete. A rounded delta such as -1.19 pp can look more precise than the
     # underlying scored cells permit, especially when dead cells leave unequal arm denominators.
@@ -2799,6 +2815,28 @@ def selftest():
     assert rm_rep["replicates_hash"] == "b" * 64
     blind = run_panel(dict(r_good, planted_arm="english"), ask_fn=r_oracle)
     assert blind is None, "a robustness panel that cannot read intact forms must refuse at calibration"
+
+    # An ENTROPY run reports its arms in bits with the panel's ceiling, never accuracies.
+    e_items = [{"id": "ec1", "calibration": True, "english": "plain e", "ainglish": "marked e",
+                "question": "q?", "options": ["yes", "no"], "answer": "yes"},
+               {"id": "e1", "english": "plain 1", "ainglish": "marked 1", "question": "q?", "options": ["yes", "no"], "answer": "yes"},
+               {"id": "e2", "english": "plain 2", "ainglish": "marked 2", "question": "q?", "options": ["yes", "no"], "answer": "yes"}]
+    def e_oracle(ep, text, question, options):
+        if text == "plain e":
+            return "no"                      # the planted effect: the unmarked calibration arm misreads
+        if text.startswith("marked") and ep["name"] == "reader-c":
+            return "no"                      # one reader disagrees on the marked arm -> spread there
+        return "yes"
+    e_good = {"construct": "ent-demo", "slug": "demo", "metric": "interpretation_entropy_delta", "seed": 3,
+              "items": e_items, "planted_arm": "ainglish",
+              "panel": [{"name": "reader-a"}, {"name": "reader-b"}, {"name": "reader-c"}], "panel_neff": 3}
+    em = run_panel(dict(e_good), ask_fn=e_oracle)
+    assert em is not None and em["metric"] == "interpretation_entropy_delta", "an entropy run must emit"
+    assert set(em["arms"]) >= {"english", "ainglish", "max_bits"}, em["arms"]
+    assert em["arms"]["max_bits"] > 0 and em["arms"]["english"] <= em["arms"]["max_bits"] + 1e-9 \
+        and em["arms"]["ainglish"] <= em["arms"]["max_bits"] + 1e-9, \
+        "entropy arms are bits bounded by the declared panel ceiling, not accuracies: %r" % em["arms"]
+    assert em["arms"]["accuracy"]["chance"] == 0.5, "the accuracies survive as a labelled diagnostic"
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))
