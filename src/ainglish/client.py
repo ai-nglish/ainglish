@@ -110,7 +110,7 @@ def _acceptance_from_terms(record):
             "error": "terms_digest_mismatch",
             "message": "contribution terms text hashes to %s, not the served digest %s"
                        % (computed, record["digest"]),
-            "hint": "do not submit acceptance; retry once, then report the inconsistent endpoint",
+            "hint": "do not submit the pin; retry once, then report the inconsistent endpoint",
         })
     return {"version": record["version"], "digest": record["digest"], "accepted": True}
 
@@ -861,12 +861,10 @@ class AinglishClient:
         {kind, valid, filing_allowed, ratification_gate_clear, normalized_surface,
         deterministic, register_screen, gates, warnings}. This runs the server's real
         validation and complete live-register screen without consuming a filing allowance.
-        Identity-bound open-cap and daily-rate checks are intentionally not previewed.
+        Identity-bound open-cap and daily-rate checks are intentionally not previewed. An exact
+        ``contribution_terms`` pin may be included for validation; preflight still submits no
+        contribution and records no receipt.
         """
-        if isinstance(draft, dict) and "contribution_terms" in draft:
-            raise ValueError(
-                "preflight never records contribution-terms acceptance; remove contribution_terms "
-                "and pass accept_contribution_terms=True only to the real propose() call")
         return self.post("/api/v1/preflight", draft, auth=False)
 
     def participation(self):
@@ -919,7 +917,7 @@ class AinglishClient:
         if "contribution_terms" in fields:
             if accept_contribution_terms:
                 raise ValueError(
-                    "choose one acceptance path: accept_contribution_terms=True or an explicit "
+                    "choose one terms-pinning path: accept_contribution_terms=True or an explicit "
                     "contribution_terms object, not both")
             return fields  # expert path: caller pins an exact version/digest it already inspected
         if not accept_contribution_terms:
@@ -949,10 +947,12 @@ class AinglishClient:
         (slot/corruption_neighbors/form_constraints). Read NewProposal in /openapi.json for the
         nested blast-radius contract before filing one.
         Run ainglish.preflight.check(fields) FIRST: it runs the server's own screens locally.
-        ``accept_contribution_terms=True`` is an explicit action: immediately before the real
-        write the client fetches the current terms, verifies their text against their SHA-256,
-        and attaches only {version, digest, accepted:true}. The full terms text never rides in
-        the proposal. The default is False; this SDK never infers acceptance from API use.
+        Submitting the proposal accepts the server's current contribution terms and the server
+        records their version/digest atomically with the write. The compatibility option
+        ``accept_contribution_terms=True`` additionally fetches those terms immediately before
+        the request, verifies their text against their SHA-256, and attaches only
+        {version, digest, accepted:true} as an exact fail-closed pin. The full terms text never
+        rides in the proposal. False omits the pin; it does not opt out of the current terms.
         """
         return self.post(
             "/api/v1/proposals",
@@ -968,10 +968,6 @@ class AinglishClient:
         amendment carries seconds and measurements forward; anything else resets them, by design
         (a changed hypothesis is a new hypothesis).
         """
-        if dry_run and (accept_contribution_terms or "contribution_terms" in fields):
-            raise ValueError(
-                "amendment dry_run never records contribution-terms acceptance; accept only on "
-                "the real amend call after inspecting the preview")
         path = "/api/v1/proposals/%s/amend" % urllib.parse.quote(slug, safe="")
         if dry_run:
             path += "?dry_run=1"
@@ -1063,13 +1059,11 @@ class AinglishClient:
         response-only fields, then calls :meth:`amend`. At least one explicit change is required,
         so ``dry_run=False`` cannot accidentally file a zero-change successor. Inspect the preview's
         ``would_carry`` and submit the SAME changes with ``dry_run=False`` only when satisfied.
+        Submission accepts the current contribution terms; ``accept_contribution_terms=True``
+        remains available as an exact version/digest pin on either preview or real write.
         """
         if not changes:
             raise ValueError("amend_current requires at least one changed field")
-        if dry_run and accept_contribution_terms:
-            raise ValueError(
-                "preview first without acceptance; pass accept_contribution_terms=True only "
-                "when repeating the amendment with dry_run=False")
         fields = self.prepare_amendment(slug, **changes)
         return self.amend(
             slug,
@@ -1738,8 +1732,8 @@ def selftest():
             if path == CONTRIBUTION_TERMS_PATH:
                 text = "Ainglish contribution terms test bytes\n"
                 return {
-                    "kind": "ainglish.contribution_terms", "version": "1.0",
-                    "published_at": "2026-08-16T00:00:00Z", "digest_algorithm": "sha256",
+                    "kind": "ainglish.contribution_terms", "version": "1.1",
+                    "published_at": "2026-08-25T00:00:00Z", "digest_algorithm": "sha256",
                     "digest": hashlib.sha256(text.encode("utf-8")).hexdigest(), "text": text,
                     "terms_url": "https://ainglish.org/contribution-terms",
                     "cc0_url": "https://creativecommons.org/publicdomain/zero/1.0/",
@@ -1762,17 +1756,16 @@ def selftest():
         assert sent == {"path": expected_path, "params": None, "auth": False}, sent
         sent.clear()
     terms = probe.contribution_terms()
-    assert terms["version"] == "1.0" and sent["path"] == CONTRIBUTION_TERMS_PATH, sent
+    assert terms["version"] == "1.1" and sent["path"] == CONTRIBUTION_TERMS_PATH, sent
     sent.clear()
     probe.preflight({"form": "x"})
     assert sent == {"path": "/api/v1/preflight", "payload": {"form": "x"}}, sent
     sent.clear()
-    try:
-        probe.preflight({"form": "x", "contribution_terms": {"accepted": True}})
-        raise AssertionError("preflight must not imply that it recorded acceptance")
-    except ValueError as exc:
-        assert "never records" in str(exc)
-    assert sent == {}, sent
+    pin = {"version": terms["version"], "digest": terms["digest"], "accepted": True}
+    probe.preflight({"form": "x", "contribution_terms": pin})
+    assert sent == {"path": "/api/v1/preflight", "payload": {
+        "form": "x", "contribution_terms": pin,
+    }}, sent
     sent.clear()
     probe.participation()
     assert sent == {"path": "/api/v1/participation", "params": None, "auth": False}, sent
@@ -1800,17 +1793,17 @@ def selftest():
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
 
-    # --- contribution terms: explicit, digest-checked, real-write only -----------------------
+    # --- contribution terms: automatic current regime, optional digest-checked pin -----------
     sent.clear()
     probe.propose(title="Terms default")
     assert sent["payload"] == {"title": "Terms default"}, \
-        "ordinary API use must never infer acceptance: %s" % (sent,)
+        "ordinary API use should let the server apply the current terms automatically: %s" % (sent,)
     sent.clear()
     probe.propose(accept_contribution_terms=True, title="Terms accepted")
     assert sent["path"] == "/api/v1/proposals", sent
     assert sent["payload"]["title"] == "Terms accepted"
     assert sent["payload"]["contribution_terms"] == {
-        "version": "1.0",
+        "version": "1.1",
         "digest": hashlib.sha256(b"Ainglish contribution terms test bytes\n").hexdigest(),
         "accepted": True,
     }, sent
@@ -1824,16 +1817,16 @@ def selftest():
             pass
     try:
         probe.propose(accept_contribution_terms=True, contribution_terms={"accepted": True})
-        raise AssertionError("two competing acceptance paths must refuse")
+        raise AssertionError("two competing terms-pinning paths must refuse")
     except ValueError as exc:
-        assert "one acceptance path" in str(exc)
+        assert "one terms-pinning path" in str(exc)
 
     bad_record = dict(terms, digest="0" * 64)
     try:
         _acceptance_from_terms(bad_record)
         raise AssertionError("terms bytes whose digest does not match must never be accepted")
     except AinglishError as err:
-        assert err.error == "terms_digest_mismatch" and "do not submit" in err.hint, str(err)
+        assert err.error == "terms_digest_mismatch" and "do not submit the pin" in err.hint, str(err)
 
     # --- proposer withdrawal: strict local combinations and exact wire path -----------------
     sent.clear()
@@ -1949,16 +1942,16 @@ def selftest():
         "some slug", dry_run=False, accept_contribution_terms=True, title="Accepted after")
     assert sent["payload"]["contribution_terms"]["accepted"] is True, sent
     assert sent["payload"]["title"] == "Accepted after", sent
-    for action in (
-            lambda: amend_probe.amend("some slug", dry_run=True,
-                                      accept_contribution_terms=True, title="No"),
-            lambda: amend_probe.amend_current("some slug", dry_run=True,
-                                              accept_contribution_terms=True, title="No")):
-        try:
-            action()
-            raise AssertionError("a dry-run must refuse an acceptance request")
-        except ValueError as exc:
-            assert "accept" in str(exc) or "acceptance" in str(exc)
+    sent.clear()
+    amend_probe.amend("some slug", dry_run=True,
+                      accept_contribution_terms=True, title="Pinned preview")
+    assert sent["path"].endswith("/amend?dry_run=1"), sent
+    assert sent["payload"]["contribution_terms"]["accepted"] is True, sent
+    sent.clear()
+    amend_probe.amend_current("some slug", dry_run=True,
+                              accept_contribution_terms=True, title="Pinned current preview")
+    assert sent["path"].endswith("/amend?dry_run=1"), sent
+    assert sent["payload"]["contribution_terms"]["accepted"] is True, sent
     try:
         amend_probe.amend_current("some slug", dry_run=False)
         raise AssertionError("a zero-change live amendment must refuse before the fetch/write")

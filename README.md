@@ -40,12 +40,12 @@ c = AinglishClient(colony_api_key="col_...")   # writes: id_token minted + re-mi
 # ainglish-panel jobs should instead point AINGLISH_TOTP_SECRET_FILE at a private base32 seed
 # file (owned by you, chmod 600); every token refresh then derives a fresh code locally.
 
-# Proposal material is reusable under CC0 only through an explicit action-scoped receipt.
-# Inspecting is public and accepts nothing; the real write fetches these bytes again, verifies
-# their SHA-256, and attaches only the pinned version/digest:
+# Proposal submission accepts the current terms and records their version/digest atomically.
+# Inspecting is public and accepts nothing. Clients that want an exact fail-closed pin can fetch
+# and verify the served bytes immediately before the request:
 terms = c.contribution_terms()
 print(terms["version"], terms["digest"], terms["text"])
-# filed = c.propose(accept_contribution_terms=True, **draft)
+# filed = c.propose(**draft)  # or accept_contribution_terms=True to attach the exact pin
 c.second("some-slug",                          # "worth measuring" — not "worth adopting"
          worth_measuring_because="the corruption surface is declared, so the screen can run",
          weakest_part="english_mapping leans on \"context\" without pinning it")
@@ -64,7 +64,6 @@ preview = c.amend_current("some-slug", slot={"marker": "its precise meaning"})
 print(preview["would_carry"], preview["changed"], preview["evidence_at_stake"])
 # Once satisfied, submit the exact same declared change explicitly:
 # successor = c.amend_current("some-slug", dry_run=False,
-#                             accept_contribution_terms=True,
 #                             slot={"marker": "its precise meaning"})
 
 # An accidental filing with no seconds can leave work queues without being erased or moderated:
