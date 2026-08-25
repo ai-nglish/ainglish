@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `panel.py`: `learnability` runs — can a fresh reader infer the construct from the register entry
+  alone? The ainglish arm is the served register entry plus the marked message, the english arm the
+  marked message cold; the value is the entry arm's accuracy (score 0..1, no arms on the wire), with
+  per-member entry-arm accuracies and the usual calibration gate.
+
 ## 0.2.37 — 2026-08-26
 
 - `panel.py`: `reasoning_effort` is a typed reader setting on the OpenAI-compatible adapter

@@ -778,6 +778,8 @@ def bootstrap_delta(rows, items, metric, n=2000, seed=0):
             deltas.append(100 * (acc["ainglish"] - acc["english"]))
         elif metric == "interpretation_entropy_delta" and ent["ainglish"] is not None and ent["english"] is not None:
             deltas.append(ent["ainglish"] - ent["english"])
+        elif metric == "learnability" and acc["ainglish"] is not None:
+            deltas.append(acc["ainglish"])
     if not deltas:
         return None, None
     deltas.sort()
@@ -920,7 +922,7 @@ def _validate_item_block(items, label):
 def _validate_panel_declarations(manifest, panel):
     """Return (planted_arm, calibration_min_gap), or None on a zero-cost refusal."""
     metric = manifest.get("metric")
-    if metric not in ("comprehension_accuracy_delta", "interpretation_entropy_delta",
+    if metric not in ("comprehension_accuracy_delta", "interpretation_entropy_delta", "learnability",
                       "robustness_delta"):
         print(f"REFUSING to run: unsupported panel metric {metric!r}. Use "
               "comprehension_accuracy_delta, interpretation_entropy_delta, or robustness_delta. "
@@ -1738,6 +1740,14 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         value = round(100 * (acc["ainglish"] - acc["english"]), 2)
     elif metric == "interpretation_entropy_delta":
         value = round(ent["ainglish"] - ent["english"], 4)
+    elif metric == "learnability":
+        # Can a fresh reader infer the construct from the REGISTER ENTRY alone? The ainglish arm is
+        # entry + marked message, the english arm the marked message cold; the value is the entry
+        # arm's accuracy, a score in 0..1 (the cold arm is the natural control the calibration
+        # gate already consumes). Not a delta and not a veto.
+        if acc["ainglish"] is None:
+            print("REFUSING to emit: no live entry-arm cells to score."); return None
+        value = round(acc["ainglish"], 4)
     else:
         print(f"unsupported metric {metric}"); return None
     lo, hi = bootstrap_delta(real_rows, real, metric, seed=seed)
@@ -1796,6 +1806,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             p_val = round(100 * (p_acc["ainglish"] - p_acc["english"]), 2)
         elif metric == "interpretation_entropy_delta" and p_ent["ainglish"] is not None and p_ent["english"] is not None:
             p_val = round(p_ent["ainglish"] - p_ent["english"], 4)
+        elif metric == "learnability" and p_acc["ainglish"] is not None:
+            p_val = round(p_acc["ainglish"], 4)
         else:
             continue
         row = {"model": p_["name"], "value": p_val}
@@ -1945,6 +1957,13 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # making every consumer retrieve manifest bytes. Keep the committed copy during the
         # transition: SDK 0.2.28 rows carried it there, and the server verifies both agree.
         measurement["accuracy_resolution"] = accuracy_resolution
+    if metric == "learnability":
+        # A unit-interval score, not a delta: no arms on the wire (the server refuses them on this
+        # metric) and the accuracy-resolution grid is a delta concept. The cold arm remains visible
+        # through the calibration receipt and per_member entry-arm accuracies.
+        measurement["arms"] = None
+        measurement["unit"] = "score 0..1 (accuracy of the register-entry arm)"
+        measurement.pop("accuracy_resolution", None)
     # panel_neff is emitted ONLY when the manifest declares it. This harness will not auto-fill a
     # decorrelation number it cannot estimate: a roster count carrying the name of an error-structure
     # statistic is a receipt-integrity bug, not a convenience.
@@ -2909,6 +2928,22 @@ def selftest():
     for ok in ("xhigh", "max", "minimal"):
         assert request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.6", "reasoning_effort": ok}).get("reasoning_effort") == ok
     assert em["arms"]["accuracy"]["chance"] == 0.5, "the accuracies survive as a labelled diagnostic"
+
+    # LEARNABILITY: the ainglish arm carries the register entry + the marked message, the english arm
+    # the marked message cold; the value is the ENTRY arm's accuracy in 0..1 and no arms are sent
+    # (the server refuses arms on a unit-interval metric).
+    l_items = [{"id": "lc1", "calibration": True, "english": "cold cal", "ainglish": "ENTRY cal",
+                "question": "q?", "options": ["yes", "no"], "answer": "yes"},
+] + [{"id": f"l{k}", "english": f"cold {k}", "ainglish": f"ENTRY {k}", "question": "q?", "options": ["yes", "no"], "answer": "yes"} for k in range(1, 7)]
+    def l_oracle(ep, text, question, options):
+        return "yes" if text.startswith("ENTRY") else "no"   # derivable only with the entry present
+    l_good = {"construct": "learn-demo", "slug": "demo", "metric": "learnability", "seed": 1,   # a seed whose counterbalancing reaches BOTH arms for these ids
+              "items": l_items, "planted_arm": "ainglish", "panel": [{"name": "reader-a"}, {"name": "reader-b"}], "panel_neff": 2}
+    lm = run_panel(dict(l_good), ask_fn=l_oracle)
+    assert lm is not None and lm["metric"] == "learnability", "a learnability run must emit"
+    assert lm["value"] == 1.0 and 0.0 <= lm["value_lo"] <= lm["value"] <= lm["value_hi"] <= 1.0, lm
+    assert lm.get("arms") is None, "learnability is a unit-interval metric: no arms on the wire"
+    assert lm["unit"] == "score 0..1 (accuracy of the register-entry arm)", lm.get("unit")
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))
