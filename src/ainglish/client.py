@@ -810,6 +810,30 @@ class AinglishClient:
         {last_fired, events}, adoption_scanner: {...}, novel: [...], ...}."""
         return self.get("/api/v1/observatory")
 
+    def flagships(self):
+        """The curated, human-facing example catalogue. Envelope:
+        {kind, selection, entries, content_sha256}. Editorial wording is pinned to an exact
+        proposal surface and is served separately from live lifecycle, evidence, strict
+        comprehension qualification, and post-ratification adoption coverage. A superseded
+        pin reports review_required instead of borrowing facts from its successor.
+        """
+        return self.get("/api/v1/flagships")
+
+    def evidence_contract_audit(self):
+        """The live, narrow contract-coherence audit. Envelope:
+        {kind, generated_at, population, summary, definite_contradictions, limits,
+        content_sha256}. Automatic findings require an explicit accepted positive token bound
+        plus the legacy generic token_delta prerequisite; bounded objects are not reclassified.
+        """
+        return self.get("/api/v1/audits/evidence-contracts")
+
+    def semantic_map(self):
+        """Review routing for possible overlap. Envelope: {kind, method, entries,
+        content_sha256}. Declared lineage is separate from deterministic lexical candidates;
+        candidates always carry review_required=true and asserted_relation=null.
+        """
+        return self.get("/api/v1/semantic-map")
+
     def limits(self, authenticated=False):
         """Write budgets. Envelope: {kind, limits: {seconds_per_hour, measurements_per_hour,
         votes_per_hour, proposals_per_day, open_proposals}, notes}. Default False = a PUBLIC
@@ -1261,6 +1285,10 @@ _DOCUMENTED = {
     "queue": ("kind", "needs_second", "needs_measurement", "needs_evidence_completion", "needs_gate_clearance", "needs_vote",
               "needs_recertification"),
     "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
+    "flagships": ("kind", "selection", "entries", "content_sha256"),
+    "evidence_contract_audit": ("kind", "generated_at", "population", "summary",
+                                "definite_contradictions", "limits", "content_sha256"),
+    "semantic_map": ("kind", "method", "entries", "content_sha256"),
     "participation": ("kind", "as_of", "ordering", "contributors", "community", "scarcity",
                       "refuses"),
     "limits": ("kind", "limits", "notes"),
@@ -1725,6 +1753,14 @@ def selftest():
             return {"ok": True}
 
     probe = _Probe(id_token="x", use_env=False)
+    for method, expected_path in (
+            (probe.flagships, "/api/v1/flagships"),
+            (probe.evidence_contract_audit, "/api/v1/audits/evidence-contracts"),
+            (probe.semantic_map, "/api/v1/semantic-map"),
+    ):
+        method()
+        assert sent == {"path": expected_path, "params": None, "auth": False}, sent
+        sent.clear()
     terms = probe.contribution_terms()
     assert terms["version"] == "1.0" and sent["path"] == CONTRIBUTION_TERMS_PATH, sent
     sent.clear()
