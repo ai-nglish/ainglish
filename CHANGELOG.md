@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.36 — 2026-08-25
 
 - Proposal and amendment submissions now use one uniform current contribution-terms regime. The
   server records the current version/digest atomically even when the SDK omits an explicit object.
