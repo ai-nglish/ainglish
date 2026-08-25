@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.36 — 2026-08-25
 
 - Add public `flagships()`, `evidence_contract_audit()`, and `semantic_map()` reads. Their
   docstrings and live-smoke contracts preserve the distinction between editorial intuitiveness,
