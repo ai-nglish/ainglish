@@ -239,7 +239,7 @@ SAMPLER_KEYS = ("seed", "top_p", "top_k", "num_ctx", "reasoning_effort")
 # `/no_think` system prompt) do NOT reach that path. `reasoning_effort` is the one control that
 # does, so it is transmitted and stamped like every other answer-affecting setting — a direct
 # classifier read and a reasoning read are different instruments and must not share a receipt.
-REASONING_EFFORT_VALUES = ("none", "minimal", "low", "medium", "high")
+REASONING_EFFORT_VALUES = ("none", "minimal", "low", "medium", "high", "xhigh", "max")   # the documented set; support varies by model and the provider is the authority on which apply
 # One least-privilege constant feeds both the Colony SDK and stdlib exchange paths so they cannot
 # drift. Ainglish has no reputation gate, so write tokens need identity and profile only.
 AINGLISH_OIDC_SCOPE = "openid profile"
@@ -279,6 +279,16 @@ def temperature_for(endpoint):
     is not silent: None is retained in every reader receipt, so a rerun knows the provider default
     was the instrument setting. An explicit endpoint value (including explicit None) always wins.
     """
+    # Reasoning models refuse temperature/top_p beside any reasoning_effort other than "none"
+    # (OpenAI GPT-5.x: the request errors). The implicit 0 is therefore OMITTED when a non-none
+    # effort is declared — the receipt records provider-default — and an EXPLICIT temperature
+    # beside such an effort is refused before spend rather than let the provider 4xx mid-run.
+    effort = endpoint.get("reasoning_effort")
+    if effort is not None and effort != "none":
+        if "temperature" in endpoint and endpoint["temperature"] is not None:
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: temperature cannot be declared beside "
+                             f"reasoning_effort={effort!r} (reasoning models reject it); omit temperature or use effort 'none'.")
+        return None
     if "temperature" in endpoint:
         value = endpoint["temperature"]
     else:
@@ -316,6 +326,8 @@ def sampler_settings(endpoint):
 
     if "top_p" in endpoint:
         value = endpoint["top_p"]
+        if endpoint.get("reasoning_effort") not in (None, "none"):
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: top_p cannot be declared beside a non-none reasoning_effort (reasoning models reject it).")
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: top_p must be a number "
                              "from 0 through 1.")
@@ -1793,15 +1805,22 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # ceiling: log2 of the mean number of live answers per (item, arm) cell, which is what a
         # counterbalanced roster actually offers each cell; declared so "both arms at the ceiling"
         # is judged against this panel, not a fixed constant.
+        # The estimator is a MEAN of per-item entropies, so its attainable ceiling is the mean of the
+        # per-item ceilings log2(min(live answers in that cell, option cardinality)) — not log2 of
+        # the mean cell size (Jensen), and counterbalancing gives the two arms different cell-size
+        # distributions, so each arm carries its own ceiling (@dexagon-ai, #89 review).
+        import math as _m
+        opt_n = {i["id"]: len(i["options"]) for i in real}
         cells = {}
         for r in real_rows:
             if not is_absent(r[3]):
                 cells[(r[0], r[1])] = cells.get((r[0], r[1]), 0) + 1
-        import math as _m
-        mean_live = (sum(cells.values()) / len(cells)) if cells else 1.0
+        def _ceiling(arm):
+            per = [_m.log2(max(1, min(n, opt_n.get(iid, n)))) for (iid, a), n in cells.items() if a == arm]
+            return round(sum(per) / len(per), 4) if per else None
         arms = {"english": round(ent["english"], 4) if ent["english"] is not None else None,
                 "ainglish": round(ent["ainglish"], 4) if ent["ainglish"] is not None else None,
-                "max_bits": round(_m.log2(max(1.0, mean_live)), 4),
+                "max_bits": {"english": _ceiling("english"), "ainglish": _ceiling("ainglish")},
                 "accuracy": {"english": arms["english"], "ainglish": arms["ainglish"], "chance": arms["chance"]}}
 
     # Accuracy is discrete. A rounded delta such as -1.19 pp can look more precise than the
@@ -2833,9 +2852,23 @@ def selftest():
     em = run_panel(dict(e_good), ask_fn=e_oracle)
     assert em is not None and em["metric"] == "interpretation_entropy_delta", "an entropy run must emit"
     assert set(em["arms"]) >= {"english", "ainglish", "max_bits"}, em["arms"]
-    assert em["arms"]["max_bits"] > 0 and em["arms"]["english"] <= em["arms"]["max_bits"] + 1e-9 \
-        and em["arms"]["ainglish"] <= em["arms"]["max_bits"] + 1e-9, \
-        "entropy arms are bits bounded by the declared panel ceiling, not accuracies: %r" % em["arms"]
+    mb = em["arms"]["max_bits"]
+    assert isinstance(mb, dict) and set(mb) == {"english", "ainglish"}, "per-ARM ceilings (Jensen; counterbalanced cell sizes differ): %r" % mb
+    for arm in ("english", "ainglish"):
+        assert mb[arm] is None or em["arms"][arm] <= mb[arm] + 1e-9, "an arm's entropy cannot exceed its own attainable ceiling: %r" % em["arms"]
+    # the ceiling is the MEAN of per-item log2(min(cell size, options)), not log2 of the mean cell size
+    assert all(v is None or 0 < v <= 1.0 for v in mb.values()), mb   # two-option items: at most 1 bit per item
+    # reasoning-model sampling contract (@dexagon-ai): no implicit temperature beside a non-none effort,
+    # explicit temperature/top_p beside one refuses, and the documented effort set is accepted.
+    assert "temperature" not in request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.2", "reasoning_effort": "low"}), "implicit temperature must be omitted beside reasoning"
+    assert request_sampling({"name": "r", "provider": "ollama", "model": "m", "reasoning_effort": "none"}).get("temperature") == 0, "effort none keeps the deterministic default"
+    for bad in ({"temperature": 0}, {"top_p": 0.9}):
+        try:
+            request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.2", "reasoning_effort": "low", **bad}); raise AssertionError("accepted %r beside reasoning" % bad)
+        except SystemExit as exc:
+            assert "cannot be declared beside" in str(exc), str(exc)
+    for ok in ("xhigh", "max", "minimal"):
+        assert request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.6", "reasoning_effort": ok}).get("reasoning_effort") == ok
     assert em["arms"]["accuracy"]["chance"] == 0.5, "the accuracies survive as a labelled diagnostic"
 
     # the documented dry-run path completes AND stamps itself non-evidence

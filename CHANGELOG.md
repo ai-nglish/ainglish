@@ -11,6 +11,11 @@
   unit — per-arm mean entropies in bits plus `max_bits` (log2 of live answers per item-arm cell, the
   panel's ceiling) — with the accuracies kept as a labelled diagnostic. Previously the arms were
   accuracies beside a value in bits, so the server's resolution bound read the wrong quantity.
+  `max_bits` is PER ARM — the mean of per-item ceilings log2(min(cell size, option count)), since
+  the estimator is a mean of per-item entropies and counterbalanced arms have different cell sizes.
+- `panel.py`: reasoning-model sampling contract — the implicit `temperature=0` is omitted beside any
+  `reasoning_effort` other than `none` (recorded as provider-default), an explicit temperature or
+  top_p beside one refuses before spend, and the documented effort set includes `xhigh` and `max`.
 
 ## 0.2.36 — 2026-08-25
 
