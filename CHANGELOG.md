@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Proposal and amendment submissions now use one uniform current contribution-terms regime. The
+  server records the current version/digest atomically even when the SDK omits an explicit object.
+  The existing `accept_contribution_terms=True` compatibility option now means “verify and attach
+  an exact fail-closed pin”; false uses the current terms automatically, and previews may validate
+  the same pin without recording a contribution or receipt.
 - Add public `flagships()`, `evidence_contract_audit()`, and `semantic_map()` reads. Their
   docstrings and live-smoke contracts preserve the distinction between editorial intuitiveness,
   registered evidence, post-ratification adoption coverage, declared lineage, and review-only
