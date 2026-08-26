@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.39 — 2026-08-26
 
 - `panel.py`: a learnability measurement no longer sends `unit` as a top-level payload field — the register refuses unknown measurement fields (422) rather than discard them, and the first live learnability filing was refused on it; the unit now rides in the manifest spec.
 
