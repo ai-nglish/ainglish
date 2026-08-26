@@ -7,11 +7,10 @@ MODEL panel, and until now "panel" existed only as prose. This file makes it an 
 give it a manifest and model endpoints, and it produces a measurement ready to submit to
 POST /api/v1/proposals/{slug}/measurements — with the methodology enforced by construction:
 
-  COUNTERBALANCED ARMS   For REAL items, each panelist answers every item exactly once — half in the
-                         standard-English arm, half in the Ainglish arm, split deterministically by
-                         seed — so both arms share readers without any reader seeing both forms of
-                         one real item. Calibration is the positive control and deliberately exposes
-                         every reader to both arms of every calibration item.
+  COUNTERBALANCED ARMS   For delta metrics, each panelist answers every real item exactly once — half
+                         in each arm, split deterministically by seed. Learnability is a one-arm
+                         score and instead exposes every reader-item cold then entry-loaded, with one
+                         digest-bound entry snapshot. Calibration exposes every reader to both arms.
   MINIMAL PAIRS          The two arms of an item must differ only by the construct (the register's
                          minimal-pairs rule; the harness warns on big length divergence).
   CALIBRATION GATE       Planted-effect items (the correct answer is derivable in one arm and NOT in
@@ -21,6 +20,8 @@ POST /api/v1/proposals/{slug}/measurements — with the methodology enforced by 
                          REFUSES to emit a measurement — ctl() applied to the panel itself. Separate
                          normalized calibration-cell receipts and per-reader refusal summaries make
                          that failure diagnosable without converting it into construct evidence.
+                         Learnability controls must be target-independent: target failure belongs in
+                         its score, never in the generic instrument gate.
   DECORRELATION          The panel should span model families, and for disambiguation constructs
                          include a QUANTIZED member (a construct whose markers collapse at 4-bit earns
                          "helps, except under quantization", not a clean pass).
@@ -983,6 +984,69 @@ def _validate_panel_declarations(manifest, panel):
     return planted_arm, min_gap
 
 
+def _validate_learnability_v2(manifest, real, calibration):
+    """Bind one exact register entry and keep the positive control independent of its target.
+
+    Learnability must be able to return a low score. If the calibration set is the target entry,
+    the gate conditions the reader cohort on already learning the thing being measured and turns
+    target failure into an instrument refusal. The calibration therefore certifies only the
+    generic ability to use an explicit novel-marker definition; the real block is allowed to fail.
+    """
+    entry = manifest.get("entry")
+    required = {"text", "sha256", "source_url", "proposal_revision"}
+    if not isinstance(entry, dict) or set(entry) != required:
+        print("REFUSING to run: learnability v2 requires entry with exactly text, sha256, "
+              "source_url, and proposal_revision. One immutable register snapshot must be the "
+              "only instruction supplied to every real entry-arm cell. No reader cell was bought.")
+        return False
+    text = entry.get("text")
+    digest = entry.get("sha256")
+    source_url = entry.get("source_url")
+    revision = entry.get("proposal_revision")
+    if not isinstance(text, str) or not text.strip() or len(text.encode("utf-8")) > 131072:
+        print("REFUSING to run: learnability entry.text must be a non-empty UTF-8 snapshot of at "
+              "most 128 KiB. No reader cell was bought.")
+        return False
+    actual = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) or digest != actual:
+        print("REFUSING to run: learnability entry.sha256 does not bind the exact entry.text bytes. "
+              "No reader cell was bought.")
+        return False
+    if (not isinstance(source_url, str) or not source_url.startswith("https://")
+            or len(source_url) > 2048):
+        print("REFUSING to run: learnability entry.source_url must be a bounded HTTPS retrieval "
+              "location. No reader cell was bought.")
+        return False
+    if (not isinstance(revision, str) or not revision.strip()
+            or revision != manifest.get("slug")):
+        print("REFUSING to run: learnability entry.proposal_revision must equal the runspec slug. "
+              "No reader cell was bought.")
+        return False
+
+    coached = [item["id"] for item in real if item["english"] != item["ainglish"]]
+    if coached:
+        print(f"REFUSING to run: learnability real items must carry the byte-identical marked "
+              f"message in both item arms; entry text is prepended only by the harness. Per-item "
+              f"entry coaching was found on {coached}. No reader cell was bought.")
+        return False
+
+    target_names = {str(manifest.get("construct", "")).strip().casefold(),
+                    str(manifest.get("slug", "")).strip().casefold()}
+    bad_controls = []
+    for item in calibration:
+        control = item.get("calibration_construct")
+        independent = item.get("calibration_scope") == "target-independent"
+        if (not independent or not isinstance(control, str) or not control.strip()
+                or control.strip().casefold() in target_names):
+            bad_controls.append(item["id"])
+    if bad_controls:
+        print(f"REFUSING to run: learnability calibration must declare a non-target "
+              f"calibration_construct and calibration_scope='target-independent' on every row; "
+              f"invalid row(s) {bad_controls}. No reader cell was bought.")
+        return False
+    return True
+
+
 def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
     """robustness_delta v4: DIFFERENTIAL degradation under one corruption event, in PERCENTAGE
     POINTS (the API contract's unit — accuracy differences scale by 100 exactly as the
@@ -1437,6 +1501,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         print("REFUSING to run: comprehension panels need at least two real items — bootstrap and "
               "resample-down sensitivity are undefined for a smaller sample. No reader cell was bought.")
         return None
+    if manifest.get("metric") == "learnability" and not _validate_learnability_v2(
+            manifest, real, calib):
+        return None
 
     # --- per-item difficulty (@Exori's collider condition; the item SET carries it, per
     # @Rosetta's build-time rule — the harness change is deliberately just a reporting detail).
@@ -1576,8 +1643,14 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
                 )
                 for arm in arms:
                     attempted_cells[stage] += 1
+                    asked_text = item[arm]
+                    if manifest.get("metric") == "learnability" and stage == "real" and arm == "ainglish":
+                        # The harness, not the carrier author, composes the one frozen entry with
+                        # every marked message. That makes per-item hints impossible: all entry
+                        # cells share these exact prefix bytes and the same declared separator.
+                        asked_text = manifest["entry"]["text"] + "\n\nMarked message:\n" + item["ainglish"]
                     try:
-                        answer = ask_fn(ep, item[arm], item["question"], item["options"])
+                        answer = ask_fn(ep, asked_text, item["question"], item["options"])
                     except TransportFault as fault:
                         # A fault is a DEAD CELL WITH A STATED CAUSE — never a wrong answer, and
                         # never a dead run. Before this, one slow reader raised out of run_panel
@@ -1641,9 +1714,10 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
                    if not any(row[0] == item["id"] and row[1] == arm and row[2] == ep["name"]
                               and not is_absent(row[3]) for row in calib_rows)]
         if missing:
+            real_cell_plan = len(real) * len(panel) * (2 if manifest.get("metric") == "learnability" else 1)
             message = (f"REFUSING to run: reader {ep['name']!r} has no live calibration answer "
                        f"for {missing} — every measured reader must pass both arms of every "
-                       f"positive control. No real cell was bought ({len(real) * len(panel)} "
+                       f"positive control. No real cell was bought ({real_cell_plan} "
                        "saved).")
             return _panel_refusal(
                 "calibration", "transport_or_yield", message,
@@ -1684,10 +1758,15 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             instrument_preparation=instrument_preparation_receipt(
                 panel, _manifest_unbound_entry_point(manifest)),
         )
+    real_cell_plan = len(real) * len(panel) * (2 if manifest.get("metric") == "learnability" else 1)
     print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — panel can "
-          f"detect. ctl(planted-items) passes. {len(real) * len(panel)} real cells to go.")
+          f"detect. ctl(planted-items) passes. {real_cell_plan} real cells to go.")
 
-    real_rows = run_items(real, stage="real")
+    # A unit-interval learnability score needs every declared reader-item entry cell. A hash deal
+    # is appropriate for a two-arm delta, but silently scores only a complementary half-sample
+    # when the headline reads one arm alone. Stateless single-turn calls therefore read cold first
+    # and entry second for every real reader-item; both populations are complete and auditable.
+    real_rows = run_items(real, both_arms=manifest.get("metric") == "learnability", stage="real")
     if real_rows is None:
         return None
     rows = calib_rows + real_rows
@@ -1889,6 +1968,14 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         }
 
     spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
+    if metric == "learnability":
+        spec["entry"] = dict(manifest["entry"])
+        spec["real_arm_exposure"] = {
+            "mode": "both-arms-per-reader-item",
+            "order": ["english-cold", "ainglish-entry"],
+            "entry_composition": "entry.text + '\\n\\nMarked message:\\n' + item.ainglish",
+            "cells": len(real) * len(panel) * 2,
+        }
     spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
         json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
     if manifest.get("items_url"):
@@ -1911,6 +1998,11 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         "arm_exposure": "both-arms-per-reader-item",
         "cells": len(calib) * len(panel) * 2,
     }
+    if metric == "learnability":
+        spec["calibration"]["scope"] = "target-independent"
+        spec["calibration"]["constructs"] = sorted({
+            item["calibration_construct"] for item in calib
+        })
     # Difficulty is part of the experiment's identity, and ABSENCE IS STATED: a set that was
     # never annotated and a set that balanced perfectly must not read the same. The per-item
     # values ride inside items_sha256, so the pin covers them.
@@ -1930,8 +2022,11 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # the delta the manifest describes.
     spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
     spec["transport_truncations"] = truncation_receipt(truncations, ("english", "ainglish"))
-    spec["protocol"] = ("panel.py counterbalanced real arms + both-arms-per-reader-item "
-                        "planted-effect calibration gate") + (
+    spec["protocol"] = (("panel.py learnability v2: target-independent calibration first + "
+                         "one digest-bound entry snapshot + cold-then-entry both-arms exposure "
+                         "for every real reader-item") if metric == "learnability" else
+                        ("panel.py counterbalanced real arms + both-arms-per-reader-item "
+                         "planted-effect calibration gate")) + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
     measurement = {
         "metric": metric, "value": value,
@@ -2948,16 +3043,34 @@ def selftest():
         assert request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.6", "reasoning_effort": ok}).get("reasoning_effort") == ok
     assert em["arms"]["accuracy"]["chance"] == 0.5, "the accuracies survive as a labelled diagnostic"
 
-    # LEARNABILITY: the ainglish arm carries the register entry + the marked message, the english arm
-    # the marked message cold; the value is the ENTRY arm's accuracy in 0..1 and no arms are sent
-    # (the server refuses arms on a unit-interval metric).
-    l_items = [{"id": "lc1", "calibration": True, "english": "cold cal", "ainglish": "ENTRY cal",
-                "question": "q?", "options": ["yes", "no"], "answer": "yes"},
-] + [{"id": f"l{k}", "english": f"cold {k}", "ainglish": f"ENTRY {k}", "question": "q?", "options": ["yes", "no"], "answer": "yes"} for k in range(1, 7)]
+    # LEARNABILITY v2: calibration is an unrelated novel-marker control. Real item arms carry the
+    # same marked message; the harness prepends one digest-bound register entry to every entry arm
+    # and exposes every reader-item to cold then entry. Target failure must emit a low score rather
+    # than be relabelled as an instrument/calibration failure.
+    l_entry_text = "Register entry: zor(yes) means that the sender explicitly confirmed yes."
+    l_entry = {
+        "text": l_entry_text,
+        "sha256": hashlib.sha256(l_entry_text.encode()).hexdigest(),
+        "source_url": "https://example.test/register/demo",
+        "proposal_revision": "demo",
+    }
+    l_items = [{"id": "lc1", "calibration": True,
+                "calibration_scope": "target-independent",
+                "calibration_construct": "miv-routing-control-v1",
+                "english": "The card says miv(17), but no definition of miv is supplied.",
+                "ainglish": "Control entry: miv(17) means the object is in bay seventeen.",
+                "question": "Does the control state bay seventeen?", "options": ["yes", "no"],
+                "answer": "yes"},
+] + [{"id": f"l{k}", "english": f"Status {k}: zor(yes).", "ainglish": f"Status {k}: zor(yes).",
+       "question": "Did the sender explicitly confirm yes?", "options": ["yes", "no"],
+       "answer": "yes"} for k in range(1, 7)]
+    l_calls = []
     def l_oracle(ep, text, question, options):
-        return "yes" if text.startswith("ENTRY") else "no"   # derivable only with the entry present
+        l_calls.append((ep["name"], text))
+        return "yes" if text.startswith(("Control entry:", l_entry_text)) else "no"
     l_good = {"construct": "learn-demo", "slug": "demo", "metric": "learnability", "seed": 1,   # a seed whose counterbalancing reaches BOTH arms for these ids
-              "items": l_items, "planted_arm": "ainglish", "panel": [{"name": "reader-a"}, {"name": "reader-b"}], "panel_neff": 2}
+              "items": l_items, "entry": l_entry, "planted_arm": "ainglish",
+              "panel": [{"name": "reader-a"}, {"name": "reader-b"}], "panel_neff": 2}
     lm = run_panel(dict(l_good), ask_fn=l_oracle)
     assert lm is not None and lm["metric"] == "learnability", "a learnability run must emit"
     assert lm["value"] == 1.0 and 0.0 <= lm["value_lo"] <= lm["value"] <= lm["value_hi"] <= 1.0, lm
@@ -2975,7 +3088,32 @@ def selftest():
     # (@dexagon-ai #90) the paid real cold-arm cells stay visible as a LABELLED diagnostic the server
     # preserves (calibration is stored verbatim), not as an unstated "retained control".
     cold = lm["calibration"]["real_cold_arm"]
-    assert cold["cells"] > 0 and cold["accuracy"] == 0.0 and "NOT the planted-effect control" in cold["label"], cold
+    assert cold["cells"] == 12 and cold["accuracy"] == 0.0 and "NOT the planted-effect control" in cold["label"], cold
+    assert sum(text.startswith(l_entry_text) for _reader, text in l_calls) == 12, \
+        "every reader-item must receive the one frozen entry snapshot"
+    assert sum(text.startswith("Status ") for _reader, text in l_calls) == 12, \
+        "every reader-item must also receive the same marked message cold"
+    assert lm["manifest"]["entry"] == l_entry and \
+        lm["manifest"]["real_arm_exposure"]["mode"] == "both-arms-per-reader-item"
+
+    # A generic control can pass while the target entry teaches nothing. That is a substantive
+    # low learnability result, not an instrument refusal: this assertion pins falsifiability.
+    def l_target_blind(ep, text, question, options):
+        return "yes" if text.startswith("Control entry:") else "no"
+    low = run_panel(dict(l_good), ask_fn=l_target_blind)
+    assert low is not None and low["value"] == 0.0 and low["calibration"]["passed"] is True, low
+
+    bad_entry = dict(l_entry, sha256="0" * 64)
+    assert_pre_spend_refusal(dict(l_good, entry=bad_entry),
+                             "a learnability entry digest mismatch must refuse before spend")
+    coached = [dict(item) for item in l_items]
+    coached[1]["ainglish"] += " The answer is yes."
+    assert_pre_spend_refusal(dict(l_good, items=coached),
+                             "per-item entry coaching must refuse before spend")
+    target_control = [dict(item) for item in l_items]
+    target_control[0]["calibration_construct"] = "learn-demo"
+    assert_pre_spend_refusal(dict(l_good, items=target_control),
+                             "target-specific learnability calibration must refuse before spend")
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))
@@ -3615,6 +3753,27 @@ def dry_reader(items, manifest=None):
     mock that had to genuinely comprehend would just be a worse panel. Zero API calls; the emitted
     payload is stamped DRY-RUN and refuses submission, so the cheat cannot leak into evidence."""
     by_key = {}
+    if manifest is not None and manifest.get("metric") == "learnability":
+        entry_text = (manifest.get("entry") or {}).get("text", "")
+        table = {}
+        for item in items:
+            answer = str(item["answer"])
+            if item.get("calibration"):
+                table[(str(item["question"]), tuple(item["options"]), item["ainglish"])] = (answer, True)
+                table[(str(item["question"]), tuple(item["options"]), item["english"])] = (answer, False)
+            else:
+                entry_prompt = entry_text + "\n\nMarked message:\n" + item["ainglish"]
+                table[(str(item["question"]), tuple(item["options"]), entry_prompt)] = (answer, True)
+                table[(str(item["question"]), tuple(item["options"]), item["english"])] = (answer, False)
+
+        def learnability_oracle(ep, text, q, options):
+            opts = [str(option) for option in options]
+            answer, readable = table.get((str(q), tuple(options), text), (opts[-1], False))
+            if readable and answer in opts:
+                return answer
+            return next((option for option in opts if option != answer), opts[-1])
+
+        return learnability_oracle
     if manifest is not None and manifest.get("metric") == "robustness_delta":
         # Robustness asks texts the real-item map never contains: the calibration set and every
         # corrupted variant (@dexagon-ai #11 finding 5 — the plain oracle answered both

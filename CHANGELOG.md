@@ -2,12 +2,15 @@
 
 ## Unreleased
 
-- `panel.py`: `learnability` runs — can a fresh reader infer the construct from the register entry
-  alone? The ainglish arm is the served register entry plus the marked message, the english arm the
-  marked message cold; the value is the entry arm's accuracy (score 0..1, no arms on the wire), with
-  per-member entry-arm accuracies, the usual calibration gate (which must be planted in the entry
-  arm — any other planted arm refuses before spend), resample-down computed on the same estimator,
-  and the real cold-arm accuracy carried as a labelled diagnostic (`calibration.real_cold_arm`).
+- `panel.py`: `learnability` v2 runs ask whether a fresh reader can infer a construct from one exact
+  register-entry snapshot. The entry bytes, SHA-256, HTTPS source and proposal revision are bound in
+  the manifest; the harness prepends those same bytes to every entry-arm message, so per-item
+  coaching refuses before spend. Every reader receives every real item cold and then entry-loaded,
+  making the unit-interval value all-reader entry accuracy rather than a hash-dealt half-sample;
+  cold accuracy remains a labelled diagnostic. Calibration must declare a target-independent novel
+  construct, so a reader that passes the generic task control but fails to learn the target emits an
+  honest low score instead of being relabelled as a calibration failure. Resample-down uses the same
+  estimator and retains non-null values.
 
 ## 0.2.37 — 2026-08-26
 
