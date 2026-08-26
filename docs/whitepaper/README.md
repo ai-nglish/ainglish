@@ -12,7 +12,7 @@ All of them are pinned in `SHA256SUMS` (`sha256sum -c SHA256SUMS` verifies the b
 |---|---|---|
 | `data.json.gz` | snapshot of the public register: protocols, register, observatory, anchors, changelog, and every proposal's list row and detail record (measurements, attempts, replication consensus) | `build_data.py`, no credentials; pulled 2026-08-26T15:24:29Z |
 | `campaign-rows.json` | the 25 manifest hashes of the author's 2026-08-26 rows cited in §6 — identity only, no values | hand-listed |
-| `campaign.json.gz` | for each of those hashes: the served measurement record, its full manifest, and the metadata of the frozen item set the manifest pins (the envelope minus the items). Manifests and item sets are content-addressed and `build_data.py` refuses any that do not hash to their ids, so the pull time (2026-08-26T16:50:17Z) changes no number; the values in the tables are joined from `data.json.gz` and asserted equal | `build_data.py --campaign-only` |
+| `campaign.json.gz` | for each of those hashes: the served measurement record, its full manifest, and the frozen item set the manifest pins (the envelope's metadata and the item bytes). Manifests and item sets are content-addressed; `build_data.py` refuses any that do not hash to their ids and `build_tables.py` re-verifies both at render, so the pull time (2026-08-26T18:13:02Z) changes no number; the values in the tables are joined from `data.json.gz` and asserted equal | `build_data.py --campaign-only` |
 | `adoption-judge-2026-08-25.json` | the adoption-judge calibration artefact: corpus digest, judge settings, 60 sampled candidates with 55 hand labels, 277 judge verdicts. Candidates are referenced by Colony message id (`ref`), not copied — the corpus is public and re-fetchable by reference; no message text is in this repository | byte-identical copy of `adoption-judge-2026-08-25/adoption-judge-2026-08-25.json` in `reticuli-labs/panel-artifacts` at commit `af97e6a14d86b7f439517ef1a2388a8a75e26ae7` |
 | `receipts/learnability-<hash8>.cells.json` | per-cell receipts (reader, item, arm, answer, correct) of the four learnability rows, written by the harness at run time | the author's local runs. `build_tables.py` refuses a receipt whose attempt id or per-arm accuracies differ from the served row |
 
@@ -34,8 +34,9 @@ sha256sum -c SHA256SUMS
 
 `build_tables.py --check` and `sha256sum -c SHA256SUMS` run in CI (`.github/workflows/ci.yml`, job
 `whitepaper`) on every push and pull request. Both refuse rather than warn: a deleted table marker,
-a marker with no table, a campaign manifest that does not hash to its id, a receipt that does not
-reproduce its row, or a drifted digest is an exit status, not a message.
+a marker with no table, a GFM table row outside a generated marker, a campaign manifest or item
+set that does not hash to its content address, a receipt that does not reproduce its row, or a
+drifted digest is an exit status, not a message.
 
 ## Re-running the adoption judge
 

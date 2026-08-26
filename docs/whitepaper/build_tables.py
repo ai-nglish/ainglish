@@ -15,10 +15,11 @@ Usage: build_tables.py [--check] [--preview]
   --check    exit 1 if the document would change (no write)
   --preview  print every rendered table to stdout
 Exit 2 on any integrity failure: a campaign manifest that does not hash to its id; a campaign row
-absent from the snapshot or whose served value differs between the two files; a receipt whose
-attempt id or per-arm accuracies differ from the served row; a table marker missing from the
-document; a marker in the document that no table renders. The check is only as strong as its
-refusal, so none of these degrade to a warning."""
+absent from the snapshot or whose served value differs between the two files; an item set that
+does not hash to its manifest's items_sha256; a receipt whose attempt id or per-arm accuracies
+differ from the served row; a table marker missing from the document; a marker in the document
+that no table renders; a GFM table row anywhere outside a generated marker. The check is only as
+strong as its refusal, so none of these degrade to a warning."""
 import json, sys, collections, os, re, gzip, glob, hashlib, random, datetime as dt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -72,6 +73,8 @@ for h, c in camp.items():
         die("campaign row %s is not in the register snapshot" % h[:12])
     if byhash[h]["value"] != c["record"]["value"]:
         die("campaign row %s: served value differs between campaign.json and data.json" % h[:12])
+    if canonical_sha256(c.get("items")) != c["manifest"].get("items_sha256"):
+        die("campaign row %s: pinned item set does not hash to the manifest's items_sha256" % h[:12])
 SHORT = {"approx-n-approximation-marker-parenthesized-d-1-robust-5": "approx(N)", "moved-earlier-moved-later-which-way-did-the-meeting-move-2": "moved-earlier / moved-later",
          "rather-not-fine-either-way-would-welcome-you-don-t-have-to-s-2": "rather-not / would-welcome", "this-once-from-now-on-does-this-instruction-apply-to-this-ta": "this-once / from-now-on",
          "may-as-permission-may-as-possibility-does-may-authorize-an-a": "may-as-permission / -possibility", "proxy-m-say-when-the-evidence-you-measured-is-a-proxy-for-th-2": "proxy(M)",
@@ -256,9 +259,19 @@ T["adoption_calibration"] = md(["hand-labelled candidates", "mention / use", "sc
                                  "%d (%.0f%%)" % (scan_agree, 100 * scan_agree / len(hl)), "%d (%.0f%%)" % (judge_agree, 100 * judge_agree / len(hl)),
                                  "%d / %d / %d / %d" % (cm[("use", "use")], cm[("use", "mention")], cm[("mention", "use")], cm[("mention", "mention")]),
                                  "%d of %d" % (cm[("use", "use")], cm[("use", "use")] + cm[("use", "mention")]), cm[("mention", "use")]]])
+scan = lambda x: "use" if x["regex_uses"] > 0 else "mention"
+J = collections.Counter((scan(x), x["judge"]) for x in verd)
+if set(x["judge"] for x in verd) - {"use", "mention"}:
+    die("adoption artefact carries a judge label other than use/mention")
+su, sm = J[("use", "use")] + J[("use", "mention")], J[("mention", "use")] + J[("mention", "mention")]
+ju, jm = J[("use", "use")] + J[("mention", "use")], J[("use", "mention")] + J[("mention", "mention")]
+T["adoption_joint"] = md(["all %d candidate messages" % len(verd), "judge: use", "judge: mention", "scanner total"],
+                         [["scanner v2: use", J[("use", "use")], J[("use", "mention")], su], ["scanner v2: mention only", J[("mention", "use")], J[("mention", "mention")], sm], ["judge total", ju, jm, len(verd)]])
+T["adoption_joint"] += "\n" + md(["judge reads use among…", "rate"], [["the scanner's use messages", "%d of %d (%.0f%%)" % (J[("use", "use")], su, 100 * J[("use", "use")] / max(1, su))],
+                                                                        ["the scanner's mention-only messages", "%d of %d (%.0f%%)" % (J[("mention", "use")], sm, 100 * J[("mention", "use")] / max(1, sm))]])
 per = collections.defaultdict(collections.Counter)
 for x in verd:
-    per[x["slug"]]["cand"] += 1; per[x["slug"]]["scan"] += x["regex_uses"] > 0; per[x["slug"]]["judge"] += x["judge"] == "use"
+    c = per[x["slug"]]; c["cand"] += 1; c["scan"] += scan(x) == "use"; c["judge"] += x["judge"] == "use"; c["both"] += (scan(x) == "use" and x["judge"] == "use"); c["judge_only"] += (scan(x) == "mention" and x["judge"] == "use")
 tot = collections.Counter()
 body = []
 for s, c in sorted(per.items(), key=lambda kv: (-kv[1]["cand"], kv[0])):
@@ -266,10 +279,10 @@ for s, c in sorted(per.items(), key=lambda kv: (-kv[1]["cand"], kv[0])):
     if p is None or not p.get("ratified_at"):
         die("adoption candidate construct %s is not a ratified row in the snapshot" % s)
     rat = dt.datetime.fromisoformat(p["ratified_at"]); form = p.get("form") or s
-    body.append(["`%s`" % (form[:40] + ("…" if len(form) > 40 else "")), c["cand"], c["scan"], c["judge"], rat.date().isoformat(), (rat + dt.timedelta(days=DEPRECATE_AFTER_DAYS)).date().isoformat()])
+    body.append(["`%s`" % (form[:40] + ("…" if len(form) > 40 else "")), c["cand"], c["scan"], c["judge"], c["both"], c["judge_only"], rat.date().isoformat(), (rat + dt.timedelta(days=DEPRECATE_AFTER_DAYS)).date().isoformat()])
     tot.update(c)
-body.append(["**all (%d constructs)**" % len(per), tot["cand"], tot["scan"], tot["judge"], "", ""])
-T["adoption"] = md(["construct (form)", "candidates", "scanner v2 'use' messages", "judge 'use' messages", "ratified", "sweep exposure from (ratified + %d d)" % DEPRECATE_AFTER_DAYS], body)
+body.append(["**all (%d constructs)**" % len(per), tot["cand"], tot["scan"], tot["judge"], tot["both"], tot["judge_only"], "", ""])
+T["adoption"] = md(["construct (form)", "candidates", "scanner v2 'use'", "judge 'use'", "both", "judge 'use' the scanner filed as mention", "ratified", "sweep exposure from (ratified + %d d)" % DEPRECATE_AFTER_DAYS], body)
 # ------------------------------------------------------------------ anchors
 A = D.get("anchors") or {}
 anch = A.get("versions") or A.get("anchors") or []
@@ -308,6 +321,12 @@ for k, v in T.items():
     if len(pat.findall(new)) != 1:
         die("marker pair for %s is not present exactly once" % k)
     new = pat.sub(lambda mo: mo.group(1) + v + mo.group(2), new)
+# "every table is generated" has to be mechanically true: blank the generated regions (keeping
+# line numbers) and refuse any GFM table row that survives.
+masked = re.sub(r"<!-- table:\w+ -->\n.*?<!-- /table:\w+ -->", lambda mo: "\n" * mo.group(0).count("\n"), new, flags=re.S)
+orphans = [i + 1 for i, line in enumerate(masked.split("\n")) if line.lstrip().startswith("|")]
+if orphans:
+    die("table rows outside generated markers at document lines %s" % orphans[:12])
 if "--check" in sys.argv:
     print("document up to date" if new == doc else "DOCUMENT WOULD CHANGE"); sys.exit(0 if new == doc else 1)
 open(DOC, "w").write(new); print("rendered %d tables into %s" % (len(T), os.path.basename(DOC)))

@@ -5,8 +5,9 @@ credentials) into two files beside this script:
   data.json      the register snapshot: protocols, register, observatory, anchors, changelog,
                  every proposal's list row and detail record (measurements, attempts, consensus)
   campaign.json  for each manifest hash listed in campaign-rows.json: the served measurement
-                 record, its full manifest, and the metadata of the frozen item set the manifest
-                 pins (everything in the envelope except the items themselves)
+                 record, its full manifest, and the frozen item set the manifest pins — the
+                 envelope's metadata and the item bytes, so the renderer can re-verify both the
+                 manifest and the item set against their content addresses
 
 FAIL-CLOSED. A partial census is worse than none: any fetch that fails after retries, any
 proposal whose detail record is missing, any campaign manifest that does not hash to its own
@@ -112,7 +113,7 @@ for h in ids:
         failures.append("measurement %s: item set at %s does not hash to the manifest's items_sha256" % (h[:12], url)); continue
     campaign[h] = {"record": {k: v for k, v in rec.items() if k != "manifest"}, "manifest": man,
                    "items_url": url, "items_meta": ({k: v for k, v in env.items() if k != "items"} if isinstance(env, dict) else {"_bare_list": True}),
-                   "items_count": len(items)}
+                   "items": items}
 abort_if_failed("campaign rows")
 if set(campaign) != set(ids):
     failures.append("campaign keyset differs from campaign-rows.json")
