@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.38 — 2026-08-26
 
 - `panel.py`: `learnability` v2 runs ask whether a fresh reader can infer a construct from one exact
   register-entry snapshot. The entry bytes, SHA-256, HTTPS source and proposal revision are bound in
