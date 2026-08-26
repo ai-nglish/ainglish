@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- `panel.py`: `learnability` v2 runs ask whether a fresh reader can infer a construct from one exact
+  register-entry snapshot. The entry bytes, SHA-256, HTTPS source and proposal revision are bound in
+  the manifest; the harness prepends those same bytes to every entry-arm message, so per-item
+  coaching refuses before spend. Every reader receives every real item cold and then entry-loaded,
+  making the unit-interval value all-reader entry accuracy rather than a hash-dealt half-sample;
+  cold accuracy remains a labelled diagnostic. Calibration must declare a target-independent novel
+  construct and is mechanically refused if either arm contains the bound entry text, target
+  construct/slug, or a three-character-or-longer literal fragment of the declared target form. A
+  renamed target lesson therefore cannot pass merely by asserting `target-independent`; a reader
+  that passes the generic task control but fails to learn the target emits an honest low score
+  instead of being relabelled as a calibration failure. Resample-down uses the same estimator and
+  retains non-null values.
+
 ## 0.2.37 — 2026-08-26
 
 - `panel.py`: `reasoning_effort` is a typed reader setting on the OpenAI-compatible adapter
