@@ -3080,6 +3080,11 @@ def selftest():
     # resample-down computes on the same estimator (exact values, no sign criterion for a 0..1 score)
     assert [r["value"] for r in lm["resample_down"]] == [1.0, 1.0], lm["resample_down"]
     assert all(r["outside_interval"] is False and r["sign_flipped"] is None for r in lm["resample_down"]), lm["resample_down"]
+    # the --dry-run mock must know the DECLARED control (calibration_items), not just inline items,
+    # or every learnability dry run refuses at calibration and the plumbing check never runs
+    ldry = run_panel(dict(l_good, _dry_run=True), ask_fn=dry_reader(l_items, dict(l_good, _dry_run=True)))
+    assert ldry is not None and not _is_panel_refusal(ldry) and "DRY-RUN" in ldry["manifest"]["protocol"], \
+        "a learnability dry run must pass its declared control and stamp itself non-evidence"
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))
@@ -3746,6 +3751,12 @@ def dry_reader(items, manifest=None):
             return next((o for o in opts if o != correct), opts[-1])  # deterministic miss
 
         return robustness_oracle
+    if manifest is not None and manifest.get("metric") == "learnability":
+        # Learnability declares its target-independent control in calibration_items; the mock
+        # must know those texts too (entry arm readable, cold arm the planted unreadability).
+        for it in manifest.get("calibration_items", []):
+            by_key[(str(it["question"]), tuple(it["options"]), it["ainglish"])] = (str(it["answer"]), "ainglish")
+            by_key[(str(it["question"]), tuple(it["options"]), it["english"])] = (str(it["answer"]), "english")
     for it in items:
         if it["ainglish"] == it["english"]:
             # same-arms item (the frozen set's over-read probes): the answer is derivable in BOTH
