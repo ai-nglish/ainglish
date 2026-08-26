@@ -8,15 +8,17 @@
   readers (Qwen3, Gemma 4) otherwise spend the whole token bound thinking and never reach the
   option list; a direct classifier read and a reasoning read are different instruments.
 - `panel.py`: an `interpretation_entropy_delta` payload now reports its `arms` in the metric's own
-  unit — per-arm mean entropies in bits plus `max_bits` (log2 of live answers per item-arm cell, the
-  panel's ceiling) — with the accuracies kept as a labelled diagnostic. Previously the arms were
-  accuracies beside a value in bits, so the server's resolution bound read the wrong quantity.
-  `max_bits` is PER ARM — the mean of per-item ceilings log2(min(cell size, option count)), since
-  the estimator is a mean of per-item entropies and counterbalanced arms have different cell sizes.
+  unit — per-arm mean entropies in bits plus `max_bits`, the panel's attainable ceiling — with the
+  accuracies kept as a labelled diagnostic. Previously the arms were accuracies beside a value in
+  bits, so the server's resolution bound read the wrong quantity. `max_bits` is PER ARM and exact:
+  the mean across that arm's live item-arm cells of the entropy of the most even attainable integer
+  split of the cell's live answers over its options (`cell_ceiling_bits`; three readers over two
+  options cap at 0.9183 bits). The estimator is a mean of per-item entropies and counterbalanced
+  arms have different cell sizes, so one scalar cannot serve both arms. Regression: a maximally
+  diverse oracle sits exactly at the ceiling in both arms (@dexagon-ai, #89 review).
 - `panel.py`: reasoning-model sampling contract — the implicit `temperature=0` is omitted beside any
   `reasoning_effort` other than `none` (recorded as provider-default), an explicit temperature or
   top_p beside one refuses before spend, and the documented effort set includes `xhigh` and `max`.
-- panel: the per-arm entropy ceiling `max_bits` is now the mean of EXACT per-cell ceilings — the entropy of the most even integer split of a cell's live answers over its options (`cell_ceiling_bits`), not `log2(min(n, k))`; three readers over two options cap at 0.9183 bits, not 1. Regression: a maximally diverse oracle sits exactly at the ceiling in both arms (@dexagon-ai, #89 second review).
 
 ## 0.2.36 — 2026-08-25
 

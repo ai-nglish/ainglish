@@ -702,10 +702,9 @@ def cell_ceiling_bits(n, k):
     """The attainable entropy ceiling of one (item, arm) cell: n live answers over k options.
 
     n finite answers can be no more diverse than the most EVEN integer split over min(n, k)
-    occupied options, so the ceiling is that split's entropy — not log2(min(n, k)), which is only
-    attainable when the split is exact (n <= k, or k divides n). Three readers over two options
-    give (2, 1) = 0.9183 bits, not 1 bit; reporting 1 bit leaves false headroom on every odd-reader
-    binary panel and lets "both arms at the ceiling" read as resolvable (@dexagon-ai, #89).
+    occupied options, so the ceiling is that split's entropy. Three readers over two options give
+    (2, 1) = 0.9183 bits; any looser ceiling leaves false headroom on odd-reader binary panels and
+    lets "both arms at the ceiling" read as resolvable (@dexagon-ai, #89).
     """
     m = max(1, min(int(n), int(k)))
     q, r = divmod(int(n), m)
@@ -1816,14 +1815,12 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     if metric == "interpretation_entropy_delta":
         # The arms of an ENTROPY row are the per-arm mean entropies in bits, not accuracies — the
         # server's resolution bound reads arms in the metric's own unit. max_bits is the panel's
-        # ceiling: log2 of the mean number of live answers per (item, arm) cell, which is what a
-        # counterbalanced roster actually offers each cell; declared so "both arms at the ceiling"
-        # is judged against this panel, not a fixed constant.
-        # The estimator is a MEAN of per-item entropies, so its attainable ceiling is the mean of the
-        # per-item ceilings — each the entropy of the most even split of that cell's live answers
-        # over its options (see cell_ceiling_bits), not log2(min(n, k)) and not log2 of the mean cell
-        # size (Jensen); counterbalancing gives the two arms different cell-size distributions, so each
-        # arm carries its own ceiling (@dexagon-ai, #89 review, both rounds).
+        # attainable ceiling, ONE definition everywhere: per arm, the mean across that arm's live
+        # (item, arm) cells of the entropy of the most even attainable integer split of the cell's
+        # live answers over its options (cell_ceiling_bits). The estimator is a mean of per-item
+        # entropies, counterbalancing gives the two arms different cell-size distributions, and the
+        # server judges "both arms at the ceiling" against these declared values, so each arm carries
+        # its own exact ceiling (@dexagon-ai, #89 review).
         import math as _m
         opt_n = {i["id"]: len(i["options"]) for i in real}
         cells = {}
@@ -1831,8 +1828,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             if not is_absent(r[3]):
                 cells[(r[0], r[1])] = cells.get((r[0], r[1]), 0) + 1
         def _ceiling(arm):
-            # exact per-cell ceiling = entropy of the most even split of the live answers over the
-            # options (cell_ceiling_bits), averaged over the arm's cells — never log2(min(n, k)).
+            # mean over the arm's live cells of cell_ceiling_bits(live answers, options)
             per = [cell_ceiling_bits(n, opt_n.get(iid, n)) for (iid, a), n in cells.items() if a == arm]
             return round(sum(per) / len(per), 4) if per else None
         arms = {"english": round(ent["english"], 4) if ent["english"] is not None else None,
@@ -2873,11 +2869,11 @@ def selftest():
     assert isinstance(mb, dict) and set(mb) == {"english", "ainglish"}, "per-ARM ceilings (Jensen; counterbalanced cell sizes differ): %r" % mb
     for arm in ("english", "ainglish"):
         assert mb[arm] is None or em["arms"][arm] <= mb[arm] + 1e-9, "an arm's entropy cannot exceed its own attainable ceiling: %r" % em["arms"]
-    # the ceiling is the MEAN of per-item log2(min(cell size, options)), not log2 of the mean cell size
-    assert all(v is None or 0 < v <= 1.0 for v in mb.values()), mb   # two-option items: at most 1 bit per item
-    # Exact attainable ceiling (@dexagon-ai #89, second review): n live readers over k options can be
-    # no more diverse than the most EVEN integer split, so the cell ceiling is the entropy of that
-    # split, not log2(min(n, k)) — three readers over two options is (2,1) = 0.9183 bits, not 1 bit.
+    # the ceiling is the mean over live cells of the most-even-split entropy; two-option cells never exceed 1 bit
+    assert all(v is None or 0 < v <= 1.0 for v in mb.values()), mb
+    # Exact attainable ceiling (@dexagon-ai #89): n live answers over k options can be no more
+    # diverse than the most even attainable integer split, so the cell ceiling is that split's
+    # entropy — three readers over two options is (2,1) = 0.9183 bits.
     # The oracle recomputes the harness's own counterbalancing to answer maximally diversely WITHIN
     # every live cell, so every arm must sit EXACTLY at its ceiling, not merely under it.
     assert abs(cell_ceiling_bits(3, 2) - 0.9183) < 1e-4 and cell_ceiling_bits(4, 2) == 1.0 \
