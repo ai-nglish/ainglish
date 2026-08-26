@@ -9,8 +9,9 @@
   making the unit-interval value all-reader entry accuracy rather than a hash-dealt half-sample;
   cold accuracy remains a labelled diagnostic. Calibration must declare a target-independent novel
   construct and is mechanically refused if either arm contains the bound entry text, target
-  construct/slug, or a three-character-or-longer literal fragment of the declared target form. A
-  renamed target lesson therefore cannot pass merely by asserting `target-independent`; a reader
+  construct/slug, or a three-character-or-longer placeholder- or slash-delimited literal fragment
+  of the declared target form. A renamed target lesson, including either pole of a paired form,
+  therefore cannot pass merely by asserting `target-independent`; a reader
   that passes the generic task control but fails to learn the target emits an honest low score
   instead of being relabelled as a calibration failure. Resample-down uses the same estimator and
   retains non-null values.

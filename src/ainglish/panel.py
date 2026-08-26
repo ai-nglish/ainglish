@@ -1041,8 +1041,11 @@ def _validate_learnability_v2(manifest, real, calibration):
         str(manifest.get("construct", "")).strip().casefold(),
         str(manifest.get("slug", "")).strip().casefold(),
     ) if value}
+    # A proposal form may name several alternatives (``left / right``), and each pole is target
+    # material on its own.  Split those separators as well as placeholders: otherwise a control
+    # can teach the second pole while avoiding the one combined literal produced by ``right) /``.
     target_literals = {fragment.strip().casefold()
-                       for fragment in re.split(r"<[^>]*>", form)
+                       for fragment in re.split(r"<[^>]*>|\s*/\s*", form)
                        if len(fragment.strip()) >= 3}
     entry_text = text.casefold()
     bad_controls = []
@@ -3146,6 +3149,11 @@ def selftest():
                                       "miv(17) means the object is in bay seventeen.")
     assert_pre_spend_refusal(dict(l_good, items=renamed_target),
                              "a control teaching the target form under another name must refuse before spend")
+    paired_pole = [dict(item) for item in l_items]
+    paired_pole[0]["ainglish"] = ("Control entry: pav(yes) means the sender declined; "
+                                    "miv(17) means the object is in bay seventeen.")
+    assert_pre_spend_refusal(dict(l_good, form="zor(<answer>) / pav(<answer>)", items=paired_pole),
+                             "a control teaching one slash-separated target pole must refuse before spend")
     named_target = [dict(item) for item in l_items]
     named_target[0]["english"] += " The demo target is also shown."
     assert_pre_spend_refusal(dict(l_good, items=named_target),
