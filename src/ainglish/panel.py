@@ -934,6 +934,13 @@ def _validate_panel_declarations(manifest, panel):
         print(f"REFUSING to run: planted_arm must be 'english' or 'ainglish'; got "
               f"{planted_arm!r}. No reader cell was bought.")
         return None
+    if metric == "learnability" and planted_arm != "ainglish":
+        # The score reads the register-entry (ainglish) arm, so the positive control must be planted
+        # there: a control that fires on the cold arm certifies the opposite instrument and would
+        # let a learnability value ship on a gate that never tested the entry (@dexagon-ai, #90).
+        print(f"REFUSING to run: learnability scores the register-entry (ainglish) arm, so planted_arm "
+              f"must be 'ainglish'; got {planted_arm!r}. No reader cell was bought.")
+        return None
 
     raw_gap = manifest.get("calibration_min_gap", 0.5)
     try:
@@ -1743,8 +1750,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     elif metric == "learnability":
         # Can a fresh reader infer the construct from the REGISTER ENTRY alone? The ainglish arm is
         # entry + marked message, the english arm the marked message cold; the value is the entry
-        # arm's accuracy, a score in 0..1 (the cold arm is the natural control the calibration
-        # gate already consumes). Not a delta and not a veto.
+        # arm's accuracy, a score in 0..1. The cold arm is reported beside it as a labelled
+        # diagnostic (calibration.real_cold_arm); it is NOT the planted-effect control. Not a delta
+        # and not a veto.
         if acc["ainglish"] is None:
             print("REFUSING to emit: no live entry-arm cells to score."); return None
         value = round(acc["ainglish"], 4)
@@ -1771,6 +1779,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             sval = round(100 * (sacc["ainglish"] - sacc["english"]), 2)
         elif metric == "interpretation_entropy_delta" and sent.get("ainglish") is not None and sent.get("english") is not None:
             sval = round(sent["ainglish"] - sent["english"], 4)
+        elif metric == "learnability" and sacc.get("ainglish") is not None:
+            sval = round(sacc["ainglish"], 4)          # the entry-arm score, same estimator as the headline
         else:
             sval = None
         # Sign-flipping ALONE is too weak a criterion, and this check failed its own motivating
@@ -1783,7 +1793,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         if sval is not None and lo is not None and hi is not None:
             outside = sval < min(lo, hi) or sval > max(lo, hi)
         resample.append({"kept_fraction": frac, "items": keep, "value": sval,
-                         "sign_flipped": None if sval is None or value == 0 else (sval > 0) != (value > 0),
+                         # a 0..1 score has no sign to flip; the interval criterion below carries it
+                         "sign_flipped": None if sval is None or value == 0 or metric == "learnability" else (sval > 0) != (value > 0),
                          "outside_interval": outside})
     unstable = [r for r in resample if r.get("sign_flipped") or r.get("outside_interval")]
     if unstable:
@@ -1959,11 +1970,19 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         measurement["accuracy_resolution"] = accuracy_resolution
     if metric == "learnability":
         # A unit-interval score, not a delta: no arms on the wire (the server refuses them on this
-        # metric) and the accuracy-resolution grid is a delta concept. The cold arm remains visible
-        # through the calibration receipt and per_member entry-arm accuracies.
+        # metric) and the accuracy-resolution grid is a delta concept. The paid real cold-arm cells
+        # stay visible as a LABELLED diagnostic inside `calibration`, which the server preserves
+        # verbatim — never as an unstated "retained control" (@dexagon-ai, #90).
         measurement["arms"] = None
         measurement["unit"] = "score 0..1 (accuracy of the register-entry arm)"
         measurement.pop("accuracy_resolution", None)
+        cold_cells = [r for r in real_rows if r[1] == "english" and not is_absent(r[3])]
+        measurement["calibration"]["real_cold_arm"] = {
+            "accuracy": round(acc["english"], 4) if acc["english"] is not None else None,
+            "cells": len(cold_cells),
+            "label": "real items read cold (marked message without the register entry) — a labelled "
+                     "diagnostic beside the entry-arm score, NOT the planted-effect control",
+        }
     # panel_neff is emitted ONLY when the manifest declares it. This harness will not auto-fill a
     # decorrelation number it cannot estimate: a roster count carrying the name of an error-structure
     # statistic is a receipt-integrity bug, not a convenience.
@@ -2944,6 +2963,19 @@ def selftest():
     assert lm["value"] == 1.0 and 0.0 <= lm["value_lo"] <= lm["value"] <= lm["value_hi"] <= 1.0, lm
     assert lm.get("arms") is None, "learnability is a unit-interval metric: no arms on the wire"
     assert lm["unit"] == "score 0..1 (accuracy of the register-entry arm)", lm.get("unit")
+    # (@dexagon-ai #90) the positive control must be planted in the arm the score reads: a manifest
+    # whose calibration reader is right only on the cold/English arm would otherwise certify the
+    # opposite instrument and still emit value 1.0 — refuse before spend, inverse direction.
+    assert_pre_spend_refusal(dict(l_good, planted_arm="english"),
+                             "learnability must refuse a planted arm other than ainglish before spend")
+    # (@dexagon-ai #90) resample-down must actually compute for learnability — exact non-null values,
+    # a boolean interval check, and no sign criterion (a 0..1 score has no sign to flip).
+    assert [r["value"] for r in lm["resample_down"]] == [1.0, 1.0], lm["resample_down"]
+    assert all(r["outside_interval"] is False and r["sign_flipped"] is None for r in lm["resample_down"]), lm["resample_down"]
+    # (@dexagon-ai #90) the paid real cold-arm cells stay visible as a LABELLED diagnostic the server
+    # preserves (calibration is stored verbatim), not as an unstated "retained control".
+    cold = lm["calibration"]["real_cold_arm"]
+    assert cold["cells"] > 0 and cold["accuracy"] == 0.0 and "NOT the planted-effect control" in cold["label"], cold
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))

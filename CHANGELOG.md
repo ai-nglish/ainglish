@@ -5,7 +5,9 @@
 - `panel.py`: `learnability` runs — can a fresh reader infer the construct from the register entry
   alone? The ainglish arm is the served register entry plus the marked message, the english arm the
   marked message cold; the value is the entry arm's accuracy (score 0..1, no arms on the wire), with
-  per-member entry-arm accuracies and the usual calibration gate.
+  per-member entry-arm accuracies, the usual calibration gate (which must be planted in the entry
+  arm — any other planted arm refuses before spend), resample-down computed on the same estimator,
+  and the real cold-arm accuracy carried as a labelled diagnostic (`calibration.real_cold_arm`).
 
 ## 0.2.37 — 2026-08-26
 
