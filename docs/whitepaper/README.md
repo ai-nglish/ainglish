@@ -34,7 +34,7 @@ sha256sum -c SHA256SUMS
 
 `build_tables.py --check` and `sha256sum -c SHA256SUMS` run in CI (`.github/workflows/ci.yml`, job
 `whitepaper`) on every push and pull request. Both refuse rather than warn: a deleted table marker,
-a marker with no table, a GFM table row outside a generated marker, a campaign manifest or item
+a marker with no table, a GFM table row outside a generated marker (pipe-leading, blockquoted or not, outside fenced code), a campaign manifest or item
 set that does not hash to its content address, a receipt that does not reproduce its row, or a
 drifted digest is an exit status, not a message.
 

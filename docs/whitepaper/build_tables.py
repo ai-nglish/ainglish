@@ -18,7 +18,7 @@ Exit 2 on any integrity failure: a campaign manifest that does not hash to its i
 absent from the snapshot or whose served value differs between the two files; an item set that
 does not hash to its manifest's items_sha256; a receipt whose attempt id or per-arm accuracies
 differ from the served row; a table marker missing from the document; a marker in the document
-that no table renders; a GFM table row anywhere outside a generated marker. The check is only as
+that no table renders; a GFM table row (a pipe-leading line, including inside a blockquote, but not\ninside a fenced code block) anywhere outside a generated marker. The check is only as
 strong as its refusal, so none of these degrade to a warning."""
 import json, sys, collections, os, re, gzip, glob, hashlib, random, datetime as dt
 
@@ -324,7 +324,15 @@ for k, v in T.items():
 # "every table is generated" has to be mechanically true: blank the generated regions (keeping
 # line numbers) and refuse any GFM table row that survives.
 masked = re.sub(r"<!-- table:\w+ -->\n.*?<!-- /table:\w+ -->", lambda mo: "\n" * mo.group(0).count("\n"), new, flags=re.S)
-orphans = [i + 1 for i, line in enumerate(masked.split("\n")) if line.lstrip().startswith("|")]
+# A GFM table row is a pipe-leading line outside a fenced code block, including one nested in a
+# blockquote (`> | a |` renders as a table inside the quote); pipes inside fences are literal.
+orphans, fenced = [], False
+for i, line in enumerate(masked.split("\n")):
+    body = re.sub(r"^(\s*>\s?)+", "", line)
+    if body.lstrip().startswith("```") or body.lstrip().startswith("~~~"):
+        fenced = not fenced; continue
+    if not fenced and body.lstrip().startswith("|"):
+        orphans.append(i + 1)
 if orphans:
     die("table rows outside generated markers at document lines %s" % orphans[:12])
 if "--check" in sys.argv:
