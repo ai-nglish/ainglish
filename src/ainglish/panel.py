@@ -991,6 +991,8 @@ def _validate_learnability_v2(manifest, real, calibration):
     the gate conditions the reader cohort on already learning the thing being measured and turns
     target failure into an instrument refusal. The calibration therefore certifies only the
     generic ability to use an explicit novel-marker definition; the real block is allowed to fail.
+    ``entry.proposal_revision`` deliberately equals the exact slug; the ``slug@revision`` syntax
+    accepted by attempt preregistration is not accepted for this entry-snapshot identity.
     """
     entry = manifest.get("entry")
     required = {"text", "sha256", "source_url", "proposal_revision"}
@@ -1022,6 +1024,11 @@ def _validate_learnability_v2(manifest, real, calibration):
         print("REFUSING to run: learnability entry.proposal_revision must equal the runspec slug. "
               "No reader cell was bought.")
         return False
+    form = manifest.get("form")
+    if not isinstance(form, str) or not form.strip():
+        print("REFUSING to run: learnability requires the target proposal form so calibration "
+              "target-independence can be checked mechanically. No reader cell was bought.")
+        return False
 
     coached = [item["id"] for item in real if item["english"] != item["ainglish"]]
     if coached:
@@ -1030,19 +1037,29 @@ def _validate_learnability_v2(manifest, real, calibration):
               f"entry coaching was found on {coached}. No reader cell was bought.")
         return False
 
-    target_names = {str(manifest.get("construct", "")).strip().casefold(),
-                    str(manifest.get("slug", "")).strip().casefold()}
+    target_names = {value for value in (
+        str(manifest.get("construct", "")).strip().casefold(),
+        str(manifest.get("slug", "")).strip().casefold(),
+    ) if value}
+    target_literals = {fragment.strip().casefold()
+                       for fragment in re.split(r"<[^>]*>", form)
+                       if len(fragment.strip()) >= 3}
+    entry_text = text.casefold()
     bad_controls = []
     for item in calibration:
         control = item.get("calibration_construct")
         independent = item.get("calibration_scope") == "target-independent"
+        arm_texts = [str(item.get(arm, "")).casefold() for arm in ("english", "ainglish")]
+        target_leak = any(entry_text in arm_text for arm_text in arm_texts) or any(
+            needle in arm_text for needle in target_names | target_literals for arm_text in arm_texts)
         if (not independent or not isinstance(control, str) or not control.strip()
-                or control.strip().casefold() in target_names):
+                or control.strip().casefold() in target_names or target_leak):
             bad_controls.append(item["id"])
     if bad_controls:
-        print(f"REFUSING to run: learnability calibration must declare a non-target "
-              f"calibration_construct and calibration_scope='target-independent' on every row; "
-              f"invalid row(s) {bad_controls}. No reader cell was bought.")
+        print(f"REFUSING to run: learnability calibration must declare and contain only a "
+              f"non-target calibration construct; entry text, target form fragments, construct "
+              f"and slug are forbidden even when relabelled target-independent. Invalid row(s) "
+              f"{bad_controls}. No reader cell was bought.")
         return False
     return True
 
@@ -1969,6 +1986,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
 
     spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
     if metric == "learnability":
+        spec["form"] = manifest["form"]
         spec["entry"] = dict(manifest["entry"])
         spec["real_arm_exposure"] = {
             "mode": "both-arms-per-reader-item",
@@ -3068,7 +3086,8 @@ def selftest():
     def l_oracle(ep, text, question, options):
         l_calls.append((ep["name"], text))
         return "yes" if text.startswith(("Control entry:", l_entry_text)) else "no"
-    l_good = {"construct": "learn-demo", "slug": "demo", "metric": "learnability", "seed": 1,   # a seed whose counterbalancing reaches BOTH arms for these ids
+    l_good = {"construct": "learn-demo", "slug": "demo", "form": "zor(<answer>)",
+              "metric": "learnability", "seed": 1,   # a seed whose counterbalancing reaches BOTH arms for these ids
               "items": l_items, "entry": l_entry, "planted_arm": "ainglish",
               "panel": [{"name": "reader-a"}, {"name": "reader-b"}], "panel_neff": 2}
     lm = run_panel(dict(l_good), ask_fn=l_oracle)
@@ -3093,7 +3112,7 @@ def selftest():
         "every reader-item must receive the one frozen entry snapshot"
     assert sum(text.startswith("Status ") for _reader, text in l_calls) == 12, \
         "every reader-item must also receive the same marked message cold"
-    assert lm["manifest"]["entry"] == l_entry and \
+    assert lm["manifest"]["entry"] == l_entry and lm["manifest"]["form"] == "zor(<answer>)" and \
         lm["manifest"]["real_arm_exposure"]["mode"] == "both-arms-per-reader-item"
 
     # A generic control can pass while the target entry teaches nothing. That is a substantive
@@ -3106,6 +3125,10 @@ def selftest():
     bad_entry = dict(l_entry, sha256="0" * 64)
     assert_pre_spend_refusal(dict(l_good, entry=bad_entry),
                              "a learnability entry digest mismatch must refuse before spend")
+    no_form = dict(l_good)
+    no_form.pop("form")
+    assert_pre_spend_refusal(no_form,
+                             "learnability must refuse when the target form cannot be checked")
     coached = [dict(item) for item in l_items]
     coached[1]["ainglish"] += " The answer is yes."
     assert_pre_spend_refusal(dict(l_good, items=coached),
@@ -3114,6 +3137,19 @@ def selftest():
     target_control[0]["calibration_construct"] = "learn-demo"
     assert_pre_spend_refusal(dict(l_good, items=target_control),
                              "target-specific learnability calibration must refuse before spend")
+    entry_leak = [dict(item) for item in l_items]
+    entry_leak[0]["ainglish"] = l_entry_text + "\n\nControl entry: miv(17) means bay seventeen."
+    assert_pre_spend_refusal(dict(l_good, items=entry_leak),
+                             "a relabelled control carrying entry.text must refuse before spend")
+    renamed_target = [dict(item) for item in l_items]
+    renamed_target[0]["ainglish"] = ("Control entry: zor(yes) means the sender confirmed yes; "
+                                      "miv(17) means the object is in bay seventeen.")
+    assert_pre_spend_refusal(dict(l_good, items=renamed_target),
+                             "a control teaching the target form under another name must refuse before spend")
+    named_target = [dict(item) for item in l_items]
+    named_target[0]["english"] += " The demo target is also shown."
+    assert_pre_spend_refusal(dict(l_good, items=named_target),
+                             "a calibration arm naming the target slug must refuse before spend")
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))
