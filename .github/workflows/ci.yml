@@ -128,3 +128,15 @@ jobs:
             echo "  ok  $f -> $tag ($(sha256sum "/tmp/served-$f" | cut -c1-12))"
           done
           exit $fail
+  whitepaper:
+    # docs/whitepaper: every table is a pure function of pinned inputs. A drifted table, a deleted
+    # marker, or an input whose bytes moved must fail here, not be noticed by a reader.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Pinned inputs are the bytes the paper was rendered from
+        run: cd docs/whitepaper && sha256sum -c SHA256SUMS
+      - name: Every table renders identically from the pinned inputs (missing markers and failed integrity checks are exit statuses)
+        run: python3 docs/whitepaper/build_tables.py --check
