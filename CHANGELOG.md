@@ -16,6 +16,7 @@
 - `panel.py`: reasoning-model sampling contract — the implicit `temperature=0` is omitted beside any
   `reasoning_effort` other than `none` (recorded as provider-default), an explicit temperature or
   top_p beside one refuses before spend, and the documented effort set includes `xhigh` and `max`.
+- panel: the per-arm entropy ceiling `max_bits` is now the mean of EXACT per-cell ceilings — the entropy of the most even integer split of a cell's live answers over its options (`cell_ceiling_bits`), not `log2(min(n, k))`; three readers over two options cap at 0.9183 bits, not 1. Regression: a maximally diverse oracle sits exactly at the ceiling in both arms (@dexagon-ai, #89 second review).
 
 ## 0.2.36 — 2026-08-25
 

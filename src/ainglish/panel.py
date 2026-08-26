@@ -698,6 +698,20 @@ def entropy(counts):
     return -sum((c / total) * math.log2(c / total) for c in counts.values() if c)
 
 
+def cell_ceiling_bits(n, k):
+    """The attainable entropy ceiling of one (item, arm) cell: n live answers over k options.
+
+    n finite answers can be no more diverse than the most EVEN integer split over min(n, k)
+    occupied options, so the ceiling is that split's entropy — not log2(min(n, k)), which is only
+    attainable when the split is exact (n <= k, or k divides n). Three readers over two options
+    give (2, 1) = 0.9183 bits, not 1 bit; reporting 1 bit leaves false headroom on every odd-reader
+    binary panel and lets "both arms at the ceiling" read as resolvable (@dexagon-ai, #89).
+    """
+    m = max(1, min(int(n), int(k)))
+    q, r = divmod(int(n), m)
+    return entropy({i: (q + 1 if i < r else q) for i in range(m)})
+
+
 def score(rows, items):
     """rows: (item_id, arm, panelist, answer). Returns per-arm accuracy and mean answer-entropy."""
     key = {i["id"]: i for i in items}
@@ -1806,9 +1820,10 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # counterbalanced roster actually offers each cell; declared so "both arms at the ceiling"
         # is judged against this panel, not a fixed constant.
         # The estimator is a MEAN of per-item entropies, so its attainable ceiling is the mean of the
-        # per-item ceilings log2(min(live answers in that cell, option cardinality)) — not log2 of
-        # the mean cell size (Jensen), and counterbalancing gives the two arms different cell-size
-        # distributions, so each arm carries its own ceiling (@dexagon-ai, #89 review).
+        # per-item ceilings — each the entropy of the most even split of that cell's live answers
+        # over its options (see cell_ceiling_bits), not log2(min(n, k)) and not log2 of the mean cell
+        # size (Jensen); counterbalancing gives the two arms different cell-size distributions, so each
+        # arm carries its own ceiling (@dexagon-ai, #89 review, both rounds).
         import math as _m
         opt_n = {i["id"]: len(i["options"]) for i in real}
         cells = {}
@@ -1816,7 +1831,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             if not is_absent(r[3]):
                 cells[(r[0], r[1])] = cells.get((r[0], r[1]), 0) + 1
         def _ceiling(arm):
-            per = [_m.log2(max(1, min(n, opt_n.get(iid, n)))) for (iid, a), n in cells.items() if a == arm]
+            # exact per-cell ceiling = entropy of the most even split of the live answers over the
+            # options (cell_ceiling_bits), averaged over the arm's cells — never log2(min(n, k)).
+            per = [cell_ceiling_bits(n, opt_n.get(iid, n)) for (iid, a), n in cells.items() if a == arm]
             return round(sum(per) / len(per), 4) if per else None
         arms = {"english": round(ent["english"], 4) if ent["english"] is not None else None,
                 "ainglish": round(ent["ainglish"], 4) if ent["ainglish"] is not None else None,
@@ -2858,6 +2875,32 @@ def selftest():
         assert mb[arm] is None or em["arms"][arm] <= mb[arm] + 1e-9, "an arm's entropy cannot exceed its own attainable ceiling: %r" % em["arms"]
     # the ceiling is the MEAN of per-item log2(min(cell size, options)), not log2 of the mean cell size
     assert all(v is None or 0 < v <= 1.0 for v in mb.values()), mb   # two-option items: at most 1 bit per item
+    # Exact attainable ceiling (@dexagon-ai #89, second review): n live readers over k options can be
+    # no more diverse than the most EVEN integer split, so the cell ceiling is the entropy of that
+    # split, not log2(min(n, k)) — three readers over two options is (2,1) = 0.9183 bits, not 1 bit.
+    # The oracle recomputes the harness's own counterbalancing to answer maximally diversely WITHIN
+    # every live cell, so every arm must sit EXACTLY at its ceiling, not merely under it.
+    assert abs(cell_ceiling_bits(3, 2) - 0.9183) < 1e-4 and cell_ceiling_bits(4, 2) == 1.0 \
+        and abs(cell_ceiling_bits(5, 3) - 1.5219) < 1e-4 and cell_ceiling_bits(1, 2) == 0.0, "balanced-split ceilings"
+    d_items = [e_items[0]] + [{"id": "d%d" % i, "english": "plain d%d" % i, "ainglish": "marked d%d" % i,
+                               "question": "q?", "options": ["yes", "no"], "answer": "yes"} for i in range(1, 9)]
+    d_text = {}
+    for it in d_items[1:]:
+        d_text[it["english"]] = (it["id"], "english"); d_text[it["ainglish"]] = (it["id"], "ainglish")
+    d_names = [p["name"] for p in e_good["panel"]]
+    def d_oracle(ep, text, question, options):
+        if text == "plain e":
+            return "no"
+        if text == "marked e":
+            return "yes"
+        iid, arm = d_text[text]
+        mates = sorted(n for n in d_names if arm_for(e_good["seed"], n, iid) == arm)
+        return options[mates.index(ep["name"]) % len(options)]
+    dm = run_panel(dict(e_good, items=d_items), ask_fn=d_oracle)
+    assert dm is not None, "the maximally diverse entropy panel must emit"
+    for arm in ("english", "ainglish"):
+        assert abs(dm["arms"][arm] - dm["arms"]["max_bits"][arm]) < 1e-4, \
+            "maximally diverse cells must sit EXACTLY at the attainable ceiling, arm %s: %r" % (arm, dm["arms"])
     # reasoning-model sampling contract (@dexagon-ai): no implicit temperature beside a non-none effort,
     # explicit temperature/top_p beside one refuses, and the documented effort set is accepted.
     assert "temperature" not in request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.2", "reasoning_effort": "low"}), "implicit temperature must be omitted beside reasoning"
