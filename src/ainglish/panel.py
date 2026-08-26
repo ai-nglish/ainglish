@@ -233,7 +233,13 @@ PRESETS = {
 # timeout_s is a wire bound too: increasing it changes which slow cells survive, so it must be
 # committed beside max_tokens rather than hiding in a module constant.
 TRANSPORT_BOUNDS = {"max_tokens": 1024, "timeout_s": 120}
-SAMPLER_KEYS = ("seed", "top_p", "top_k", "num_ctx")
+SAMPLER_KEYS = ("seed", "top_p", "top_k", "num_ctx", "reasoning_effort")
+# Reasoning readers (Qwen3, Gemma 4 …) spend the whole token bound thinking and never reach the
+# option list on the OpenAI-compatible wire; the model-side switches (Modelfile `think`, a
+# `/no_think` system prompt) do NOT reach that path. `reasoning_effort` is the one control that
+# does, so it is transmitted and stamped like every other answer-affecting setting — a direct
+# classifier read and a reasoning read are different instruments and must not share a receipt.
+REASONING_EFFORT_VALUES = ("none", "minimal", "low", "medium", "high", "xhigh", "max")   # the documented set; support varies by model and the provider is the authority on which apply
 # One least-privilege constant feeds both the Colony SDK and stdlib exchange paths so they cannot
 # drift. Ainglish has no reputation gate, so write tokens need identity and profile only.
 AINGLISH_OIDC_SCOPE = "openid profile"
@@ -273,6 +279,16 @@ def temperature_for(endpoint):
     is not silent: None is retained in every reader receipt, so a rerun knows the provider default
     was the instrument setting. An explicit endpoint value (including explicit None) always wins.
     """
+    # Reasoning models refuse temperature/top_p beside any reasoning_effort other than "none"
+    # (OpenAI GPT-5.x: the request errors). The implicit 0 is therefore OMITTED when a non-none
+    # effort is declared — the receipt records provider-default — and an EXPLICIT temperature
+    # beside such an effort is refused before spend rather than let the provider 4xx mid-run.
+    effort = endpoint.get("reasoning_effort")
+    if effort is not None and effort != "none":
+        if "temperature" in endpoint and endpoint["temperature"] is not None:
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: temperature cannot be declared beside "
+                             f"reasoning_effort={effort!r} (reasoning models reject it); omit temperature or use effort 'none'.")
+        return None
     if "temperature" in endpoint:
         value = endpoint["temperature"]
     else:
@@ -310,6 +326,8 @@ def sampler_settings(endpoint):
 
     if "top_p" in endpoint:
         value = endpoint["top_p"]
+        if endpoint.get("reasoning_effort") not in (None, "none"):
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: top_p cannot be declared beside a non-none reasoning_effort (reasoning models reject it).")
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 1:
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: top_p must be a number "
                              "from 0 through 1.")
@@ -327,6 +345,15 @@ def sampler_settings(endpoint):
                              "the receipt records provider-default.")
         out["top_k"] = value
 
+    if "reasoning_effort" in endpoint:
+        value = endpoint["reasoning_effort"]
+        if not isinstance(value, str) or value not in REASONING_EFFORT_VALUES:
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: reasoning_effort must be one of "
+                             f"{', '.join(REASONING_EFFORT_VALUES)}.")
+        if api != "openai":
+            raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: reasoning_effort is transmitted only "
+                             "by the OpenAI-compatible adapter; omit it so the receipt records provider-default.")
+        out["reasoning_effort"] = value
     if "num_ctx" in endpoint:
         value = endpoint["num_ctx"]
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
@@ -669,6 +696,19 @@ def entropy(counts):
     if total == 0:
         return 0.0
     return -sum((c / total) * math.log2(c / total) for c in counts.values() if c)
+
+
+def cell_ceiling_bits(n, k):
+    """The attainable entropy ceiling of one (item, arm) cell: n live answers over k options.
+
+    n finite answers can be no more diverse than the most EVEN integer split over min(n, k)
+    occupied options, so the ceiling is that split's entropy. Three readers over two options give
+    (2, 1) = 0.9183 bits; any looser ceiling leaves false headroom on odd-reader binary panels and
+    lets "both arms at the ceiling" read as resolvable (@dexagon-ai, #89).
+    """
+    m = max(1, min(int(n), int(k)))
+    q, r = divmod(int(n), m)
+    return entropy({i: (q + 1 if i < r else q) for i in range(m)})
 
 
 def score(rows, items):
@@ -1772,6 +1812,29 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     arms = {"english": round(acc["english"], 4) if acc["english"] is not None else None,
             "ainglish": round(acc["ainglish"], 4) if acc["ainglish"] is not None else None,
             "chance": round(sum(1 / len(i["options"]) for i in real) / len(real), 4) if real else None}
+    if metric == "interpretation_entropy_delta":
+        # The arms of an ENTROPY row are the per-arm mean entropies in bits, not accuracies — the
+        # server's resolution bound reads arms in the metric's own unit. max_bits is the panel's
+        # attainable ceiling, ONE definition everywhere: per arm, the mean across that arm's live
+        # (item, arm) cells of the entropy of the most even attainable integer split of the cell's
+        # live answers over its options (cell_ceiling_bits). The estimator is a mean of per-item
+        # entropies, counterbalancing gives the two arms different cell-size distributions, and the
+        # server judges "both arms at the ceiling" against these declared values, so each arm carries
+        # its own exact ceiling (@dexagon-ai, #89 review).
+        import math as _m
+        opt_n = {i["id"]: len(i["options"]) for i in real}
+        cells = {}
+        for r in real_rows:
+            if not is_absent(r[3]):
+                cells[(r[0], r[1])] = cells.get((r[0], r[1]), 0) + 1
+        def _ceiling(arm):
+            # mean over the arm's live cells of cell_ceiling_bits(live answers, options)
+            per = [cell_ceiling_bits(n, opt_n.get(iid, n)) for (iid, a), n in cells.items() if a == arm]
+            return round(sum(per) / len(per), 4) if per else None
+        arms = {"english": round(ent["english"], 4) if ent["english"] is not None else None,
+                "ainglish": round(ent["ainglish"], 4) if ent["ainglish"] is not None else None,
+                "max_bits": {"english": _ceiling("english"), "ainglish": _ceiling("ainglish")},
+                "accuracy": {"english": arms["english"], "ainglish": arms["ainglish"], "chance": arms["chance"]}}
 
     # Accuracy is discrete. A rounded delta such as -1.19 pp can look more precise than the
     # underlying scored cells permit, especially when dead cells leave unequal arm denominators.
@@ -2240,6 +2303,20 @@ def selftest():
         assert reader_receipt({"name": "a", "provider": "anthropic", "model": "m"})["temperature"] is None, \
             "omission is still explicit in the re-runnable reader receipt"
         default_sampler = reader_receipt({"name": "o", "provider": "ollama", "model": "m"})
+        # reasoning_effort: rides the OpenAI-compatible wire and the receipt; refused on Anthropic;
+        # provider-default when unstated (the instrument must say whether the reader reasoned).
+        sent = request_sampling({"name": "r", "provider": "ollama", "model": "m", "reasoning_effort": "none"})
+        assert sent.get("reasoning_effort") == "none", sent
+        assert transport_settings({"name": "r", "provider": "ollama", "model": "m"})["reasoning_effort"] == "provider-default"
+        for bad in ({"reasoning_effort": "off"}, {"reasoning_effort": 0}):
+            try:
+                sampler_settings({"name": "r", "provider": "ollama", "model": "m", **bad}); raise AssertionError("accepted %r" % bad)
+            except SystemExit as exc:
+                assert "reasoning_effort must be one of" in str(exc)
+        try:
+            sampler_settings({"name": "r", "provider": "anthropic", "model": "m", "reasoning_effort": "low"}); raise AssertionError("anthropic accepted reasoning_effort")
+        except SystemExit as exc:
+            assert "OpenAI-compatible adapter" in str(exc)
         assert {key: default_sampler[key] for key in SAMPLER_KEYS} == {
             key: "provider-default" for key in SAMPLER_KEYS}, \
             "every undeclared sampler default must be typed rather than silently omitted"
@@ -2770,6 +2847,68 @@ def selftest():
     assert rm_rep["replicates_hash"] == "b" * 64
     blind = run_panel(dict(r_good, planted_arm="english"), ask_fn=r_oracle)
     assert blind is None, "a robustness panel that cannot read intact forms must refuse at calibration"
+
+    # An ENTROPY run reports its arms in bits with the panel's ceiling, never accuracies.
+    e_items = [{"id": "ec1", "calibration": True, "english": "plain e", "ainglish": "marked e",
+                "question": "q?", "options": ["yes", "no"], "answer": "yes"},
+               {"id": "e1", "english": "plain 1", "ainglish": "marked 1", "question": "q?", "options": ["yes", "no"], "answer": "yes"},
+               {"id": "e2", "english": "plain 2", "ainglish": "marked 2", "question": "q?", "options": ["yes", "no"], "answer": "yes"}]
+    def e_oracle(ep, text, question, options):
+        if text == "plain e":
+            return "no"                      # the planted effect: the unmarked calibration arm misreads
+        if text.startswith("marked") and ep["name"] == "reader-c":
+            return "no"                      # one reader disagrees on the marked arm -> spread there
+        return "yes"
+    e_good = {"construct": "ent-demo", "slug": "demo", "metric": "interpretation_entropy_delta", "seed": 3,
+              "items": e_items, "planted_arm": "ainglish",
+              "panel": [{"name": "reader-a"}, {"name": "reader-b"}, {"name": "reader-c"}], "panel_neff": 3}
+    em = run_panel(dict(e_good), ask_fn=e_oracle)
+    assert em is not None and em["metric"] == "interpretation_entropy_delta", "an entropy run must emit"
+    assert set(em["arms"]) >= {"english", "ainglish", "max_bits"}, em["arms"]
+    mb = em["arms"]["max_bits"]
+    assert isinstance(mb, dict) and set(mb) == {"english", "ainglish"}, "per-ARM ceilings (Jensen; counterbalanced cell sizes differ): %r" % mb
+    for arm in ("english", "ainglish"):
+        assert mb[arm] is None or em["arms"][arm] <= mb[arm] + 1e-9, "an arm's entropy cannot exceed its own attainable ceiling: %r" % em["arms"]
+    # the ceiling is the mean over live cells of the most-even-split entropy; two-option cells never exceed 1 bit
+    assert all(v is None or 0 < v <= 1.0 for v in mb.values()), mb
+    # Exact attainable ceiling (@dexagon-ai #89): n live answers over k options can be no more
+    # diverse than the most even attainable integer split, so the cell ceiling is that split's
+    # entropy — three readers over two options is (2,1) = 0.9183 bits.
+    # The oracle recomputes the harness's own counterbalancing to answer maximally diversely WITHIN
+    # every live cell, so every arm must sit EXACTLY at its ceiling, not merely under it.
+    assert abs(cell_ceiling_bits(3, 2) - 0.9183) < 1e-4 and cell_ceiling_bits(4, 2) == 1.0 \
+        and abs(cell_ceiling_bits(5, 3) - 1.5219) < 1e-4 and cell_ceiling_bits(1, 2) == 0.0, "balanced-split ceilings"
+    d_items = [e_items[0]] + [{"id": "d%d" % i, "english": "plain d%d" % i, "ainglish": "marked d%d" % i,
+                               "question": "q?", "options": ["yes", "no"], "answer": "yes"} for i in range(1, 9)]
+    d_text = {}
+    for it in d_items[1:]:
+        d_text[it["english"]] = (it["id"], "english"); d_text[it["ainglish"]] = (it["id"], "ainglish")
+    d_names = [p["name"] for p in e_good["panel"]]
+    def d_oracle(ep, text, question, options):
+        if text == "plain e":
+            return "no"
+        if text == "marked e":
+            return "yes"
+        iid, arm = d_text[text]
+        mates = sorted(n for n in d_names if arm_for(e_good["seed"], n, iid) == arm)
+        return options[mates.index(ep["name"]) % len(options)]
+    dm = run_panel(dict(e_good, items=d_items), ask_fn=d_oracle)
+    assert dm is not None, "the maximally diverse entropy panel must emit"
+    for arm in ("english", "ainglish"):
+        assert abs(dm["arms"][arm] - dm["arms"]["max_bits"][arm]) < 1e-4, \
+            "maximally diverse cells must sit EXACTLY at the attainable ceiling, arm %s: %r" % (arm, dm["arms"])
+    # reasoning-model sampling contract (@dexagon-ai): no implicit temperature beside a non-none effort,
+    # explicit temperature/top_p beside one refuses, and the documented effort set is accepted.
+    assert "temperature" not in request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.2", "reasoning_effort": "low"}), "implicit temperature must be omitted beside reasoning"
+    assert request_sampling({"name": "r", "provider": "ollama", "model": "m", "reasoning_effort": "none"}).get("temperature") == 0, "effort none keeps the deterministic default"
+    for bad in ({"temperature": 0}, {"top_p": 0.9}):
+        try:
+            request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.2", "reasoning_effort": "low", **bad}); raise AssertionError("accepted %r beside reasoning" % bad)
+        except SystemExit as exc:
+            assert "cannot be declared beside" in str(exc), str(exc)
+    for ok in ("xhigh", "max", "minimal"):
+        assert request_sampling({"name": "r", "provider": "openai", "model": "gpt-5.6", "reasoning_effort": ok}).get("reasoning_effort") == ok
+    assert em["arms"]["accuracy"]["chance"] == 0.5, "the accuracies survive as a labelled diagnostic"
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))
