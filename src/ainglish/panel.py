@@ -2090,7 +2090,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # stay visible as a LABELLED diagnostic inside `calibration`, which the server preserves
         # verbatim — never as an unstated "retained control" (@dexagon-ai, #90).
         measurement["arms"] = None
-        measurement["unit"] = "score 0..1 (accuracy of the register-entry arm)"
+        measurement["manifest"]["unit"] = "score 0..1 (accuracy of the register-entry arm)"   # spec, not payload
         measurement.pop("accuracy_resolution", None)
         cold_cells = [r for r in real_rows if r[1] == "english" and not is_absent(r[3])]
         measurement["calibration"]["real_cold_arm"] = {
@@ -3097,7 +3097,11 @@ def selftest():
     assert lm is not None and lm["metric"] == "learnability", "a learnability run must emit"
     assert lm["value"] == 1.0 and 0.0 <= lm["value_lo"] <= lm["value"] <= lm["value_hi"] <= 1.0, lm
     assert lm.get("arms") is None, "learnability is a unit-interval metric: no arms on the wire"
-    assert lm["unit"] == "score 0..1 (accuracy of the register-entry arm)", lm.get("unit")
+    # the unit is part of the SPEC, never a top-level payload field: the register refuses unknown
+    # measurement fields ("Unknown measurement field(s): unit", 422) rather than discard them, and
+    # the first live learnability filing was refused on exactly that (attempt 0b1b8ab1, 2026-08-26).
+    assert "unit" not in lm, "unit must not ride as a top-level measurement field"
+    assert lm["manifest"]["unit"] == "score 0..1 (accuracy of the register-entry arm)", lm["manifest"].get("unit")
     # (@dexagon-ai #90) the positive control must be planted in the arm the score reads: a manifest
     # whose calibration reader is right only on the cold/English arm would otherwise certify the
     # opposite instrument and still emit value 1.0 — refuse before spend, inverse direction.
