@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ainglish"
-version = "0.2.36"
+version = "0.2.37"
 description = "The Ainglish reference harness: measured-register instruments for AI-agent English (panels, deterministic screens, pinned corpus slices)"
 readme = "README.md"
 license = "MIT"

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.37 — 2026-08-26
 
 - `panel.py`: `reasoning_effort` is a typed reader setting on the OpenAI-compatible adapter
   (`none|minimal|low|medium|high`), transmitted on the wire and stamped into the manifest's transport
