@@ -3,11 +3,14 @@
 ## Unreleased
 
 - `panel.py`: `learnability` runs — can a fresh reader infer the construct from the register entry
-  alone? The ainglish arm is the served register entry plus the marked message, the english arm the
-  marked message cold; the value is the entry arm's accuracy (score 0..1, no arms on the wire), with
-  per-member entry-arm accuracies, the usual calibration gate (which must be planted in the entry
-  arm — any other planted arm refuses before spend), resample-down computed on the same estimator,
-  and the real cold-arm accuracy carried as a labelled diagnostic (`calibration.real_cold_arm`).
+  alone? The manifest binds ONE `entry_snapshot {text, sha256}`; every real item's entry arm must be
+  exactly that snapshot + separator + the cold arm (no per-item coaching). The positive control is
+  TARGET-INDEPENDENT — `calibration_items` with a novel marker and its own synthetic entry, refused if
+  it carries the target entry or the construct's literals — so a target the entry teaches nothing
+  comes out as a LOW SCORE, never as a calibration refusal. Every reader reads both arms of every
+  real item, cold arm first; the value is the entry arm's accuracy over all those cells (score 0..1,
+  no arms on the wire), the cold arm rides as `calibration.real_cold_arm` over the same cells,
+  resample-down uses the same estimator, and `planted_arm` other than `ainglish` refuses before spend.
 
 ## 0.2.37 — 2026-08-26
 

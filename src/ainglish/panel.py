@@ -877,6 +877,67 @@ def _same_arm_calibration_ids(items):
             if item.get("english") == item.get("ainglish")]
 
 
+def _construct_literals(construct):
+    """The literal (non-placeholder) fragments of a construct form, for target-independence checks."""
+    import re as _re
+    return [frag.strip().casefold() for frag in _re.split(r"<[^>]*>", str(construct or ""))
+            if len(frag.strip()) >= 3]
+
+
+def _validate_learnability_design(manifest, items):
+    """Learnability's manifest contract (@dexagon-ai, #90): return the declared control items or None.
+
+    - `entry_snapshot` {text, sha256}: ONE register-entry snapshot, digest-bound, and every real
+      item's entry arm must be exactly snapshot + separator + its cold arm — no per-item coaching.
+    - `calibration_items`: a TARGET-INDEPENDENT positive control (a novel marker with its own
+      synthetic entry). It may not carry the target's entry text or the construct's literals, and
+      inline calibration:true items are refused. A target the entry teaches nothing must therefore
+      come out as a LOW SCORE, never as a calibration refusal — the carrier can falsify its claim.
+    """
+    snap = manifest.get("entry_snapshot")
+    if not isinstance(snap, dict) or not isinstance(snap.get("text"), str) or not snap["text"].strip():
+        print("REFUSING to run: learnability needs entry_snapshot {text, sha256} — the ONE register entry "
+              "every entry-arm cell shows, digest-bound. No reader cell was bought.")
+        return None
+    digest = hashlib.sha256(snap["text"].encode("utf-8")).hexdigest()
+    if snap.get("sha256") != digest:
+        print(f"REFUSING to run: entry_snapshot.sha256 {str(snap.get('sha256'))[:12]}… does not match its text "
+              f"({digest[:12]}…). No reader cell was bought.")
+        return None
+    sep = manifest.get("entry_separator", "\n\n")
+    if any(i.get("calibration") for i in items):
+        print("REFUSING to run: learnability declares its positive control in calibration_items (target-independent); "
+              "inline calibration:true items are refused. No reader cell was bought.")
+        return None
+    for item in items:
+        if item.get("ainglish") != snap["text"] + sep + str(item.get("english")):
+            print(f"REFUSING to run: item {item.get('id')!r}: the entry arm must be exactly the bound entry snapshot "
+                  f"+ separator + the cold arm (per-item entry coaching or entry drift). No reader cell was bought.")
+            return None
+    calib = manifest.get("calibration_items")
+    if not isinstance(calib, list) or not calib:
+        print("REFUSING to run: learnability needs calibration_items — a TARGET-INDEPENDENT positive control "
+              "(a novel marker with its own synthetic entry), so a target the entry teaches nothing reads as a "
+              "low score rather than an instrument failure. No reader cell was bought.")
+        return None
+    if not _validate_item_block(calib, "calibration_items"):
+        return None
+    literals = _construct_literals(manifest.get("construct"))
+    for item in calib:
+        for arm in ("english", "ainglish"):
+            text = str(item.get(arm, ""))
+            if snap["text"] in text:
+                print(f"REFUSING to run: calibration item {item.get('id')!r} carries the TARGET entry — the control "
+                      "must be target-independent. No reader cell was bought.")
+                return None
+            hit = [lit for lit in literals if lit in text.casefold()]
+            if hit:
+                print(f"REFUSING to run: calibration item {item.get('id')!r} names the target construct ({hit}) — the "
+                      "control must be target-independent. No reader cell was bought.")
+                return None
+    return calib
+
+
 def _validate_item_block(items, label):
     """Validate fields every reader/scorer will dereference, before buying a reader cell."""
     if not isinstance(items, list):
@@ -1420,8 +1481,14 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             return None
         return run_robustness(manifest, ask_fn, planted_arm, calibration_min_gap)
 
-    calib = [i for i in items if i.get("calibration")]
-    real = [i for i in items if not i.get("calibration")]
+    if manifest.get("metric") == "learnability":
+        calib = _validate_learnability_design(manifest, items)
+        if calib is None:
+            return None
+        real = list(items)
+    else:
+        calib = [i for i in items if i.get("calibration")]
+        real = [i for i in items if not i.get("calibration")]
     seed = manifest.get("seed", 0)
     if not calib:
         print("REFUSING to run: no calibration items. A panel that was never shown a detectable "
@@ -1687,7 +1754,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — panel can "
           f"detect. ctl(planted-items) passes. {len(real) * len(panel)} real cells to go.")
 
-    real_rows = run_items(real, stage="real")
+    # Learnability reads BOTH arms of every real item per reader, cold arm first, so the entry
+    # cannot leak into the cold read and every reader-item entry cell is scored (@dexagon-ai, #90).
+    real_rows = run_items(real, both_arms=(manifest.get("metric") == "learnability"), stage="real")
     if real_rows is None:
         return None
     rows = calib_rows + real_rows
@@ -1922,6 +1991,10 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # two instruments if it thinks before answering. Recorded per member so a replication runs the
     # bound rather than inferring it — and so a bound that differs across members is visible.
     spec["transport"] = {labelled(p_): transport_settings(p_) for p_ in panel}
+    if manifest.get("metric") == "learnability":
+        spec["entry_snapshot"] = {"sha256": manifest["entry_snapshot"]["sha256"],
+                                  "bytes": len(manifest["entry_snapshot"]["text"].encode("utf-8"))}
+        spec["exposure"] = "learnability: every reader reads both arms of every real item, cold arm first; the control is target-independent (calibration_items)"
     # Cells lost to the wire, per (model, arm, reason) — the same granularity the guard reports
     # dead_rate at, plus the cause it cannot see. EMITTED EVEN AT ZERO, on purpose: a field whose
     # absence has a direction cannot be optional, and this one's absence reads as "no faults" when
@@ -1980,8 +2053,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         measurement["calibration"]["real_cold_arm"] = {
             "accuracy": round(acc["english"], 4) if acc["english"] is not None else None,
             "cells": len(cold_cells),
-            "label": "real items read cold (marked message without the register entry) — a labelled "
-                     "diagnostic beside the entry-arm score, NOT the planted-effect control",
+            "label": "real items read cold (marked message without the register entry) by every reader, "
+                     "the cold read taken BEFORE the entry read — a labelled diagnostic beside the "
+                     "entry-arm score over the same cells, NOT the planted-effect control",
         }
     # panel_neff is emitted ONLY when the manifest declares it. This harness will not auto-fill a
     # decorrelation number it cannot estimate: a roster count carrying the name of an error-structure
@@ -2951,31 +3025,61 @@ def selftest():
     # LEARNABILITY: the ainglish arm carries the register entry + the marked message, the english arm
     # the marked message cold; the value is the ENTRY arm's accuracy in 0..1 and no arms are sent
     # (the server refuses arms on a unit-interval metric).
-    l_items = [{"id": "lc1", "calibration": True, "english": "cold cal", "ainglish": "ENTRY cal",
-                "question": "q?", "options": ["yes", "no"], "answer": "yes"},
-] + [{"id": f"l{k}", "english": f"cold {k}", "ainglish": f"ENTRY {k}", "question": "q?", "options": ["yes", "no"], "answer": "yes"} for k in range(1, 7)]
+    # LEARNABILITY (@dexagon-ai #90, all rounds): the register entry is bound as ONE snapshot with a
+    # digest; the positive control is TARGET-INDEPENDENT (a novel marker with its own synthetic
+    # entry), so a target the entry teaches nothing yields a LOW SCORE, never a calibration refusal;
+    # every reader reads BOTH arms of every real item, cold first; the cold arm rides as a labelled
+    # diagnostic over the same population.
+    l_entry = "Register entry: ENTRY means the answer is yes."
+    l_snap = {"text": l_entry, "sha256": hashlib.sha256(l_entry.encode()).hexdigest()}
+    l_items = [{"id": "l%d" % k, "english": "cold %d" % k, "ainglish": l_entry + "\n\ncold %d" % k,
+                "question": "q?", "options": ["yes", "no"], "answer": "yes"} for k in range(1, 7)]
+    z_entry = "Register entry: ZORP means the answer is no."
+    l_cal = [{"id": "zc%d" % k, "english": "zorp message %d" % k, "ainglish": z_entry + "\n\nzorp message %d" % k,
+              "question": "q?", "options": ["yes", "no"], "answer": "no"} for k in (1, 2)]
     def l_oracle(ep, text, question, options):
-        return "yes" if text.startswith("ENTRY") else "no"   # derivable only with the entry present
-    l_good = {"construct": "learn-demo", "slug": "demo", "metric": "learnability", "seed": 1,   # a seed whose counterbalancing reaches BOTH arms for these ids
-              "items": l_items, "planted_arm": "ainglish", "panel": [{"name": "reader-a"}, {"name": "reader-b"}], "panel_neff": 2}
+        if text.startswith(z_entry):
+            return "no"                                  # the novel-marker control: derivable from ITS entry
+        if text.startswith(l_entry):
+            return "yes"                                 # learns the target from the bound entry
+        return "yes" if text.startswith("zorp") else "no"   # cold reads: wrong on both
+    l_good = {"construct": "learn-demo", "slug": "demo", "metric": "learnability", "seed": 1,
+              "items": l_items, "calibration_items": l_cal, "entry_snapshot": l_snap, "planted_arm": "ainglish",
+              "panel": [{"name": "reader-a"}, {"name": "reader-b"}], "panel_neff": 2}
     lm = run_panel(dict(l_good), ask_fn=l_oracle)
     assert lm is not None and lm["metric"] == "learnability", "a learnability run must emit"
     assert lm["value"] == 1.0 and 0.0 <= lm["value_lo"] <= lm["value"] <= lm["value_hi"] <= 1.0, lm
     assert lm.get("arms") is None, "learnability is a unit-interval metric: no arms on the wire"
     assert lm["unit"] == "score 0..1 (accuracy of the register-entry arm)", lm.get("unit")
-    # (@dexagon-ai #90) the positive control must be planted in the arm the score reads: a manifest
-    # whose calibration reader is right only on the cold/English arm would otherwise certify the
-    # opposite instrument and still emit value 1.0 — refuse before spend, inverse direction.
-    assert_pre_spend_refusal(dict(l_good, planted_arm="english"),
-                             "learnability must refuse a planted arm other than ainglish before spend")
-    # (@dexagon-ai #90) resample-down must actually compute for learnability — exact non-null values,
-    # a boolean interval check, and no sign criterion (a 0..1 score has no sign to flip).
+    assert lm["manifest"]["entry_snapshot"]["sha256"] == l_snap["sha256"], "the bound entry digest must ride in the spec"
+    assert "cold arm first" in lm["manifest"]["exposure"], lm["manifest"].get("exposure")
+    # every reader reads BOTH arms of every real item, cold first: 2 x readers x items cells
+    cold = lm["calibration"]["real_cold_arm"]
+    assert cold["cells"] == 2 * 6 and cold["accuracy"] == 0.0 and "NOT the planted-effect control" in cold["label"], cold
+    assert lm["per_member"] and all(p["value"] == 1.0 for p in lm["per_member"]), lm["per_member"]
+    # THE property: a target the entry teaches nothing is a LOW SCORE, not an instrument failure
+    def l_blind(ep, text, question, options):
+        if text.startswith(z_entry):
+            return "no"
+        return "yes" if text.startswith("zorp") else "no"   # never learns the target entry
+    lb = run_panel(dict(l_good), ask_fn=l_blind)
+    assert lb is not None and lb["value"] == 0.0, "an unlearnable target must EMIT a low score: %r" % (lb and lb.get("value"))
+    assert lb["calibration"]["gap"] >= 0.5, "the novel-marker control passed while the target scored zero"
+    # refusals, all before any reader cell
+    assert_pre_spend_refusal(dict(l_good, planted_arm="english"), "learnability must refuse a planted arm other than ainglish before spend")
+    assert_pre_spend_refusal(dict(l_good, calibration_items=[dict(l_cal[0], ainglish=l_entry + "\n\nzorp message 1")]),
+                             "a calibration item that carries the TARGET entry is not target-independent")
+    assert_pre_spend_refusal(dict(l_good, calibration_items=[dict(l_cal[0], english="learn-demo message")]),
+                             "a calibration item naming the target construct is not target-independent")
+    assert_pre_spend_refusal(dict(l_good, items=l_items[:-1] + [dict(l_items[-1], ainglish=l_entry + " (plus a hint)\n\ncold 6")]),
+                             "an entry arm that is not exactly snapshot + cold text is per-item coaching")
+    assert_pre_spend_refusal(dict(l_good, entry_snapshot=dict(l_snap, sha256="0" * 64)), "a snapshot whose digest does not match its text")
+    assert_pre_spend_refusal(dict(l_good, calibration_items=[]), "learnability needs a declared target-independent control")
+    assert_pre_spend_refusal(dict(l_good, items=l_items + [dict(l_cal[0], calibration=True)]),
+                             "inline calibration:true items are refused for learnability; the control is declared separately")
+    # resample-down computes on the same estimator (exact values, no sign criterion for a 0..1 score)
     assert [r["value"] for r in lm["resample_down"]] == [1.0, 1.0], lm["resample_down"]
     assert all(r["outside_interval"] is False and r["sign_flipped"] is None for r in lm["resample_down"]), lm["resample_down"]
-    # (@dexagon-ai #90) the paid real cold-arm cells stay visible as a LABELLED diagnostic the server
-    # preserves (calibration is stored verbatim), not as an unstated "retained control".
-    cold = lm["calibration"]["real_cold_arm"]
-    assert cold["cells"] > 0 and cold["accuracy"] == 0.0 and "NOT the planted-effect control" in cold["label"], cold
 
     # the documented dry-run path completes AND stamps itself non-evidence
     dry = run_panel(dict(r_good, _dry_run=True), ask_fn=dry_reader(r_items, dict(r_good, _dry_run=True)))
