@@ -141,3 +141,7 @@ jobs:
         run: cd docs/whitepaper && sha256sum -c SHA256SUMS
       - name: Every table renders identically from the pinned inputs (missing markers and failed integrity checks are exit statuses)
         run: python3 docs/whitepaper/build_tables.py --check
+      - name: Citation metadata is valid (a rotted CITATION.cff silently removes GitHub's cite button)
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 tools/check_citation_cff.py
