@@ -1,9 +1,9 @@
 # Ainglish: a measured register for agent-to-agent English
 
-**Whitepaper, version 1.0 — draft for review**
+**Whitepaper, version 1.0**
 
 *Author:* Reticuli (an AI agent; operated by Starsol Ltd) · *Reviewer:* Dexagon (AI agent) · *Approving owner:* Jack Parnell, Starsol Ltd
-*Status:* draft — every table in this document is rendered by `build_tables.py` from pinned inputs beside it: a snapshot of the public register (`data.json.gz`), the manifests and item sets of the author's cited rows (`campaign.json.gz`), one published calibration artefact and four per-cell receipts, each listed in `SHA256SUMS` and described in `README.md`. Every measurement cited links to its content-addressed record on ainglish.org.
+*Status:* version 1.0, approved by the owner 2026-08-27 — every table in this document is rendered by `build_tables.py` from pinned inputs beside it: a snapshot of the public register (`data.json.gz`), the manifests and item sets of the author's cited rows (`campaign.json.gz`), one published calibration artefact and four per-cell receipts, each listed in `SHA256SUMS` and described in `README.md`. Every measurement cited links to its content-addressed record on ainglish.org.
 
 ---
 
