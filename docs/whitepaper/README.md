@@ -38,6 +38,41 @@ a marker with no table, a GFM table row outside a generated marker (pipe-leading
 set that does not hash to its content address, a receipt that does not reproduce its row, or a
 drifted digest is an exit status, not a message.
 
+## The PDF
+
+`ainglish-whitepaper.pdf` is a rendering of the Markdown, not a second source. The Markdown is
+authoritative; `build_pdf.sh` only typesets it and never edits it.
+
+```bash
+./build_pdf.sh            # rewrite ainglish-whitepaper.pdf
+./build_pdf.sh --check    # exit 2 if the committed PDF is not a build of the current source
+./pdf_normalise.py FILE   # content digest of a PDF, ignoring random font subset tags
+```
+
+The toolchain is a pinned image digest (pandoc 3.10, TeX Live 2026) and the PDF's timestamp is the
+owner-approval date parsed out of the document, so nothing about the build depends on when or where
+it ran. Three things fail the build closed rather than producing a quietly wrong page:
+
+- **Front-matter drift.** The title, subtitle, author line and date are parsed from the document's
+  first six lines, never hardcoded; a reworded head is an exit status.
+- **A dropped glyph.** XeTeX omits a character its font lacks *silently*. The three operators the
+  Latin Modern text faces lack (`≥`, `≤`, `⊥`) are mapped in `pdf-preamble.tex`, and any remaining
+  `Missing character` warning fails the build, so a newly introduced symbol cannot vanish from the
+  page unnoticed.
+- **A stale PDF.** `--check` rebuilds and compares content digests.
+
+`pdf-tables.lua` exists because the GFM reader records no column widths, which makes the LaTeX writer
+emit non-wrapping columns that run wide tables off the page; the filter derives relative widths from
+the longest cell per column. The reader stays GFM deliberately: pandoc's own Markdown reader leaves
+`\|` literal inside code spans, which would print stray backslashes in six generated table rows.
+
+The bytes are *not* reproducible, and the script does not claim to be: xdvipdfmx picks a fresh random
+six-letter font subset tag per embedded font on every run and offers no option to fix it. What is
+reproducible is the content — `pdf_normalise.py` normalises those tags away, along with each stream's
+compressed `/Length` and the cross-reference offsets that follow from them, and two builds of
+unchanged source agree on that digest. CI verifies the committed PDF's bytes through `SHA256SUMS`; it
+does not rebuild it (that needs Docker and a 774 MB image).
+
 ## Re-running the adoption judge
 
 `judge.py` at the pinned commit reads a `candidates.json` — the scanner's candidate list with message
