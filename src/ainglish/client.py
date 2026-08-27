@@ -862,10 +862,11 @@ class AinglishClient:
                      cursor=None):
         """One newest-first page of the public evidence corpus.
 
-        Envelope: {kind, note, sweep: {snapshot_max_id, guarantee, follow}, total, count,
-        limit, has_more, next, measurements: [...]}. Filters: metric=, role=
+        Envelope: {kind, note, sweep: {snapshot_max_id, filter_sha256, ordering,
+        guarantee, follow}, total, count, limit, has_more, next, measurements: [...]}. Filters: metric=, role=
         (original|replication), since= (ISO-8601), proposal= (slug), limit= (1..200), and
-        cursor=. The cursor is opaque and bound to the first page's snapshot and filters.
+        cursor=. The cursor is authenticated and bound to the first page's snapshot, normalised
+        filters and fixed id-desc ordering. Replaying it under changed filters is rejected.
 
         For a complete, insert-stable sweep use iter_measurements(); measurement_pages() is its
         envelope-preserving twin. They follow the server's `next` link verbatim rather than
@@ -881,9 +882,9 @@ class AinglishClient:
         """Yield validated evidence-index envelopes from one snapshot-bound cursor chain.
 
         The first request carries the requested filters. Every later request follows `next`
-        exactly as served. Malformed/repeating links, a changed snapshot, duplicate row ids, or
-        inconsistent page counts raise AinglishError instead of yielding a partial corpus as if
-        it were complete.
+        exactly as served. Malformed/repeating links, a changed snapshot/filter receipt, unexpected
+        ordering, duplicate row ids, or inconsistent page counts raise AinglishError instead of
+        yielding a partial corpus as if it were complete.
         """
         if not isinstance(page_size, int) or isinstance(page_size, bool) or not 1 <= page_size <= 200:
             raise ValueError("page_size must be an integer from 1 to 200")
@@ -891,6 +892,8 @@ class AinglishClient:
         seen_next, seen_rows = set(), set()
         snapshot_max_id = None
         snapshot_seen = False
+        filter_sha256 = None
+        filter_seen = False
         while True:
             if next_path is None:
                 page = self.measurements(metric=metric, role=role, since=since,
@@ -918,6 +921,19 @@ class AinglishClient:
             elif page_snapshot != snapshot_max_id:
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "measurement cursor chain changed its snapshot"})
+            page_filter = sweep.get("filter_sha256")
+            if not isinstance(page_filter, str) or not re.fullmatch(r"[0-9a-f]{64}", page_filter):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement page returned an invalid filter_sha256"})
+            if sweep.get("ordering") != "id_desc":
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement page returned an unsupported ordering"})
+            if not filter_seen:
+                filter_sha256 = page_filter
+                filter_seen = True
+            elif page_filter != filter_sha256:
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement cursor chain changed its filter digest"})
             for key in ("total", "count", "limit"):
                 value = page.get(key)
                 if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -2432,13 +2448,16 @@ def selftest():
             self.calls.append(("next", path, params, auth))
             return self.pages[path]
 
+    def _measurement_sweep(snapshot, digest="a" * 64, ordering="id_desc"):
+        return {"snapshot_max_id": snapshot, "filter_sha256": digest, "ordering": ordering}
+
     evidence_next = "/api/v1/measurements?limit=2&metric=token_delta&cursor=opaque-snapshot"
     evidence = _MeasurementPaged({
         None: {"measurements": [{"attempt_id": "attempt-a"}, {"attempt_id": "attempt-b"}],
-               "sweep": {"snapshot_max_id": 44}, "total": 3, "count": 2, "limit": 2,
+               "sweep": _measurement_sweep(44), "total": 3, "count": 2, "limit": 2,
                "has_more": True, "next": evidence_next},
         evidence_next: {"measurements": [{"attempt_id": "attempt-c"}],
-                        "sweep": {"snapshot_max_id": 44}, "total": 3, "count": 1,
+                        "sweep": _measurement_sweep(44), "total": 3, "count": 1,
                         "limit": 2, "has_more": False, "next": None},
     })
     assert [r["attempt_id"] for r in evidence.iter_measurements(
@@ -2451,7 +2470,7 @@ def selftest():
         evidence.calls,)
 
     empty_evidence = _MeasurementPaged({
-        None: {"measurements": [], "sweep": {"snapshot_max_id": None}, "total": 0,
+        None: {"measurements": [], "sweep": _measurement_sweep(None), "total": 0,
                "count": 0, "limit": 200, "has_more": False, "next": None},
     })
     assert list(empty_evidence.iter_measurements(proposal="no-evidence")) == [], \
@@ -2459,7 +2478,7 @@ def selftest():
 
     invalid_null_snapshot = _MeasurementPaged({
         None: {"measurements": [{"attempt_id": "attempt-a"}],
-               "sweep": {"snapshot_max_id": None}, "total": 1, "count": 1,
+               "sweep": _measurement_sweep(None), "total": 1, "count": 1,
                "limit": 200, "has_more": False, "next": None},
     })
     try:
@@ -2471,7 +2490,7 @@ def selftest():
     def _bad_evidence(second, needle):
         bad = _MeasurementPaged({
             None: {"measurements": [{"attempt_id": "attempt-a"}],
-                   "sweep": {"snapshot_max_id": 44}, "total": 2, "count": 1, "limit": 1,
+                   "sweep": _measurement_sweep(44), "total": 2, "count": 1, "limit": 1,
                    "has_more": True, "next": evidence_next},
             evidence_next: second,
         })
@@ -2482,16 +2501,26 @@ def selftest():
             assert err.error == "invalid_pagination" and needle in err.message, str(err)
 
     _bad_evidence(
-        {"measurements": [{"attempt_id": "attempt-b"}], "sweep": {"snapshot_max_id": 45},
+        {"measurements": [{"attempt_id": "attempt-b"}], "sweep": _measurement_sweep(45),
          "total": 2, "count": 1, "limit": 1, "has_more": False, "next": None},
         "snapshot")
     _bad_evidence(
-        {"measurements": [{"attempt_id": "attempt-a"}], "sweep": {"snapshot_max_id": 44},
+        {"measurements": [{"attempt_id": "attempt-a"}], "sweep": _measurement_sweep(44),
          "total": 2, "count": 1, "limit": 1, "has_more": False, "next": None},
         "attempt_id")
+    _bad_evidence(
+        {"measurements": [{"attempt_id": "attempt-b"}],
+         "sweep": _measurement_sweep(44, digest="b" * 64),
+         "total": 2, "count": 1, "limit": 1, "has_more": False, "next": None},
+        "filter digest")
+    _bad_evidence(
+        {"measurements": [{"attempt_id": "attempt-b"}],
+         "sweep": _measurement_sweep(44, ordering="id_asc"),
+         "total": 2, "count": 1, "limit": 1, "has_more": False, "next": None},
+        "ordering")
     malformed_next = _MeasurementPaged({
         None: {"measurements": [{"attempt_id": "attempt-a"}],
-               "sweep": {"snapshot_max_id": 44}, "total": 2, "count": 1, "limit": 1,
+               "sweep": _measurement_sweep(44), "total": 2, "count": 1, "limit": 1,
                "has_more": True, "next": "https://other.example/api/v1/measurements?cursor=x"},
     })
     try:
@@ -2501,7 +2530,7 @@ def selftest():
         assert err.error == "invalid_pagination" and "local next link" in err.message
     bad_count = _MeasurementPaged({
         None: {"measurements": [{"attempt_id": "attempt-a"}],
-               "sweep": {"snapshot_max_id": 44}, "total": 1, "count": 2, "limit": 2,
+               "sweep": _measurement_sweep(44), "total": 1, "count": 2, "limit": 2,
                "has_more": False, "next": None},
     })
     try:
