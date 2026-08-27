@@ -794,8 +794,8 @@ def _settlement_contract(manifest, real, panel, seed):
     raw = manifest["settlement_strata"]
     if manifest.get("metric") != "comprehension_accuracy_delta":
         raise ValueError("panel settlement_strata currently supports comprehension_accuracy_delta only")
-    if not isinstance(raw, list) or not raw or len(raw) > 32:
-        raise ValueError("settlement_strata must be a non-empty list of at most 32 {id, weight} objects")
+    if not isinstance(raw, list) or not raw or len(raw) > 64:
+        raise ValueError("settlement_strata must be a non-empty list of at most 64 {id, weight} objects")
     contract, seen, total = [], set(), 0.0
     for row in raw:
         if not isinstance(row, dict) or set(row) != {"id", "weight"}:
@@ -808,11 +808,11 @@ def _settlement_contract(manifest, real, panel, seed):
         if isinstance(weight, bool) or not isinstance(weight, (int, float)) \
                 or not math.isfinite(float(weight)) or float(weight) <= 0:
             raise ValueError(f"settlement stratum {ident!r} weight must be finite and positive")
-        contract.append({"id": ident, "weight": float(weight)})
+        contract.append({"id": ident, "weight": float(weight), "share": 0.0})
         seen.add(ident)
         total += float(weight)
-    if abs(total - 1.0) > 1e-9:
-        raise ValueError("settlement_strata weights must sum to 1")
+    for row in contract:
+        row["share"] = row["weight"] / total
     item_strata = [item.get("settlement_stratum") for item in real]
     if any(not isinstance(ident, str) or ident not in seen for ident in item_strata):
         raise ValueError("every real item must name one committed settlement_stratum")
@@ -820,23 +820,20 @@ def _settlement_contract(manifest, real, panel, seed):
     if missing:
         raise ValueError(f"settlement strata with no real items: {missing}")
 
-    # The weighted per-cell arms must aggregate to the public top-level arms. Prove the planned
-    # counterbalance uses the declared weights in BOTH arms before inference; otherwise a valid
-    # result could only be made to fit by changing the estimand after seeing answers.
+    # Every declared estimator must be observable in both arms before inference. The public top
+    # line is explicitly weighted across the per-stratum estimators; raw counterbalance counts do
+    # not get to silently rewrite those weights after seeing which cells survived.
     planned = {row["id"]: {"english": 0, "ainglish": 0} for row in contract}
-    totals = {"english": 0, "ainglish": 0}
     for reader in panel:
         for item in real:
             arm = arm_for(seed, reader["name"], item["id"])
             planned[item["settlement_stratum"]][arm] += 1
-            totals[arm] += 1
-    for row in contract:
-        for arm in ("english", "ainglish"):
-            share = planned[row["id"]][arm] / totals[arm] if totals[arm] else 0
-            if abs(share - row["weight"]) > 1e-9:
-                raise ValueError(
-                    f"planned {arm} exposure for stratum {row['id']!r} is {share:.6f}, not its "
-                    f"declared weight {row['weight']:.6f}; rebalance item ids, seed or weights")
+    missing_arms = [
+        f"{row['id']}:{arm}" for row in contract for arm in ("english", "ainglish")
+        if planned[row["id"]][arm] == 0
+    ]
+    if missing_arms:
+        raise ValueError(f"settlement cells with no planned arm exposure: {missing_arms}")
     return contract
 
 
@@ -863,11 +860,11 @@ def _stratified_accuracy(rows, items, contract):
         })
     by_id = {row["id"]: row for row in result_rows}
     top_arms = {
-        arm: round(sum(row["weight"] * by_id[row["id"]]["arms"][arm]
+        arm: round(sum(row["share"] * by_id[row["id"]]["arms"][arm]
                        for row in contract), 4)
         for arm in ("english", "ainglish", "chance")
     }
-    value = round(sum(row["weight"] * by_id[row["id"]]["value"]
+    value = round(sum(row["share"] * by_id[row["id"]]["value"]
                       for row in contract), 4)
     return value, top_arms, result_rows
 
@@ -2183,7 +2180,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         panel, _manifest_unbound_entry_point(manifest))
     spec["item_counts"] = {"real": len(real), "calibration": len(calib)}
     if settlement_contract is not None:
-        spec["settlement_strata"] = settlement_contract
+        spec["settlement_strata"] = [dict(row) for row in manifest["settlement_strata"]]
         spec["settlement_item_field"] = "settlement_stratum"
         spec["settlement_rule"] = "manifest-weighted arms and value; every stratum load-bearing"
     if accuracy_resolution is not None:
@@ -2860,8 +2857,8 @@ def selftest():
         good,
         items=stratified_items,
         settlement_strata=[
-            {"id": "repeat", "weight": 0.5},
-            {"id": "restore", "weight": 0.5},
+            {"id": "repeat", "weight": 1},
+            {"id": "restore", "weight": 1},
         ],
     )
     stratified = run_panel(stratified_manifest, ask_fn=tag_reliant)
@@ -2872,13 +2869,13 @@ def selftest():
     assert "accuracy_resolution" not in stratified, \
         "the pooled cell grid cannot describe a manifest-weighted stratified estimator"
     unbalanced_items = [
-        ({**item, "settlement_stratum": ("repeat" if item["id"] == "r0" else "restore")}
+        ({**item, "settlement_stratum": ("repeat" if item["id"] == "r1" else "restore")}
          if not item.get("calibration") else dict(item))
         for item in items
     ]
     assert_pre_spend_refusal(
         dict(stratified_manifest, items=unbalanced_items),
-        "declared settlement weights must match planned exposure in both arms",
+        "every declared settlement cell must have planned exposure in both arms",
     )
     # --- panel_neff is a claim, not a headcount ------------------------------------------------
     # It used to be emitted as len(panel): a roster count wearing an error-structure statistic's

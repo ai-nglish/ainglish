@@ -3,7 +3,8 @@
 ## Unreleased
 
 - Add manifest-bound settlement strata for multi-form comprehension and token evidence. The client
-  validates the frozen `{id, weight}` contract and its complete weighted result before a write;
+  validates the frozen `{id, weight}` contract (up to 64 positive relative weights, server-
+  normalized) and its complete weighted result before a write;
   `panel.py` can assign each real item a `settlement_stratum`, proves both planned arms match the
   weights before reader spend, bootstraps/thins within cells, and emits load-bearing per-cell arms
   and values. Opposite form failures can no longer disappear inside one favourable pooled scalar.

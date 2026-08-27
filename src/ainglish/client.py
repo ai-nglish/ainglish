@@ -67,7 +67,7 @@ USER_AGENT = "ainglish-python/%s" % _V
 MAX_MANIFEST_BYTES = 20_000
 MAX_ATTEMPT_ESTIMAND_CHARS = 2_000
 MAX_PREFLIGHT_RECEIPT_BYTES = 20_000
-MAX_SETTLEMENT_STRATA = 32
+MAX_SETTLEMENT_STRATA = 64
 SETTLEMENT_AGGREGATE_TOLERANCE = 0.0001
 FAILED_GATE_KINDS = (
     "harness_refuse",
@@ -258,7 +258,7 @@ def _settlement_strata_contract(manifest):
         return None
     raw = manifest["settlement_strata"]
     if not isinstance(raw, (list, tuple)) or not raw or len(raw) > MAX_SETTLEMENT_STRATA:
-        raise ValueError("manifest.settlement_strata must be a non-empty list of at most 32 "
+        raise ValueError("manifest.settlement_strata must be a non-empty list of at most 64 "
                          "{id, weight} objects")
     contract = []
     seen = set()
@@ -277,9 +277,7 @@ def _settlement_strata_contract(manifest):
         seen.add(ident)
         total += weight
         contract.append((ident, weight))
-    if abs(total - 1.0) > 1e-9:
-        raise ValueError("manifest.settlement_strata weights must sum to 1")
-    return contract
+    return [(ident, weight, weight / total) for ident, weight in contract]
 
 
 def _validate_measurement_strata(payload):
@@ -301,7 +299,7 @@ def _validate_measurement_strata(payload):
         raise ValueError("stratum_results must report every manifest.settlement_strata id exactly once")
     allowed = {"id", "value", "value_lo", "value_hi", "arms"}
     by_id = {}
-    contract_by_id = dict(contract)
+    contract_by_id = {ident: (weight, share) for ident, weight, share in contract}
     for row in raw:
         if not isinstance(row, dict) or not set(row).issubset(allowed):
             raise ValueError("each stratum_results entry must contain only id, value, value_lo, "
@@ -321,7 +319,8 @@ def _validate_measurement_strata(payload):
             if abs(value - 100 * (ainglish - english)) > SETTLEMENT_AGGREGATE_TOLERANCE:
                 raise ValueError("comprehension stratum value must equal 100*(ainglish-english)")
         by_id[ident] = row
-    weighted = sum(weight * float(by_id[ident]["value"]) for ident, weight in contract)
+    weighted = sum(share * float(by_id[ident]["value"])
+                   for ident, _weight, share in contract)
     top = _finite_number(payload.get("value"), "value")
     if abs(weighted - top) > SETTLEMENT_AGGREGATE_TOLERANCE:
         raise ValueError("value must equal the manifest-weighted stratum_results value")
@@ -330,8 +329,8 @@ def _validate_measurement_strata(payload):
         if not isinstance(top_arms, dict):
             raise ValueError("stratified comprehension requires top-level arms")
         for arm in ("english", "ainglish"):
-            expected = sum(weight * float(by_id[ident]["arms"][arm])
-                           for ident, weight in contract)
+            expected = sum(share * float(by_id[ident]["arms"][arm])
+                           for ident, _weight, share in contract)
             got = _finite_number(top_arms.get(arm), "arms.%s" % arm)
             if abs(expected - got) > SETTLEMENT_AGGREGATE_TOLERANCE:
                 raise ValueError("arms.%s must equal the manifest-weighted stratum_results arms.%s"
@@ -1280,7 +1279,8 @@ class AinglishClient:
         the composite.
 
         For a multi-form claim, freeze ``manifest.settlement_strata`` before spend as a list of
-        ``{id, weight}``, then report every corresponding ``stratum_results`` row. The client
+        ``{id, weight}`` using positive relative weights, then report every corresponding
+        ``stratum_results`` row. The client
         checks that the weighted cells equal the headline before sending; the register requires
         the pool AND every cell to reproduce, so opposite per-form drift cannot cancel."""
         _validate_measurement_strata(payload)

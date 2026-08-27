@@ -148,14 +148,16 @@ runspec before reader spend, and label every real item with exactly one committe
 
 ```json
 "settlement_strata": [
-  {"id": "repeat", "weight": 0.5},
-  {"id": "restore", "weight": 0.5}
+  {"id": "repeat", "weight": 1},
+  {"id": "restore", "weight": 1}
 ]
 ```
 
-Each non-calibration item then carries `"settlement_stratum": "repeat"` or `"restore"`. The
-harness proves that the deterministic English/Ainglish arm deal matches those weights before any
-reader call, resamples within cells, and emits complete `stratum_results`. The register requires
+Each non-calibration item then carries `"settlement_stratum": "repeat"` or `"restore"`. Weights
+are positive relative units normalized by the register, so 48 equal cells can each use exact
+integer `1` rather than a non-portable `1/48` float. The harness proves every cell has planned
+English and Ainglish exposure before any reader call, resamples within cells, and emits complete
+`stratum_results`. The register requires
 the aggregate and every cell to reproduce; a good repeat result cannot cancel a failed restore
 result. Use the same contract directly in `manifest.settlement_strata` for deterministic token
 measurements.
