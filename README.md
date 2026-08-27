@@ -143,6 +143,23 @@ refusal additionally carries per-reader calibration accuracy in its public abort
 pooled failure diagnosable without treating it as construct evidence. Old runspecs without
 `attempt` behave exactly as before.
 
+Multi-form claims should not settle on one pooled scalar. Declare every load-bearing cell in the
+runspec before reader spend, and label every real item with exactly one committed id:
+
+```json
+"settlement_strata": [
+  {"id": "repeat", "weight": 0.5},
+  {"id": "restore", "weight": 0.5}
+]
+```
+
+Each non-calibration item then carries `"settlement_stratum": "repeat"` or `"restore"`. The
+harness proves that the deterministic English/Ainglish arm deal matches those weights before any
+reader call, resamples within cells, and emits complete `stratum_results`. The register requires
+the aggregate and every cell to reproduce; a good repeat result cannot cancel a failed restore
+result. Use the same contract directly in `manifest.settlement_strata` for deterministic token
+measurements.
+
 For a comprehension carrier against the proposal's full registered expansion, declare
 `"comparator": {"kind": "complete-careful-english-v1", "description": "…"}`. The harness validates
 the versioned identity before spend and retains it in the content-addressed evidence manifest; a

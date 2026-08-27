@@ -787,6 +787,148 @@ def bootstrap_delta(rows, items, metric, n=2000, seed=0):
     return deltas[int(0.025 * len(deltas))], deltas[int(0.975 * len(deltas))]
 
 
+def _settlement_contract(manifest, real, panel, seed):
+    """Validate a manifest-bound per-form estimand before buying any real reader cell."""
+    if "settlement_strata" not in manifest:
+        return None
+    raw = manifest["settlement_strata"]
+    if manifest.get("metric") != "comprehension_accuracy_delta":
+        raise ValueError("panel settlement_strata currently supports comprehension_accuracy_delta only")
+    if not isinstance(raw, list) or not raw or len(raw) > 32:
+        raise ValueError("settlement_strata must be a non-empty list of at most 32 {id, weight} objects")
+    contract, seen, total = [], set(), 0.0
+    for row in raw:
+        if not isinstance(row, dict) or set(row) != {"id", "weight"}:
+            raise ValueError("every settlement_strata row must contain exactly id and weight")
+        ident, weight = row["id"], row["weight"]
+        if not isinstance(ident, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._:-]{0,63}", ident):
+            raise ValueError("settlement stratum ids must be lowercase 1–64 character identifiers")
+        if ident in seen:
+            raise ValueError(f"duplicate settlement stratum id {ident!r}")
+        if isinstance(weight, bool) or not isinstance(weight, (int, float)) \
+                or not math.isfinite(float(weight)) or float(weight) <= 0:
+            raise ValueError(f"settlement stratum {ident!r} weight must be finite and positive")
+        contract.append({"id": ident, "weight": float(weight)})
+        seen.add(ident)
+        total += float(weight)
+    if abs(total - 1.0) > 1e-9:
+        raise ValueError("settlement_strata weights must sum to 1")
+    item_strata = [item.get("settlement_stratum") for item in real]
+    if any(not isinstance(ident, str) or ident not in seen for ident in item_strata):
+        raise ValueError("every real item must name one committed settlement_stratum")
+    missing = [row["id"] for row in contract if row["id"] not in item_strata]
+    if missing:
+        raise ValueError(f"settlement strata with no real items: {missing}")
+
+    # The weighted per-cell arms must aggregate to the public top-level arms. Prove the planned
+    # counterbalance uses the declared weights in BOTH arms before inference; otherwise a valid
+    # result could only be made to fit by changing the estimand after seeing answers.
+    planned = {row["id"]: {"english": 0, "ainglish": 0} for row in contract}
+    totals = {"english": 0, "ainglish": 0}
+    for reader in panel:
+        for item in real:
+            arm = arm_for(seed, reader["name"], item["id"])
+            planned[item["settlement_stratum"]][arm] += 1
+            totals[arm] += 1
+    for row in contract:
+        for arm in ("english", "ainglish"):
+            share = planned[row["id"]][arm] / totals[arm] if totals[arm] else 0
+            if abs(share - row["weight"]) > 1e-9:
+                raise ValueError(
+                    f"planned {arm} exposure for stratum {row['id']!r} is {share:.6f}, not its "
+                    f"declared weight {row['weight']:.6f}; rebalance item ids, seed or weights")
+    return contract
+
+
+def _stratified_accuracy(rows, items, contract):
+    """Return the manifest-weighted top estimator and the complete server result rows."""
+    result_rows = []
+    for contract_row in contract:
+        ident = contract_row["id"]
+        subset = [item for item in items if item.get("settlement_stratum") == ident]
+        ids = {item["id"] for item in subset}
+        subset_rows = [row for row in rows if row[0] in ids]
+        acc, _ = score(subset_rows, subset)
+        if acc["english"] is None or acc["ainglish"] is None:
+            raise ValueError(f"settlement stratum {ident!r} lost every live cell in one arm")
+        arms = {
+            "english": round(acc["english"], 4),
+            "ainglish": round(acc["ainglish"], 4),
+            "chance": round(sum(1 / len(item["options"]) for item in subset) / len(subset), 4),
+        }
+        result_rows.append({
+            "id": ident,
+            "value": round(100 * (arms["ainglish"] - arms["english"]), 4),
+            "arms": arms,
+        })
+    by_id = {row["id"]: row for row in result_rows}
+    top_arms = {
+        arm: round(sum(row["weight"] * by_id[row["id"]]["arms"][arm]
+                       for row in contract), 4)
+        for arm in ("english", "ainglish", "chance")
+    }
+    value = round(sum(row["weight"] * by_id[row["id"]]["value"]
+                      for row in contract), 4)
+    return value, top_arms, result_rows
+
+
+def bootstrap_stratified_accuracy(rows, items, contract, n=2000, seed=0):
+    """Resample items within every committed stratum, preserving its frozen weight."""
+    rng = random.Random(seed)
+    by_stratum = {
+        row["id"]: [item for item in items if item.get("settlement_stratum") == row["id"]]
+        for row in contract
+    }
+    estimates = []
+    for draw in range(n):
+        sampled_items, sampled_rows = [], []
+        for ident, source in by_stratum.items():
+            for index in range(len(source)):
+                picked = rng.choice(source)
+                new_id = f"{ident}:{draw}:{index}"
+                sampled_items.append({**picked, "id": new_id})
+                sampled_rows.extend((new_id, arm, reader, answer)
+                                    for iid, arm, reader, answer in rows if iid == picked["id"])
+        try:
+            estimate, _arms, _cells = _stratified_accuracy(
+                sampled_rows, sampled_items, contract)
+        except ValueError:
+            continue
+        estimates.append(estimate)
+    if not estimates:
+        return None, None
+    estimates.sort()
+    return estimates[int(0.025 * len(estimates))], estimates[int(0.975 * len(estimates))]
+
+
+def stratified_resample_sensitivity(rows, items, contract, headline, lo, hi, seed=0):
+    """Thin within each stratum so the sensitivity check retains the declared estimand."""
+    out = []
+    for fraction in (0.75, 0.50):
+        subset = []
+        for contract_row in contract:
+            members = [item for item in items
+                       if item.get("settlement_stratum") == contract_row["id"]]
+            keep = max(1, int(len(members) * fraction))
+            rng = random.Random(f"{seed}:{fraction}:{contract_row['id']}")
+            subset.extend(rng.sample(members, keep))
+        ids = {item["id"] for item in subset}
+        try:
+            value, _arms, _cells = _stratified_accuracy(
+                [row for row in rows if row[0] in ids], subset, contract)
+        except ValueError:
+            value = None
+        out.append({
+            "kept_fraction": fraction,
+            "items": len(subset),
+            "value": value,
+            "sign_flipped": None if value is None or headline == 0 else (value > 0) != (headline > 0),
+            "outside_interval": None if value is None or lo is None or hi is None
+                                else value < min(lo, hi) or value > max(lo, hi),
+        })
+    return out
+
+
 def bootstrap_censored_mean(item_diffs, n=2000, seed=0):
     """Bootstrap the robustness estimator over ITEMS, preserving its floor-censoring rule.
 
@@ -1521,6 +1663,11 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         print("REFUSING to run: comprehension panels need at least two real items — bootstrap and "
               "resample-down sensitivity are undefined for a smaller sample. No reader cell was bought.")
         return None
+    try:
+        settlement_contract = _settlement_contract(manifest, real, panel, seed)
+    except ValueError as exc:
+        print(f"REFUSING to run: invalid settlement strata ({exc}). No reader cell was bought.")
+        return None
     if manifest.get("metric") == "learnability" and not _validate_learnability_v2(
             manifest, real, calib):
         return None
@@ -1857,7 +2004,20 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         value = round(acc["ainglish"], 4)
     else:
         print(f"unsupported metric {metric}"); return None
-    lo, hi = bootstrap_delta(real_rows, real, metric, seed=seed)
+    stratum_results = None
+    stratified_arms = None
+    if settlement_contract is not None:
+        try:
+            value, stratified_arms, stratum_results = _stratified_accuracy(
+                real_rows, real, settlement_contract)
+        except ValueError as exc:
+            print(f"REFUSING to emit: settlement strata became incomplete after cell-yield "
+                  f"filtering ({exc}). Preserve the cell-result receipt and rerun a fresh design.")
+            return None
+    lo, hi = (bootstrap_stratified_accuracy(
+        real_rows, real, settlement_contract, seed=seed)
+        if settlement_contract is not None
+        else bootstrap_delta(real_rows, real, metric, seed=seed))
 
     # RESAMPLE-DOWN sensitivity (@exori relaying @ColonistOne's collider result, DM 2026-08-04):
     # thin the item set and re-score. If the verdict moves as the set shrinks, the number was
@@ -1867,34 +2027,38 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # can fail is decoration. Deterministic (seeded), so a replication reproduces the same subsets.
     import random as _rnd
     resample = []
-    for frac in (0.75, 0.50):
-        keep = max(2, int(len(real) * frac))
-        rng = _rnd.Random(f"{seed}:{frac}")
-        subset = rng.sample(real, keep)
-        ids = {i["id"] for i in subset}
-        srows = [r for r in real_rows if r[0] in ids]
-        sacc, sent = score(srows, subset)
-        if metric == "comprehension_accuracy_delta" and sacc.get("ainglish") is not None and sacc.get("english") is not None:
-            sval = round(100 * (sacc["ainglish"] - sacc["english"]), 2)
-        elif metric == "interpretation_entropy_delta" and sent.get("ainglish") is not None and sent.get("english") is not None:
-            sval = round(sent["ainglish"] - sent["english"], 4)
-        elif metric == "learnability" and sacc.get("ainglish") is not None:
-            sval = round(sacc["ainglish"], 4)          # the entry-arm score, same estimator as the headline
-        else:
-            sval = None
-        # Sign-flipping ALONE is too weak a criterion, and this check failed its own motivating
-        # case before it shipped: a balanced item set gave a headline of +0.7 that moved to +31.4
-        # when thinned, and "the sign held" the whole way. That is the same error as counting zero
-        # as a sign. So the second criterion uses a number the register already committed to —
-        # the bootstrap interval IS its claim about this value's stability, so a subset landing
-        # outside it contradicts that claim without any new threshold to argue about.
-        outside = None
-        if sval is not None and lo is not None and hi is not None:
-            outside = sval < min(lo, hi) or sval > max(lo, hi)
-        resample.append({"kept_fraction": frac, "items": keep, "value": sval,
-                         # a 0..1 score has no sign to flip; the interval criterion below carries it
-                         "sign_flipped": None if sval is None or value == 0 or metric == "learnability" else (sval > 0) != (value > 0),
-                         "outside_interval": outside})
+    if settlement_contract is not None:
+        resample = stratified_resample_sensitivity(
+            real_rows, real, settlement_contract, value, lo, hi, seed=seed)
+    else:
+        for frac in (0.75, 0.50):
+            keep = max(2, int(len(real) * frac))
+            rng = _rnd.Random(f"{seed}:{frac}")
+            subset = rng.sample(real, keep)
+            ids = {i["id"] for i in subset}
+            srows = [r for r in real_rows if r[0] in ids]
+            sacc, sent = score(srows, subset)
+            if metric == "comprehension_accuracy_delta" and sacc.get("ainglish") is not None and sacc.get("english") is not None:
+                sval = round(100 * (sacc["ainglish"] - sacc["english"]), 2)
+            elif metric == "interpretation_entropy_delta" and sent.get("ainglish") is not None and sent.get("english") is not None:
+                sval = round(sent["ainglish"] - sent["english"], 4)
+            elif metric == "learnability" and sacc.get("ainglish") is not None:
+                sval = round(sacc["ainglish"], 4)          # the entry-arm score, same estimator as the headline
+            else:
+                sval = None
+            # Sign-flipping ALONE is too weak a criterion, and this check failed its own motivating
+            # case before it shipped: a balanced item set gave a headline of +0.7 that moved to +31.4
+            # when thinned, and "the sign held" the whole way. That is the same error as counting zero
+            # as a sign. So the second criterion uses a number the register already committed to —
+            # the bootstrap interval IS its claim about this value's stability, so a subset landing
+            # outside it contradicts that claim without any new threshold to argue about.
+            outside = None
+            if sval is not None and lo is not None and hi is not None:
+                outside = sval < min(lo, hi) or sval > max(lo, hi)
+            resample.append({"kept_fraction": frac, "items": keep, "value": sval,
+                             # a 0..1 score has no sign to flip; the interval criterion below carries it
+                             "sign_flipped": None if sval is None or value == 0 or metric == "learnability" else (sval > 0) != (value > 0),
+                             "outside_interval": outside})
     unstable = [r for r in resample if r.get("sign_flipped") or r.get("outside_interval")]
     if unstable:
         print(f"RESAMPLE-DOWN WARNING: thinning moves this value outside what the run claimed "
@@ -1912,7 +2076,13 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     for p_ in panel:
         p_rows = [r for r in real_rows if r[2] == p_["name"]]
         p_acc, p_ent = score(p_rows, real)
-        if metric == "comprehension_accuracy_delta" and p_acc["ainglish"] is not None and p_acc["english"] is not None:
+        if metric == "comprehension_accuracy_delta" and settlement_contract is not None:
+            try:
+                p_val, _p_arms, _p_cells = _stratified_accuracy(
+                    p_rows, real, settlement_contract)
+            except ValueError:
+                continue
+        elif metric == "comprehension_accuracy_delta" and p_acc["ainglish"] is not None and p_acc["english"] is not None:
             p_val = round(100 * (p_acc["ainglish"] - p_acc["english"]), 2)
         elif metric == "interpretation_entropy_delta" and p_ent["ainglish"] is not None and p_ent["english"] is not None:
             p_val = round(p_ent["ainglish"] - p_ent["english"], 4)
@@ -1957,6 +2127,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
                 "ainglish": round(ent["ainglish"], 4) if ent["ainglish"] is not None else None,
                 "max_bits": {"english": _ceiling("english"), "ainglish": _ceiling("ainglish")},
                 "accuracy": {"english": arms["english"], "ainglish": arms["ainglish"], "chance": arms["chance"]}}
+    elif stratified_arms is not None:
+        arms = stratified_arms
 
     # Accuracy is discrete. A rounded delta such as -1.19 pp can look more precise than the
     # underlying scored cells permit, especially when dead cells leave unequal arm denominators.
@@ -1964,7 +2136,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # of 100/lcm(n_english,n_ainglish) percentage points. The decimal is only a reading aid; the
     # numerator and denominator are the exact claim.
     accuracy_resolution = None
-    if metric == "comprehension_accuracy_delta":
+    if metric == "comprehension_accuracy_delta" and settlement_contract is None:
         expected = {item["id"]: item.get("answer") for item in real}
         # Structural validation requires an answer on every item, so every real id is scoreable.
         scoreable_ids = set(expected)
@@ -2010,6 +2182,10 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     spec["instrument_preparation"] = instrument_preparation_receipt(
         panel, _manifest_unbound_entry_point(manifest))
     spec["item_counts"] = {"real": len(real), "calibration": len(calib)}
+    if settlement_contract is not None:
+        spec["settlement_strata"] = settlement_contract
+        spec["settlement_item_field"] = "settlement_stratum"
+        spec["settlement_rule"] = "manifest-weighted arms and value; every stratum load-bearing"
     if accuracy_resolution is not None:
         spec["accuracy_resolution"] = accuracy_resolution
     spec["calibration"] = {
@@ -2084,6 +2260,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # making every consumer retrieve manifest bytes. Keep the committed copy during the
         # transition: SDK 0.2.28 rows carried it there, and the server verifies both agree.
         measurement["accuracy_resolution"] = accuracy_resolution
+    if stratum_results is not None:
+        measurement["stratum_results"] = stratum_results
     if metric == "learnability":
         # A unit-interval score, not a delta: no arms on the wire (the server refuses them on this
         # metric) and the accuracy-resolution grid is a delta concept. The paid real cold-arm cells
@@ -2669,6 +2847,39 @@ def selftest():
     assert m["manifest"]["instrument_preparation"] == {
         "entry_point": "run_panel(custom ask_fn)", "binding": "unbound"}, \
         "a custom reader loop must never look digest-bound in a successful manifest"
+    # Manifest-bound form cells: every real item names its cell before spend, planned arm exposure
+    # matches the weights, and the emitted top line is exactly the weighted result rather than a
+    # pool in which opposite form failures can cancel.
+    stratified_items = [
+        ({**item, "settlement_stratum": ("repeat" if item["id"] in {"r0", "r1", "r2", "r3"}
+                                         else "restore")}
+         if not item.get("calibration") else dict(item))
+        for item in items
+    ]
+    stratified_manifest = dict(
+        good,
+        items=stratified_items,
+        settlement_strata=[
+            {"id": "repeat", "weight": 0.5},
+            {"id": "restore", "weight": 0.5},
+        ],
+    )
+    stratified = run_panel(stratified_manifest, ask_fn=tag_reliant)
+    assert [row["id"] for row in stratified["stratum_results"]] == ["repeat", "restore"]
+    assert stratified["manifest"]["settlement_strata"] == stratified_manifest["settlement_strata"]
+    assert abs(stratified["value"] - sum(
+        row["value"] * 0.5 for row in stratified["stratum_results"])) < 0.0001
+    assert "accuracy_resolution" not in stratified, \
+        "the pooled cell grid cannot describe a manifest-weighted stratified estimator"
+    unbalanced_items = [
+        ({**item, "settlement_stratum": ("repeat" if item["id"] == "r0" else "restore")}
+         if not item.get("calibration") else dict(item))
+        for item in items
+    ]
+    assert_pre_spend_refusal(
+        dict(stratified_manifest, items=unbalanced_items),
+        "declared settlement weights must match planned exposure in both arms",
+    )
     # --- panel_neff is a claim, not a headcount ------------------------------------------------
     # It used to be emitted as len(panel): a roster count wearing an error-structure statistic's
     # name. The harness now refuses to auto-fill it and reports the roster count under its own name.

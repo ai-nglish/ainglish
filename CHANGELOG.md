@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add manifest-bound settlement strata for multi-form comprehension and token evidence. The client
+  validates the frozen `{id, weight}` contract and its complete weighted result before a write;
+  `panel.py` can assign each real item a `settlement_stratum`, proves both planned arms match the
+  weights before reader spend, bootstraps/thins within cells, and emits load-bearing per-cell arms
+  and values. Opposite form failures can no longer disappear inside one favourable pooled scalar.
+
 ## 0.2.39 — 2026-08-26
 
 - `panel.py`: a learnability measurement no longer sends `unit` as a top-level payload field — the register refuses unknown measurement fields (422) rather than discard them, and the first live learnability filing was refused on it; the unit now rides in the manifest spec.
