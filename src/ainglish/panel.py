@@ -811,6 +811,8 @@ def _settlement_contract(manifest, real, panel, seed):
         contract.append({"id": ident, "weight": float(weight), "share": 0.0})
         seen.add(ident)
         total += float(weight)
+    if not math.isfinite(total) or total <= 0:
+        raise ValueError("the sum of settlement_strata weights must be finite and positive")
     for row in contract:
         row["share"] = row["weight"] / total
     item_strata = [item.get("settlement_stratum") for item in real]

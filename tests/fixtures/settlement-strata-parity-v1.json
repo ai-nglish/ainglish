@@ -1,0 +1,64 @@
+{
+  "kind": "ainglish.settlement-strata-parity.v1",
+  "contract_cases": [
+    {"name": "single-integer", "accepted": true, "settlement_strata": [{"id": "only", "weight": 1}], "shares": [1.0]},
+    {"name": "relative-weights", "accepted": true, "settlement_strata": [{"id": "one", "weight": 1}, {"id": "two", "weight": 2}], "shares": [0.3333333333333333, 0.6666666666666666]},
+    {"name": "fractional-weights", "accepted": true, "settlement_strata": [{"id": "left", "weight": 0.25}, {"id": "right", "weight": 0.75}], "shares": [0.25, 0.75]},
+    {"name": "empty", "accepted": false, "settlement_strata": []},
+    {"name": "duplicate-id", "accepted": false, "settlement_strata": [{"id": "same", "weight": 1}, {"id": "same", "weight": 1}]},
+    {"name": "uppercase-id", "accepted": false, "settlement_strata": [{"id": "Not-Lower", "weight": 1}]},
+    {"name": "extra-field", "accepted": false, "settlement_strata": [{"id": "one", "weight": 1, "label": "post-hoc"}]},
+    {"name": "zero-weight", "accepted": false, "settlement_strata": [{"id": "one", "weight": 0}]},
+    {"name": "negative-weight", "accepted": false, "settlement_strata": [{"id": "one", "weight": -1}]},
+    {"name": "boolean-weight", "accepted": false, "settlement_strata": [{"id": "one", "weight": true}]},
+    {"name": "numeric-string-weight", "accepted": false, "settlement_strata": [{"id": "one", "weight": "1"}]},
+    {"name": "overflowed-sum", "accepted": false, "settlement_strata": [{"id": "one", "weight": 1e308}, {"id": "two", "weight": 1e308}]}
+  ],
+  "measurement_cases": [
+    {
+      "name": "valid-token", "accepted": true, "metric": "token_delta", "value": -10,
+      "manifest": {"settlement_strata": [{"id": "repeat", "weight": 1}, {"id": "restore", "weight": 3}]},
+      "stratum_results": [{"id": "restore", "value": -12}, {"id": "repeat", "value": -4}]
+    },
+    {
+      "name": "valid-comprehension", "accepted": true, "metric": "comprehension_accuracy_delta", "value": 5,
+      "arms": {"english": 0.65, "ainglish": 0.7, "chance": 0.25},
+      "manifest": {"settlement_strata": [{"id": "inclusive", "weight": 1}, {"id": "exclusive", "weight": 1}]},
+      "stratum_results": [
+        {"id": "inclusive", "value": 0, "arms": {"english": 0.8, "ainglish": 0.8, "chance": 0.25}},
+        {"id": "exclusive", "value": 10, "arms": {"english": 0.5, "ainglish": 0.6, "chance": 0.25}}
+      ]
+    },
+    {
+      "name": "missing-cell", "accepted": false, "metric": "token_delta", "value": -4,
+      "manifest": {"settlement_strata": [{"id": "one", "weight": 1}, {"id": "two", "weight": 1}]},
+      "stratum_results": [{"id": "one", "value": -4}]
+    },
+    {
+      "name": "post-hoc-cell", "accepted": false, "metric": "token_delta", "value": -4,
+      "manifest": {}, "stratum_results": [{"id": "invented", "value": -4}]
+    },
+    {
+      "name": "wrong-weighted-top", "accepted": false, "metric": "token_delta", "value": -9,
+      "manifest": {"settlement_strata": [{"id": "one", "weight": 1}, {"id": "two", "weight": 1}]},
+      "stratum_results": [{"id": "one", "value": -8}, {"id": "two", "value": -12}]
+    },
+    {
+      "name": "wrong-derived-cell", "accepted": false, "metric": "comprehension_accuracy_delta", "value": 5,
+      "arms": {"english": 0.5, "ainglish": 0.55},
+      "manifest": {"settlement_strata": [{"id": "one", "weight": 1}]},
+      "stratum_results": [{"id": "one", "value": 5, "arms": {"english": 0.5, "ainglish": 0.6}}]
+    },
+    {
+      "name": "wrong-weighted-arms", "accepted": false, "metric": "comprehension_accuracy_delta", "value": 10,
+      "arms": {"english": 0.4, "ainglish": 0.5},
+      "manifest": {"settlement_strata": [{"id": "one", "weight": 1}]},
+      "stratum_results": [{"id": "one", "value": 10, "arms": {"english": 0.5, "ainglish": 0.6}}]
+    },
+    {
+      "name": "unsupported-metric", "accepted": false, "metric": "learnability", "value": 0.5,
+      "manifest": {"settlement_strata": [{"id": "one", "weight": 1}]},
+      "stratum_results": [{"id": "one", "value": 0.5}]
+    }
+  ]
+}

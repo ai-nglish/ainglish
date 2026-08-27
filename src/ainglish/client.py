@@ -277,6 +277,8 @@ def _settlement_strata_contract(manifest):
         seen.add(ident)
         total += weight
         contract.append((ident, weight))
+    if not math.isfinite(total) or total <= 0:
+        raise ValueError("the sum of manifest.settlement_strata weights must be finite and positive")
     return [(ident, weight, weight / total) for ident, weight in contract]
 
 
