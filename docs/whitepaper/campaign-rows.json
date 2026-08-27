@@ -1,0 +1,32 @@
+{
+ "kind": "ainglish.whitepaper.campaign-rows.v1",
+ "campaign": "2026-08-26",
+ "note": "Identity only: the manifest hashes of the author's 2026-08-26 local-panel rows cited in section 6. Every value in the paper's tables is joined from the register snapshot (data.json.gz); manifests and item-set metadata are pulled into campaign.json.gz by build_data.py and verified against these hashes at render time.",
+ "rows": [
+  "18485665fd32f529ac8f554feee92bfeeb7359bea38edac85e06a5452d79921b",
+  "25c603866a9f8205e5fbc253e6fb83cf86717dc99aa43368b7d22044687ebcc8",
+  "2dc47b111ee5bfd656ecad4f142832711b5d1f35baa8ae07c9fe6dd80261a615",
+  "3965fddd5d31ea9f9948a113dd549cd84bac61223b61941ec69bde0b0d326635",
+  "420fb3ad6df7a280a7dec468f8058f35d11ecc66d3d1ceabd16341cbb8fe413e",
+  "4d6c9f933c48e27f013ac090b0d0886fc246c8f311e7e331e84a84c3bf10a1b0",
+  "5acf092434a7a91be35c5b86e54acd3a214f5096cec4a3859a16bce74ee8d8bc",
+  "7998be7e19f016f190fdba29068bfa9470c7f2f7e4ab6eb716d818c95f448b07",
+  "79caba68e4ee77f5caeb9bbabdf349819b60195b91c2e43cbae3352172ca9f28",
+  "7d6674a29876f97c9fd0c99c16c74ad73619003675dda4a546cbc7bfe0120b1e",
+  "82177a0e664db5fed7bbcb812a6590277cd398c8c4f3c79b1cca2a50aaa2f2ae",
+  "a5bf2d04f9a9ce4a23951adefce510935891c6851f2f90ec3330ea025e0c2494",
+  "a7270b497fbb5a8012223fa2be74c18ffd68c2dcb5ce3e5c13d6e1d3ff86bbfb",
+  "b4284015daf019e10b2bf4a7643c4341d6576859a57ae40d7c99ae0a1ced546c",
+  "b661b02842052ced7bc148b50fd4194c6084fbc27f1f70e22e45dd6af88e3d7d",
+  "b755d553d4c1f890a54833731a841aef8fa40348d2f641b6ec42b3d1f571813c",
+  "bc66ec61803fb93ff598dd2a1abdd152d3a2eb26a5bf6aeae584e4dab7bf00ac",
+  "bcc7b1d1f3cc4c975755a9d2f36d72681a301e6e6584334efd7fa4dcc73dc29f",
+  "c35249de0f0807215f4ec82e3a964f9f5ac419522b5986de10c0350ed9ae8bbb",
+  "c42abe371efc9cb63ab04f6491609956a60db84d52dbbb7b520eb6b0b314af31",
+  "d27b409889de0997178466d02baa0d4c66cc2869226802f0ef58b5bdaa876d37",
+  "dba42c0e48b623502fb370067cf080a1b639a2bb621318400217f1f3d79b3e83",
+  "dbc96ac646e5eaa6b115bd904d90a624b08d400a1229833e806512feddf290ef",
+  "edb44cee446c7105302049ca72135bdb23268325771a8612217fe7deeaf9751f",
+  "fba86a10ff5400837aeb8eaaded01d2e84a233a3fac8f889e64e578ef76cfad8"
+ ]
+}
