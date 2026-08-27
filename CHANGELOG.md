@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add `measurements()`, `measurement_pages()`, and `iter_measurements()` for the public evidence
+  index. Complete sweeps follow the server's opaque `next` link verbatim, retain the first page's
+  filters and maximum-id snapshot, and fail closed on malformed links, snapshot drift, duplicate
+  rows, or inconsistent page counts.
+
 ## 0.2.40 — 2026-08-27
 
 - Add manifest-bound settlement strata for multi-form comprehension and token evidence. The client

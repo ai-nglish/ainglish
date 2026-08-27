@@ -858,6 +858,98 @@ class AinglishClient:
         formula_version, manifest {...} (the full pre-registered spec)."""
         return self.get("/api/v1/measurements/" + manifest_hash)
 
+    def measurements(self, metric=None, role=None, since=None, proposal=None, limit=None,
+                     cursor=None):
+        """One newest-first page of the public evidence corpus.
+
+        Envelope: {kind, note, sweep: {snapshot_max_id, guarantee, follow}, total, count,
+        limit, has_more, next, measurements: [...]}. Filters: metric=, role=
+        (original|replication), since= (ISO-8601), proposal= (slug), limit= (1..200), and
+        cursor=. The cursor is opaque and bound to the first page's snapshot and filters.
+
+        For a complete, insert-stable sweep use iter_measurements(); measurement_pages() is its
+        envelope-preserving twin. They follow the server's `next` link verbatim rather than
+        reconstructing a cursor or silently dropping filters.
+        """
+        params = {k: v for k, v in (("metric", metric), ("role", role), ("since", since),
+                                     ("proposal", proposal), ("limit", limit),
+                                     ("cursor", cursor)) if v is not None}
+        return self.get("/api/v1/measurements", params or None)
+
+    def measurement_pages(self, metric=None, role=None, since=None, proposal=None,
+                          page_size=200):
+        """Yield validated evidence-index envelopes from one snapshot-bound cursor chain.
+
+        The first request carries the requested filters. Every later request follows `next`
+        exactly as served. Malformed/repeating links, a changed snapshot, duplicate row ids, or
+        inconsistent page counts raise AinglishError instead of yielding a partial corpus as if
+        it were complete.
+        """
+        if not isinstance(page_size, int) or isinstance(page_size, bool) or not 1 <= page_size <= 200:
+            raise ValueError("page_size must be an integer from 1 to 200")
+        next_path = None
+        seen_next, seen_rows = set(), set()
+        snapshot_max_id = None
+        while True:
+            if next_path is None:
+                page = self.measurements(metric=metric, role=role, since=since,
+                                         proposal=proposal, limit=page_size)
+            else:
+                page = self.get(next_path)
+            if not isinstance(page, dict) or not isinstance(page.get("measurements"), list):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement page lost its measurements list"})
+            sweep = page.get("sweep")
+            if not isinstance(sweep, dict):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement page lost its sweep receipt"})
+            page_snapshot = sweep.get("snapshot_max_id")
+            if isinstance(page_snapshot, bool) or not isinstance(page_snapshot, int) or page_snapshot < 0:
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement page returned an invalid snapshot_max_id"})
+            if snapshot_max_id is None:
+                snapshot_max_id = page_snapshot
+            elif page_snapshot != snapshot_max_id:
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement cursor chain changed its snapshot"})
+            for key in ("total", "count", "limit"):
+                value = page.get(key)
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise AinglishError(502, {"error": "invalid_pagination",
+                                              "message": "measurement page returned an invalid %s" % key})
+            if page["count"] != len(page["measurements"]):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement page count does not match its rows"})
+            has_more = page.get("has_more")
+            if not isinstance(has_more, bool):
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement page returned a non-boolean has_more"})
+            for row in page["measurements"]:
+                row_id = row.get("attempt_id") if isinstance(row, dict) else None
+                if not isinstance(row_id, str) or not row_id or row_id in seen_rows:
+                    raise AinglishError(502, {"error": "invalid_pagination",
+                                              "message": "measurement pagination repeated or lost a stable attempt_id"})
+                seen_rows.add(row_id)
+            yield page
+            if not has_more:
+                return
+            candidate = page.get("next")
+            parsed = urllib.parse.urlsplit(candidate) if isinstance(candidate, str) else None
+            if parsed is None or parsed.scheme or parsed.netloc or parsed.fragment \
+                    or parsed.path != "/api/v1/measurements" or not parsed.query \
+                    or candidate in seen_next:
+                raise AinglishError(502, {"error": "invalid_pagination",
+                                          "message": "measurement pagination said has_more but did not supply a new local next link"})
+            seen_next.add(candidate)
+            next_path = candidate
+
+    def iter_measurements(self, metric=None, role=None, since=None, proposal=None,
+                          page_size=200):
+        """Yield every matching measurement row from one snapshot-bound cursor sweep."""
+        for page in self.measurement_pages(metric=metric, role=role, since=since,
+                                           proposal=proposal, page_size=page_size):
+            yield from page["measurements"]
+
     def attempts(self, slug):
         """Every attempt on a proposal, including open, completed and aborted obligations.
         Envelope: {kind, proposal, note, counts: {open, completed, aborted}, attempts: [...]}.
@@ -1378,6 +1470,8 @@ _DOCUMENTED = {
     "register_release": ("kind", "version", "digest", "canonical_url", "entries"),
     "register_canonical": ("kind", "count", "entries"),
     "proposals": ("kind", "threshold", "min_seconders", "proposals", "pagination"),
+    "measurements": ("kind", "note", "sweep", "total", "count", "limit", "has_more",
+                     "next", "measurements"),
     "protocols": ("kind", "replication_threshold", "metrics"),
     "changelog": ("kind", "entry_hash_recipe", "register_digest_recipe", "verify", "events"),
     "anchors": ("kind", "how_to_verify", "anchors"),
@@ -1914,6 +2008,13 @@ def selftest():
     assert sent == {"path": "/api/v1/proposals", "params": {
         "stage": "measured", "limit": 25, "cursor": "opaque-next", "q": "uncertainty"}, "auth": False}, sent
     sent.clear()
+    probe.measurements(metric="token_delta", role="replication", since="2026-08-01T00:00:00Z",
+                       proposal="some-slug", limit=25, cursor="opaque-evidence-next")
+    assert sent == {"path": "/api/v1/measurements", "params": {
+        "metric": "token_delta", "role": "replication", "since": "2026-08-01T00:00:00Z",
+        "proposal": "some-slug", "limit": 25, "cursor": "opaque-evidence-next"},
+        "auth": False}, sent
+    sent.clear()
     probe.second("some-slug")
     assert sent["payload"] == {}, f"omitting the reasons must send nothing extra: {sent}"
     probe.second("some-slug", worth_measuring_because="the surface is declared")
@@ -2307,6 +2408,87 @@ def selftest():
         try:
             list(paged.iter_proposals(page_size=invalid_size))
             raise AssertionError("invalid page size %r must refuse" % (invalid_size,))
+        except ValueError:
+            pass
+
+    # --- evidence index traversal follows each opaque next link exactly ----------------------
+    class _MeasurementPaged(AinglishClient):
+        def __init__(self, pages):
+            super().__init__(use_env=False)
+            self.pages, self.calls = pages, []
+
+        def measurements(self, metric=None, role=None, since=None, proposal=None, limit=None,
+                         cursor=None):
+            self.calls.append(("first", metric, role, since, proposal, limit, cursor))
+            return self.pages[None]
+
+        def get(self, path, params=None, auth=False):
+            self.calls.append(("next", path, params, auth))
+            return self.pages[path]
+
+    evidence_next = "/api/v1/measurements?limit=2&metric=token_delta&cursor=opaque-snapshot"
+    evidence = _MeasurementPaged({
+        None: {"measurements": [{"attempt_id": "attempt-a"}, {"attempt_id": "attempt-b"}],
+               "sweep": {"snapshot_max_id": 44}, "total": 3, "count": 2, "limit": 2,
+               "has_more": True, "next": evidence_next},
+        evidence_next: {"measurements": [{"attempt_id": "attempt-c"}],
+                        "sweep": {"snapshot_max_id": 44}, "total": 3, "count": 1,
+                        "limit": 2, "has_more": False, "next": None},
+    })
+    assert [r["attempt_id"] for r in evidence.iter_measurements(
+        metric="token_delta", role="original", since="2026-08-01", proposal="some-slug",
+        page_size=2)] == ["attempt-a", "attempt-b", "attempt-c"]
+    assert evidence.calls == [
+        ("first", "token_delta", "original", "2026-08-01", "some-slug", 2, None),
+        ("next", evidence_next, None, False),
+    ], "the second request must follow next verbatim, not reconstruct filters/cursor: %s" % (
+        evidence.calls,)
+
+    def _bad_evidence(second, needle):
+        bad = _MeasurementPaged({
+            None: {"measurements": [{"attempt_id": "attempt-a"}],
+                   "sweep": {"snapshot_max_id": 44}, "total": 2, "count": 1, "limit": 1,
+                   "has_more": True, "next": evidence_next},
+            evidence_next: second,
+        })
+        try:
+            list(bad.iter_measurements(page_size=1))
+            raise AssertionError("invalid measurement cursor chain must refuse")
+        except AinglishError as err:
+            assert err.error == "invalid_pagination" and needle in err.message, str(err)
+
+    _bad_evidence(
+        {"measurements": [{"attempt_id": "attempt-b"}], "sweep": {"snapshot_max_id": 45},
+         "total": 2, "count": 1, "limit": 1, "has_more": False, "next": None},
+        "snapshot")
+    _bad_evidence(
+        {"measurements": [{"attempt_id": "attempt-a"}], "sweep": {"snapshot_max_id": 44},
+         "total": 2, "count": 1, "limit": 1, "has_more": False, "next": None},
+        "attempt_id")
+    malformed_next = _MeasurementPaged({
+        None: {"measurements": [{"attempt_id": "attempt-a"}],
+               "sweep": {"snapshot_max_id": 44}, "total": 2, "count": 1, "limit": 1,
+               "has_more": True, "next": "https://other.example/api/v1/measurements?cursor=x"},
+    })
+    try:
+        list(malformed_next.iter_measurements(page_size=1))
+        raise AssertionError("an absolute/cross-origin next link must refuse")
+    except AinglishError as err:
+        assert err.error == "invalid_pagination" and "local next link" in err.message
+    bad_count = _MeasurementPaged({
+        None: {"measurements": [{"attempt_id": "attempt-a"}],
+               "sweep": {"snapshot_max_id": 44}, "total": 1, "count": 2, "limit": 2,
+               "has_more": False, "next": None},
+    })
+    try:
+        list(bad_count.iter_measurements())
+        raise AssertionError("a measurement page's count must match its rows")
+    except AinglishError as err:
+        assert err.error == "invalid_pagination" and "count" in err.message
+    for invalid_size in (0, 201, True, "20"):
+        try:
+            list(evidence.iter_measurements(page_size=invalid_size))
+            raise AssertionError("invalid measurement page size %r must refuse" % (invalid_size,))
         except ValueError:
             pass
 
