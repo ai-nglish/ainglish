@@ -2,13 +2,21 @@
 # Render ainglish-whitepaper.pdf from ainglish-whitepaper.md.
 #
 # The Markdown document is the source of truth; this script only typesets it and
-# never modifies it. The toolchain is pinned by image digest and the PDF
-# timestamp is taken from the owner-approval date in the document, so repeated
-# runs over unchanged source produce byte-identical output.
+# never modifies it. The toolchain is pinned by image digest and the PDF timestamp
+# is taken from the owner-approval date in the document, so repeated runs over
+# unchanged source are CONTENT-equivalent under the normalisation documented below
+# — they are NOT byte-identical. xdvipdfmx picks a fresh random six-letter subset
+# tag for every embedded font and offers no option to fix it, so the raw bytes
+# differ on every build. What is stable is the digest computed by
+# pdf_normalise.py, which normalises those tags away along with each stream's
+# compressed /Length and the cross-reference offsets that follow from them. See
+# README.md, section "The PDF", for the exact scope of the claim.
 #
 # Usage: ./build_pdf.sh [--check]
-#   --check  rebuild to a temporary file and fail if it differs from the
-#            committed PDF (used by CI)
+#   --check  rebuild to a temporary file and fail if its pdf_normalise.py digest
+#            differs from the committed PDF's. Run by hand: CI does NOT rebuild
+#            the PDF (that needs Docker and a 774 MB image) — it verifies the
+#            committed bytes through SHA256SUMS instead.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -42,7 +50,7 @@ APPROVED=$(grep -oE 'approved by the owner [0-9]{4}-[0-9]{2}-[0-9]{2}' "$SRC" | 
 [ -n "${APPROVED:-}" ] || die 'no owner-approval date found in the document'
 
 # Fixed temporary names, not mktemp: a random filename would leak into the
-# output and break byte-reproducibility.
+# output and break even the normalised-content digest.
 BODY='.wp-body.md'; META='.wp-meta.yaml'; LOG='.wp-build.log'
 trap 'rm -f "$BODY" "$META" "$LOG"' EXIT
 tail -n +6 "$SRC" > "$BODY"   # drop the H1/subtitle/attribution block; the status line stays in the body
