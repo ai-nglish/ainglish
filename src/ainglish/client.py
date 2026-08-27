@@ -890,6 +890,7 @@ class AinglishClient:
         next_path = None
         seen_next, seen_rows = set(), set()
         snapshot_max_id = None
+        snapshot_seen = False
         while True:
             if next_path is None:
                 page = self.measurements(metric=metric, role=role, since=since,
@@ -904,11 +905,16 @@ class AinglishClient:
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "measurement page lost its sweep receipt"})
             page_snapshot = sweep.get("snapshot_max_id")
-            if isinstance(page_snapshot, bool) or not isinstance(page_snapshot, int) or page_snapshot < 0:
+            empty_snapshot = (page_snapshot is None and page.get("total") == 0
+                              and page.get("count") == 0 and page.get("has_more") is False)
+            if not empty_snapshot and (isinstance(page_snapshot, bool)
+                                       or not isinstance(page_snapshot, int)
+                                       or page_snapshot < 0):
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "measurement page returned an invalid snapshot_max_id"})
-            if snapshot_max_id is None:
+            if not snapshot_seen:
                 snapshot_max_id = page_snapshot
+                snapshot_seen = True
             elif page_snapshot != snapshot_max_id:
                 raise AinglishError(502, {"error": "invalid_pagination",
                                           "message": "measurement cursor chain changed its snapshot"})
@@ -2443,6 +2449,24 @@ def selftest():
         ("next", evidence_next, None, False),
     ], "the second request must follow next verbatim, not reconstruct filters/cursor: %s" % (
         evidence.calls,)
+
+    empty_evidence = _MeasurementPaged({
+        None: {"measurements": [], "sweep": {"snapshot_max_id": None}, "total": 0,
+               "count": 0, "limit": 200, "has_more": False, "next": None},
+    })
+    assert list(empty_evidence.iter_measurements(proposal="no-evidence")) == [], \
+        "the server represents an empty snapshot with a null ceiling"
+
+    invalid_null_snapshot = _MeasurementPaged({
+        None: {"measurements": [{"attempt_id": "attempt-a"}],
+               "sweep": {"snapshot_max_id": None}, "total": 1, "count": 1,
+               "limit": 200, "has_more": False, "next": None},
+    })
+    try:
+        list(invalid_null_snapshot.iter_measurements())
+        raise AssertionError("a non-empty measurement page must carry an integer snapshot ceiling")
+    except AinglishError as err:
+        assert err.error == "invalid_pagination" and "snapshot_max_id" in err.message
 
     def _bad_evidence(second, needle):
         bad = _MeasurementPaged({
