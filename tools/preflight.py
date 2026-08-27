@@ -36,6 +36,7 @@ A note on the shape, since it is the reason this file exists rather than a habit
 from __future__ import annotations
 
 import json
+import http.client
 import re
 import subprocess
 import sys
@@ -43,6 +44,7 @@ import urllib.error
 import hashlib
 import urllib.request
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 # The register no longer serves copies of these: those paths 302 to a pinned tag in THIS repo
@@ -64,6 +66,12 @@ KNOWN_BAD_TAGS = {
 
 failures: list[str] = []
 notes: list[str] = []
+
+# urllib normally wraps transport failures in URLError, but an HTTP peer that closes before
+# sending a status line can escape as http.client.RemoteDisconnected instead. Keep the boundary
+# explicit: protocol status responses are handled separately; transport failures make a network
+# assertion unavailable and must never crash an otherwise diagnostic preflight run.
+NETWORK_ERRORS = (OSError, http.client.HTTPException)
 
 
 def check(label: str, ok: bool, detail: str = "", info: str = "") -> None:
@@ -201,7 +209,7 @@ def check_mirror_parity(offline: bool) -> None:
             code, loc = resp.status, resp.headers.get("Location", "")
         except urllib.error.HTTPError as e:
             code, loc = e.code, e.headers.get("Location", "")
-        except (urllib.error.URLError, TimeoutError) as e:
+        except NETWORK_ERRORS as e:
             notes.append(f"{url} unreachable ({e}) — redirect not checked")
             continue
         # A 200 means a stale copy is being served and shadowing the rule: the precise failure
@@ -218,7 +226,7 @@ def check_mirror_parity(offline: bool) -> None:
         tag = m.group(1)
         try:
             served = urllib.request.urlopen(loc, timeout=40).read()
-        except (urllib.error.URLError, TimeoutError) as e:
+        except NETWORK_ERRORS as e:
             check(f"{name} redirect target fetches", False, f"{loc} ({e})")
             continue
         try:
@@ -241,7 +249,7 @@ def check_index(offline: bool) -> None:
     dv = declared_version()
     try:
         data = get_json(f"https://pypi.org/pypi/{PKG}/json")
-    except (urllib.error.URLError, TimeoutError) as e:
+    except NETWORK_ERRORS as e:
         notes.append(f"PyPI unreachable ({e}) — index not checked, do NOT claim it is current")
         return
     releases = set(data["releases"])
@@ -277,7 +285,7 @@ def check_pin_not_stale(offline: bool) -> None:
         loc = resp.headers.get("Location", "")
     except urllib.error.HTTPError as e:
         loc = e.headers.get("Location", "")
-    except (urllib.error.URLError, TimeoutError) as e:
+    except NETWORK_ERRORS as e:
         notes.append(f"{url} unreachable ({e}) — pin staleness not checked")
         return
     m = re.search(r"/ai-nglish/ainglish/(v[^/]+)/", loc)
@@ -308,6 +316,8 @@ def check_pin_not_stale(offline: bool) -> None:
 
 
 def main(argv: list[str]) -> int:
+    if "--selftest" in argv:
+        return selftest()
     offline = "--offline" in argv
     print(f"preflight — {PKG} {declared_version()} at {git('rev-parse', '--short', 'HEAD')}\n")
     check_untracked()
@@ -326,6 +336,28 @@ def main(argv: list[str]) -> int:
         print(f"\n{len(failures)} FAILED — a green test suite does not see any of these.")
         return 1
     print("\npreflight clear.")
+    return 0
+
+
+def selftest() -> int:
+    """The three network checks degrade to an explicit note on a dropped connection."""
+    failures.clear()
+    notes.clear()
+    dropped = http.client.RemoteDisconnected("peer closed before sending a response")
+
+    with mock.patch.object(urllib.request.OpenerDirector, "open", side_effect=dropped):
+        check_mirror_parity(False)
+        check_pin_not_stale(False)
+    with mock.patch.object(urllib.request, "urlopen", side_effect=dropped):
+        check_index(False)
+
+    assert not failures, failures
+    assert len(notes) == len(MIRRORED) + 2, notes
+    assert all("unreachable" in note for note in notes), notes
+    assert any("redirect not checked" in note for note in notes), notes
+    assert any("pin staleness not checked" in note for note in notes), notes
+    assert any("index not checked" in note for note in notes), notes
+    print("preflight selftest OK: dropped HTTP connections are reported, never traceback")
     return 0
 
 
