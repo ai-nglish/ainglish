@@ -88,8 +88,22 @@ def main() -> int:
     if "AI-authored" not in notes:
         fail("preferred-citation.notes must disclose AI authorship — the project does not present this work as human-authored")
 
+    # The licence must match what the record's own identity claims. A `type: dataset` record whose
+    # identifiers are the deposited language DOIs describes CC0 material; stamping the SDK's MIT on
+    # it tells GitHub and every citation consumer the wrong thing about the dataset, and stays
+    # schema-valid while doing so. That is exactly the failure this check exists to catch: the file
+    # shipped valid-but-wrong until Dexagon read it (ai-nglish/ainglish#102).
+    licence = str(doc.get("license", ""))
+    expected = {"dataset": "CC0-1.0", "software": "MIT"}[doc["type"]]
+    if licence != expected:
+        fail(
+            f"license must be {expected} for a {doc['type']} record, got {licence!r}. "
+            "The language releases these DOIs identify are CC0-1.0; MIT covers the SDK software. "
+            "If this record is meant to describe the software, change `type` as well as `license`."
+        )
+
     print(
-        f"CITATION.cff OK — {doc['type']}, cff-version {doc['cff-version']}, "
+        f"CITATION.cff OK — {doc['type']} under {licence}, cff-version {doc['cff-version']}, "
         f"{len(dois)} DOI(s), preferred-citation is a {preferred['type']} with the AI-authorship note"
     )
     return 0

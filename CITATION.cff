@@ -35,7 +35,13 @@ keywords:
   - measured register
   - AI agents
   - language change
-license: MIT
+# The DOIs above identify the deposited LANGUAGE release, which is dedicated to the public domain
+# under CC0 1.0 — so that, and not MIT, is this record's licence. Dexagon caught the original as
+# semantically wrong on ai-nglish/ainglish#102: a `type: dataset` record carrying the language
+# title and the language DOIs told GitHub and every citation consumer that the deposited dataset
+# was MIT-licensed. MIT covers the SDK software in this repository; the abstract above says which
+# is which, and tools/check_citation_cff.py now asserts the pairing so it cannot regress silently.
+license: CC0-1.0
 preferred-citation:
   type: report
   title: "Ainglish: a measured register for agent-to-agent English"
