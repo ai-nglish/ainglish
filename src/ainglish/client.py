@@ -46,6 +46,7 @@ import ipaddress
 import json
 import math
 import os
+import re
 import stat
 import struct
 import time
@@ -66,6 +67,8 @@ USER_AGENT = "ainglish-python/%s" % _V
 MAX_MANIFEST_BYTES = 20_000
 MAX_ATTEMPT_ESTIMAND_CHARS = 2_000
 MAX_PREFLIGHT_RECEIPT_BYTES = 20_000
+MAX_SETTLEMENT_STRATA = 64
+SETTLEMENT_AGGREGATE_TOLERANCE = 0.0001
 FAILED_GATE_KINDS = (
     "harness_refuse",
     "yield_guard_withhold",
@@ -233,12 +236,107 @@ def _validate_attempt_manifest(manifest):
            for model in models):
         raise ValueError(
             "manifest.models entries must be non-empty strings of at most 80 characters")
+    _settlement_strata_contract(manifest)
     canonical = _canonical_json(manifest).encode("utf-8")
     if len(canonical) > MAX_MANIFEST_BYTES:
         raise ValueError(
             "manifest is too large (20 KB max); reference bulky test sets by immutable URL "
             "and sha256 instead of inlining them")
     return canonical
+
+
+def _finite_number(value, field):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) \
+            or not math.isfinite(float(value)):
+        raise ValueError("%s must be a finite JSON number" % field)
+    return float(value)
+
+
+def _settlement_strata_contract(manifest):
+    """Validate and return the immutable multi-form settlement contract, if declared."""
+    if not isinstance(manifest, dict) or "settlement_strata" not in manifest:
+        return None
+    raw = manifest["settlement_strata"]
+    if not isinstance(raw, (list, tuple)) or not raw or len(raw) > MAX_SETTLEMENT_STRATA:
+        raise ValueError("manifest.settlement_strata must be a non-empty list of at most 64 "
+                         "{id, weight} objects")
+    contract = []
+    seen = set()
+    total = 0.0
+    for row in raw:
+        if not isinstance(row, dict) or set(row) != {"id", "weight"}:
+            raise ValueError("every manifest.settlement_strata entry must contain exactly id and weight")
+        ident = row["id"]
+        if not isinstance(ident, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._:-]{0,63}", ident):
+            raise ValueError("settlement stratum ids must be 1–64 lowercase ASCII identifier characters")
+        if ident in seen:
+            raise ValueError("duplicate settlement stratum id %r" % ident)
+        weight = _finite_number(row["weight"], "settlement stratum %r weight" % ident)
+        if weight <= 0:
+            raise ValueError("settlement stratum %r weight must be positive" % ident)
+        seen.add(ident)
+        total += weight
+        contract.append((ident, weight))
+    if not math.isfinite(total) or total <= 0:
+        raise ValueError("the sum of manifest.settlement_strata weights must be finite and positive")
+    return [(ident, weight, weight / total) for ident, weight in contract]
+
+
+def _validate_measurement_strata(payload):
+    """Refuse a payload the server cannot settle, before an authenticated write."""
+    if not isinstance(payload, dict):
+        raise ValueError("measurement payload must be a JSON object")
+    manifest = payload.get("manifest")
+    contract = _settlement_strata_contract(manifest)
+    raw = payload.get("stratum_results")
+    if contract is None:
+        if raw is not None:
+            raise ValueError("stratum_results requires manifest.settlement_strata; result labels "
+                             "may not be invented after the run")
+        return
+    metric = payload.get("metric")
+    if metric not in ("comprehension_accuracy_delta", "token_delta"):
+        raise ValueError("settlement_strata v1 supports comprehension_accuracy_delta and token_delta only")
+    if not isinstance(raw, (list, tuple)) or len(raw) != len(contract):
+        raise ValueError("stratum_results must report every manifest.settlement_strata id exactly once")
+    allowed = {"id", "value", "value_lo", "value_hi", "arms"}
+    by_id = {}
+    contract_by_id = {ident: (weight, share) for ident, weight, share in contract}
+    for row in raw:
+        if not isinstance(row, dict) or not set(row).issubset(allowed):
+            raise ValueError("each stratum_results entry must contain only id, value, value_lo, "
+                             "value_hi and arms")
+        ident = row.get("id")
+        if ident not in contract_by_id or ident in by_id:
+            raise ValueError("stratum_results ids must name every committed stratum exactly once")
+        value = _finite_number(row.get("value"), "stratum_results[%r].value" % ident)
+        if metric == "comprehension_accuracy_delta":
+            arms = row.get("arms")
+            if not isinstance(arms, dict) or not {"english", "ainglish"}.issubset(arms):
+                raise ValueError("comprehension stratum_results require english and ainglish arms")
+            english = _finite_number(arms["english"], "stratum_results[%r].arms.english" % ident)
+            ainglish = _finite_number(arms["ainglish"], "stratum_results[%r].arms.ainglish" % ident)
+            if not (0 <= english <= 1 and 0 <= ainglish <= 1):
+                raise ValueError("comprehension stratum arms must be within 0..1")
+            if abs(value - 100 * (ainglish - english)) > SETTLEMENT_AGGREGATE_TOLERANCE:
+                raise ValueError("comprehension stratum value must equal 100*(ainglish-english)")
+        by_id[ident] = row
+    weighted = sum(share * float(by_id[ident]["value"])
+                   for ident, _weight, share in contract)
+    top = _finite_number(payload.get("value"), "value")
+    if abs(weighted - top) > SETTLEMENT_AGGREGATE_TOLERANCE:
+        raise ValueError("value must equal the manifest-weighted stratum_results value")
+    if metric == "comprehension_accuracy_delta":
+        top_arms = payload.get("arms")
+        if not isinstance(top_arms, dict):
+            raise ValueError("stratified comprehension requires top-level arms")
+        for arm in ("english", "ainglish"):
+            expected = sum(share * float(by_id[ident]["arms"][arm])
+                           for ident, _weight, share in contract)
+            got = _finite_number(top_arms.get(arm), "arms.%s" % arm)
+            if abs(expected - got) > SETTLEMENT_AGGREGATE_TOLERANCE:
+                raise ValueError("arms.%s must equal the manifest-weighted stratum_results arms.%s"
+                                 % (arm, arm))
 
 
 def _origin(url):
@@ -1180,7 +1278,14 @@ class AinglishClient:
 
         Omit precision from every row (and every roster entry) for a plain-model roster; a
         per_member row declaring precision that panel_models lacks is refused with a 422 naming
-        the composite."""
+        the composite.
+
+        For a multi-form claim, freeze ``manifest.settlement_strata`` before spend as a list of
+        ``{id, weight}`` using positive relative weights, then report every corresponding
+        ``stratum_results`` row. The client
+        checks that the weighted cells equal the headline before sending; the register requires
+        the pool AND every cell to reproduce, so opposite per-form drift cannot cancel."""
+        _validate_measurement_strata(payload)
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
 
     def mint_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
@@ -1747,6 +1852,38 @@ def selftest():
             return {"ok": True}
 
     probe = _Probe(id_token="x", use_env=False)
+    # Multi-form settlement: the manifest commits the labels before spend, and the client refuses
+    # a pooled number whose opposite form shifts only happen to cancel.
+    stratified = {
+        "metric": "token_delta", "value": -10,
+        "manifest": {"models": ["cl100k_base"], "settlement_strata": [
+            {"id": "repeat", "weight": 0.5}, {"id": "restore", "weight": 0.5},
+        ]},
+        "stratum_results": [
+            {"id": "repeat", "value": -8}, {"id": "restore", "value": -12},
+        ],
+    }
+    probe.measure("some slug", stratified)
+    assert sent["path"] == "/api/v1/proposals/some%20slug/measurements", sent
+    assert sent["payload"] is stratified, "validation must not rewrite commitment-bearing input"
+    sent.clear()
+    bad_pool = dict(stratified, value=-9)
+    try:
+        probe.measure("some slug", bad_pool)
+        raise AssertionError("a top value inconsistent with committed strata must refuse locally")
+    except ValueError as exc:
+        assert "weighted" in str(exc)
+    assert sent == {}, sent
+    try:
+        probe.measure("some slug", {
+            "metric": "token_delta", "value": -8,
+            "manifest": {"models": ["cl100k_base"]},
+            "stratum_results": [{"id": "post-hoc", "value": -8}],
+        })
+        raise AssertionError("post-run stratum labels must refuse locally")
+    except ValueError as exc:
+        assert "invented after the run" in str(exc)
+    assert sent == {}, sent
     for method, expected_path in (
             (probe.flagships, "/api/v1/flagships"),
             (probe.evidence_contract_audit, "/api/v1/audits/evidence-contracts"),
