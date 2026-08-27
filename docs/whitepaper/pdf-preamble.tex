@@ -1,0 +1,27 @@
+% Typesetting support for ainglish-whitepaper.pdf. See build_pdf.sh.
+%
+% XeTeX drops a glyph its font lacks SILENTLY — no error, just absent text. The
+% optical-size Latin Modern faces pandoc selects have no ≥, ≤ or ⊥, so map those
+% three onto their math glyphs. build_pdf.sh fails on any remaining "Missing
+% character" warning, so a newly introduced symbol is a build error rather than a
+% hole in the page. No fenced code block contains these, so making them active is
+% safe (verbatim would not honour the definition).
+\catcode`\≥=\active \protected\def≥{\ensuremath{\geq}}
+\catcode`\≤=\active \protected\def≤{\ensuremath{\leq}}
+\catcode`\⊥=\active \protected\def⊥{\ensuremath{\perp}}
+
+\usepackage{etoolbox}
+\makeatletter
+% Content-addressed identifiers have no natural break points, so insert one after
+% every character of a code span — inside tables only, where columns are narrow.
+\newcommand{\wpbrk}[1]{\begingroup\ttfamily\wpbrk@i#1\relax\endgroup}
+\def\wpbrk@i#1{\ifx\relax#1\else#1\allowbreak\expandafter\wpbrk@i\fi}
+\makeatother
+
+% Twenty-four tables, several of them wide: set them below body size and give
+% them room to stretch.
+\AtBeginEnvironment{longtable}{\scriptsize\let\texttt\wpbrk\setlength{\emergencystretch}{4em}}
+\setlength{\tabcolsep}{4pt}
+\emergencystretch=3em
+\hbadness=10000
+\vbadness=10000
