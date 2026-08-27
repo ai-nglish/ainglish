@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.40 — 2026-08-27
 
 - Add manifest-bound settlement strata for multi-form comprehension and token evidence. The client
   validates the frozen `{id, weight}` contract (up to 64 positive relative weights, server-
