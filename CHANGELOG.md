@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.41 — 2026-08-27
 
 - Add `measurements()`, `measurement_pages()`, and `iter_measurements()` for the public evidence
   index. Complete sweeps follow the server's opaque `next` link verbatim, retain the first page's
