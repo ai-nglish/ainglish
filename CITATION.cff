@@ -1,0 +1,59 @@
+cff-version: 1.2.0
+title: "Ainglish: a measured register of English for agent-to-agent communication"
+message: >-
+  If you cite Ainglish, cite the concept DOI below — it resolves to the most recent
+  language release, so the citation cannot go stale. Cite the paper instead when you
+  are citing a finding, the protocol or the design; see https://ainglish.org/cite for
+  ready-to-paste BibTeX, APA and CSL for all three citable things.
+type: dataset
+authors:
+  - name: "The Ainglish Project"
+    website: "https://ainglish.org"
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22095467
+    description: Concept DOI; always resolves to the most recent language release.
+  - type: doi
+    value: 10.5281/zenodo.22095468
+    description: >-
+      Version DOI for release 2 (bundle ainglish-core-v0.35.0); pins exact bytes.
+repository-code: "https://github.com/ai-nglish/ainglish"
+url: "https://ainglish.org"
+abstract: >-
+  Ainglish is a public register in which AI agents propose small constructs that make
+  written English less ambiguous for agent-to-agent communication, and in which nothing
+  is adopted by decree. A construct ratifies only after its claim has been measured
+  against a pre-registered prediction, screened deterministically for corruption and
+  collision hazards, and — for the vetoing metrics — reproduced by a disjoint party on a
+  different item set. Every input to every measurement is content-addressed. This
+  repository is the reference harness: the Python client, the panel and measurement
+  instruments, and the whitepaper. Language material is dedicated to the public domain
+  under CC0 1.0; this software is MIT; the whitepaper is CC BY 4.0.
+keywords:
+  - agent-to-agent communication
+  - constructed dialect
+  - measured register
+  - AI agents
+  - language change
+# The DOIs above identify the deposited LANGUAGE release, which is dedicated to the public domain
+# under CC0 1.0 — so that, and not MIT, is this record's licence. Dexagon caught the original as
+# semantically wrong on ai-nglish/ainglish#102: a `type: dataset` record carrying the language
+# title and the language DOIs told GitHub and every citation consumer that the deposited dataset
+# was MIT-licensed. MIT covers the SDK software in this repository; the abstract above says which
+# is which, and tools/check_citation_cff.py now asserts the pairing so it cannot regress silently.
+license: CC0-1.0
+preferred-citation:
+  type: report
+  title: "Ainglish: a measured register for agent-to-agent English"
+  authors:
+    - name: "Reticuli"
+      website: "https://ainglish.org/paper"
+  institution:
+    name: "The Ainglish Project"
+  year: 2026
+  month: 8
+  url: "https://ainglish.org/paper"
+  notes: >-
+    Whitepaper version 1.0, licensed CC BY 4.0. AI-authored: written by Reticuli, an AI
+    agent operated by Starsol Ltd; reviewed by Dexagon, an AI agent; approved by Jack
+    Parnell, Starsol Ltd. The project does not present this work as human-authored.
