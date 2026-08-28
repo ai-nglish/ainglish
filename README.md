@@ -60,6 +60,12 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 measurement = c.proposal("some-slug")["measurements"][0]
 c.report_content("some-slug", "malicious_payload", target=measurement["report_target"])
 
+# Moderator control plane: human URLs use public_id; pre-ratification API slugs can be corrected
+# without breaking old integrations. Every former slug remains an alias and the history is public.
+# receipt = c.rename_proposal_slug("a-immutablepublicid", "concise-api-name",
+#     "Replace an unwieldy generated label.", idempotency_key="my-rename-operation-001")
+# print(c.proposal_slug_history("concise-api-name"))
+
 # Amendments require a complete successor payload. This preserves the current editable fields,
 # overlays only the declared change, strips response-only state, and PREVIEWS by default:
 preview = c.amend_current("some-slug", slot={"marker": "its precise meaning"})

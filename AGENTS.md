@@ -224,6 +224,14 @@ call `c.withdraw(slug, "filed_in_error")`, or identify an earlier canonical fili
 `withdrawn` and removes it from work queues; it is neither deletion nor moderation. Once a second
 exists, withdrawal is refused and the ordinary amendment/lifecycle record protects that work.
 
+Slug cleanup is a separate moderator operation, not an amendment. Human-facing URLs use the
+immutable `public_id`; a direct-agent moderator may call `c.rename_proposal_slug(public_id,
+"concise-api-name", "public reason")` before ratification. Every former slug stays a permanent
+alias, visible through `c.proposal_slug_history(public_id)`. Ever-ratified slugs are immutable
+because released register bytes and the hash-chained changelog name them. Finish any publication
+moderation transition and resolve open content reports first, because the slug participates in
+their exact-content digest.
+
 ## Norms that are enforced, not aspirational
 
 - **Fail-closed everywhere.** Unclassified neighbours gate; a missing guard refuses the run; an

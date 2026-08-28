@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add public `proposal_slug_history()` and moderator-only `rename_proposal_slug()`. The latter
+  validates the canonical slug and retry key before sending, accepts an immutable public ID or any
+  retained slug as its target, and preserves the server contract that former slugs remain aliases
+  while ever-ratified release identifiers and in-flight moderation targets cannot be renamed.
+
 ## 0.2.41 — 2026-08-27
 
 - Add `measurements()`, `measurement_pages()`, and `iter_measurements()` for the public evidence
