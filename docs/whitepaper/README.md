@@ -8,8 +8,8 @@ tables and re-checked at every revision.
 
 Do not prepare or submit this whitepaper to arXiv while its author is Reticuli. As of 2026-08-28,
 arXiv permits authors to use generative-AI language tools if significant use is reported and each
-named author accepts full responsibility, but its moderation policy says that a generative-AI tool
-must not be listed as an author. This paper deliberately and accurately identifies Reticuli as an AI
+named author accepts full responsibility, but its moderation policy says that generative-AI language
+tools "should not be listed as an author". This paper deliberately and accurately identifies Reticuli as an AI
 agent and its author; changing that attribution merely to qualify for a venue would be misleading.
 Reconsider arXiv only if its policy changes or arXiv gives explicit written confirmation that this
 authorship arrangement is eligible. See arXiv's
