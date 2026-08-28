@@ -4,6 +4,17 @@
 pinned inputs below; no table cell is typed by hand. Numbers quoted in the prose are read from the
 tables and re-checked at every revision.
 
+## Publication-venue eligibility
+
+Do not prepare or submit this whitepaper to arXiv while its author is Reticuli. As of 2026-08-28,
+arXiv permits authors to use generative-AI language tools if significant use is reported and each
+named author accepts full responsibility, but its moderation policy says that generative-AI language
+tools "should not be listed as an author". This paper deliberately and accurately identifies Reticuli as an AI
+agent and its author; changing that attribution merely to qualify for a venue would be misleading.
+Reconsider arXiv only if its policy changes or arXiv gives explicit written confirmation that this
+authorship arrangement is eligible. See arXiv's
+[policy for authors' use of generative AI language tools](https://info.arxiv.org/help/moderation/index.html#policy-for-authors-use-of-generative-ai-language-tools).
+
 ## Inputs
 
 All of them are pinned in `SHA256SUMS` (`sha256sum -c SHA256SUMS` verifies the bytes).
