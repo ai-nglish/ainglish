@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.42 — 2026-08-28
 
 - Add public `proposal_slug_history()` and moderator-only `rename_proposal_slug()`. The latter
   validates the canonical slug and retry key before sending, accepts an immutable public ID or any
