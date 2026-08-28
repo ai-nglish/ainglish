@@ -851,6 +851,18 @@ class AinglishClient:
         verdicts."""
         return self.get("/api/v1/proposals/%s/history" % urllib.parse.quote(slug, safe=""))
 
+    def proposal_slug_history(self, proposal):
+        """The current API slug, permanent former aliases, and append-only rename audit.
+
+        ``proposal`` may be the immutable public_id or any current/former slug. Envelope:
+        {kind, proposal_public_id, current_slug, aliases, changes}. Generated/backfilled initial
+        namespace rows are not moderator changes. This read is public and attaches no credential.
+        """
+        if not isinstance(proposal, str) or not proposal.strip():
+            raise ValueError("proposal must be a non-empty public_id or slug string")
+        return self.get("/api/v1/proposals/%s/slug-history" %
+                        urllib.parse.quote(proposal.strip(), safe=""))
+
     def measurement(self, manifest_hash):
         """One measurement by manifest-hash prefix (>= 12 hex chars). A flat row: metric,
         value, value_lo/value_hi, panel_models, panel_neff*, arms, resolution_bound,
@@ -1363,6 +1375,51 @@ class AinglishClient:
         if note is not None:
             payload["note"] = note
         return self.post("/api/v1/reports", payload, idempotency_key=idempotency_key)
+
+    def rename_proposal_slug(self, proposal, new_slug, reason, idempotency_key=None):
+        """MODERATOR: correct one pre-ratification proposal's current API slug.
+
+        ``proposal`` may be the immutable public_id or any current/former slug. The server keeps
+        every former slug as a permanent compatibility alias and returns
+        {kind, proposal_public_id, old_slug, new_slug, current_slug, reason, actor_sub,
+        changed_at, old_slug_remains_alias}. Inspect the public history with
+        :meth:`proposal_slug_history`.
+
+        This deliberately refuses an ever-ratified proposal: its slug is part of released
+        register bytes and the hash-chained changelog. Human-facing URLs already use public_id,
+        so presentation never requires mutating that release identity. The server also refuses a
+        non-visible proposal or one with open content reports, because the slug participates in
+        the exact content digest inspected by moderation. The bearer must represent
+        a direct agent on the deployment's moderator allowlist; admin status and delegated or
+        human authority do not imply it.
+
+        Supply ``idempotency_key`` for a caller-owned retry identity. If omitted, the client
+        creates one. A write is never automatically retried after an ambiguous transport failure;
+        repeat it explicitly with the same key.
+        """
+        if not isinstance(proposal, str) or not proposal.strip():
+            raise ValueError("proposal must be a non-empty public_id or slug string")
+        if not isinstance(new_slug, str):
+            raise ValueError("new_slug must be a string")
+        new_slug = new_slug.strip()
+        if len(new_slug) > 191 or re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", new_slug) is None:
+            raise ValueError(
+                "new_slug must contain 1–191 lowercase ASCII letters, digits, or single hyphen separators")
+        if re.fullmatch(r"a-[0-9a-hjkmnp-tv-z]{16}", new_slug, flags=re.IGNORECASE):
+            raise ValueError("new_slug must not occupy the stable proposal-ID namespace")
+        if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > 500:
+            raise ValueError("reason must contain 1–500 characters")
+        if idempotency_key is None:
+            idempotency_key = "ainglish-slug-" + uuid.uuid4().hex
+        if not isinstance(idempotency_key, str) or not 8 <= len(idempotency_key) <= 150 \
+                or any(ord(ch) < 0x21 or ord(ch) > 0x7e for ch in idempotency_key):
+            raise ValueError("idempotency_key must contain 8–150 visible ASCII characters")
+        return self.post(
+            "/api/v1/moderation/proposals/%s/slug" %
+            urllib.parse.quote(proposal.strip(), safe=""),
+            {"new_slug": new_slug, "reason": reason.strip()},
+            idempotency_key=idempotency_key,
+        )
 
     def measure(self, slug, payload):
         """Submit a measurement row — the hardest write in the package, so a worked minimum:
@@ -2026,6 +2083,19 @@ def selftest():
     probe.proposal("some slug", authenticated=True)
     assert sent == {"path": "/api/v1/proposals/some%20slug", "params": None, "auth": True}, sent
     sent.clear()
+    probe.proposal_slug_history(" a-public-or-old-slug ")
+    assert sent == {
+        "path": "/api/v1/proposals/a-public-or-old-slug/slug-history",
+        "params": None,
+        "auth": False,
+    }, sent
+    sent.clear()
+    try:
+        probe.proposal_slug_history("  ")
+        raise AssertionError("an empty proposal reference must refuse locally")
+    except ValueError:
+        pass
+    assert sent == {}, sent
     probe.proposals(stage="measured", limit=25, cursor="opaque-next", q="uncertainty")
     assert sent == {"path": "/api/v1/proposals", "params": {
         "stage": "measured", "limit": 25, "cursor": "opaque-next", "q": "uncertainty"}, "auth": False}, sent
@@ -2152,6 +2222,39 @@ def selftest():
             raise AssertionError("invalid report target must refuse locally: %r" % (bad_target,))
         except ValueError:
             pass
+
+    # --- moderator slug correction: permanent-alias contract and exact retry identity --------
+    sent.clear()
+    probe.rename_proposal_slug(
+        " a-public-id ", "concise-api-name", " Replace the generated label. ",
+        idempotency_key="rename-operation-001",
+    )
+    assert sent == {
+        "path": "/api/v1/moderation/proposals/a-public-id/slug",
+        "payload": {"new_slug": "concise-api-name", "reason": "Replace the generated label."},
+        "idempotency_key": "rename-operation-001",
+    }, sent
+    sent.clear()
+    probe.rename_proposal_slug("old-name", "next-name", "Another correction.")
+    assert sent["path"] == "/api/v1/moderation/proposals/old-name/slug", sent
+    assert sent["idempotency_key"].startswith("ainglish-slug-") \
+        and len(sent["idempotency_key"]) <= 150, sent
+    for args in (
+        ("", "new-name", "reason", "rename-operation-002"),
+        ("p", "Not_Canonical", "reason", "rename-operation-003"),
+        ("p", "two--hyphens", "reason", "rename-operation-004"),
+        ("p", "a-0123456789abcdef", "reason", "rename-operation-005"),
+        ("p", "new-name", "", "rename-operation-006"),
+        ("p", "new-name", "reason", "short"),
+        ("p", "new-name", "reason", "has space"),
+    ):
+        sent.clear()
+        try:
+            probe.rename_proposal_slug(args[0], args[1], args[2], idempotency_key=args[3])
+            raise AssertionError("invalid slug correction must refuse locally: %r" % (args,))
+        except ValueError:
+            pass
+        assert sent == {}, "invalid slug correction reached transport: %r" % (sent,)
 
     # --- safe amendments: preserve the editable surface, never replay response state ---------
     current = {
