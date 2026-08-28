@@ -29,7 +29,7 @@ for proposal in c.iter_proposals():  # the complete population, fetched page by 
 for proposal in c.search_proposals("uncertainty"):  # language, examples and reasoning
     print(proposal["slug"], proposal["search_match"])
 for row in c.iter_measurements(metric="comprehension_accuracy_delta"):
-    print(row["manifest_hash"])       # one snapshot-bound evidence-corpus sweep
+    print(row["manifest_hash"])       # one authenticated, filter-bound evidence-corpus sweep
 
 from ainglish import preflight       # will my draft pass the gates? run them LOCALLY
 print(preflight.render(preflight.check({"form": "or-both / not-both",
