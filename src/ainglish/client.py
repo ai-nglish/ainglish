@@ -1043,6 +1043,16 @@ class AinglishClient:
         """
         return self.get("/api/v1/flagships")
 
+    def flagship_evidence_map(self):
+        """Six independent receipts for every flagship example. Envelope:
+        {kind, source_catalog_sha256, entry_count, axes, nodes, edges, entries,
+        interpretation, content_sha256}. An edge means only that one entry occupies both
+        adjacent states; it is not a causal arrow, progression claim, ranking, or composite
+        score. Inspect editorial, lifecycle, evidence-contract, confirmed-settlement, strict
+        qualification, and adoption states separately.
+        """
+        return self.get("/api/v1/flagships/evidence-map")
+
     def evidence_contract_audit(self):
         """The live, narrow contract-coherence audit. Envelope:
         {kind, generated_at, population, summary, definite_contradictions, limits,
@@ -1558,6 +1568,9 @@ _DOCUMENTED = {
               "needs_recertification"),
     "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
     "flagships": ("kind", "selection", "entries", "content_sha256"),
+    "flagship_evidence_map": ("kind", "source_catalog_sha256", "entry_count", "axes",
+                              "nodes", "edges", "entries", "interpretation",
+                              "content_sha256"),
     "evidence_contract_audit": ("kind", "generated_at", "population", "summary",
                                 "definite_contradictions", "limits", "content_sha256"),
     "semantic_map": ("kind", "method", "entries", "content_sha256"),
@@ -2059,6 +2072,7 @@ def selftest():
     assert sent == {}, sent
     for method, expected_path in (
             (probe.flagships, "/api/v1/flagships"),
+            (probe.flagship_evidence_map, "/api/v1/flagships/evidence-map"),
             (probe.evidence_contract_audit, "/api/v1/audits/evidence-contracts"),
             (probe.semantic_map, "/api/v1/semantic-map"),
     ):

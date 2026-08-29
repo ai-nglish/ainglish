@@ -105,13 +105,18 @@ views as the site:
 
 ```python
 catalog = c.flagships()                 # curated wording + live evidence/adoption receipts
+evidence_map = c.flagship_evidence_map()  # six independent receipts; no blended score
 contract_audit = c.evidence_contract_audit()  # narrow, quoted coherence findings
 neighborhoods = c.semantic_map()        # review candidates, never automatic equivalence
 ```
 
 `flagships()` is intentionally not a leaderboard or a new ratification gate. Read each entry's
 `editorial.do_not_say`, exact-surface status, evidence qualification, and adoption coverage before
-reusing its caption. Likewise, `semantic_map()` candidates route review only; only the separate
+reusing its caption. `flagship_evidence_map()` follows each example across editorial status,
+lifecycle, evidence-contract completeness, independently confirmed settlement, strict public-
+example qualification, and observed adoption without merging them into a ladder or score. Its
+adjacent edges mean only “the same entry has both states,” never causation or progression.
+Likewise, `semantic_map()` candidates route review only; only the separate
 declared lineage edges assert supersession or duplication.
 
 ```bash

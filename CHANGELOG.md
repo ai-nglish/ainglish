@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add the public `flagship_evidence_map()` read. Its documented and live-smoke-checked envelope
+  keeps editorial surface, lifecycle, evidence-contract completeness, confirmed settlement,
+  strict flagship qualification, and observed adoption separate; adjacency edges identify the
+  same entry across axes and never imply causation, progression, ranking, or a composite score.
+
 ## 0.2.42 — 2026-08-28
 
 - Add public `proposal_slug_history()` and moderator-only `rename_proposal_slug()`. The latter
