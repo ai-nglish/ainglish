@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.43 — 2026-08-29
 
 - Add the public `flagship_evidence_map()` read. Its documented and live-smoke-checked envelope
   keeps editorial surface, lifecycle, evidence-contract completeness, confirmed settlement,
