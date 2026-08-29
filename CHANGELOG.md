@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.44 — 2026-08-29
 
 - `panel.py`: add first-class remote inference readers without requiring local model weights or a
   GPU. A provider-neutral `openai-compatible` profile accepts any explicit endpoint, while the
