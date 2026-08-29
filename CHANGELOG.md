@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `panel.py`: record per-cell wall-clock and PROVIDER-REPORTED token usage, exposed by
+  `usage_report()` and cleared per run by `reset_usage()`. Deliberately not a receipt field: the
+  register refuses unknown measurement fields and `submit_measurement()` posts the whole dict, so a
+  new result key would break every submission -- and cost is what the instrument charged, not what
+  it found. A provider that reports no usage yields null token counts rather than zero, because a
+  zero that means "unknown" is the shape that gets quoted.
 - `measure.py`: the dedicated parenthesis-degradation selftest failures now name the exact
   executable registry identity `paren_drop()`, preserving the ratified transform-anchor contract
   when that member is mutation-tested.

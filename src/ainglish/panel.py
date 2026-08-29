@@ -58,6 +58,7 @@ import ipaddress
 import json
 import math
 import re
+import time
 import os
 import random
 import socket
@@ -637,6 +638,54 @@ def reader_receipt(endpoint):
     return out
 
 
+# Per-cell instrument telemetry. Deliberately NOT part of a measurement receipt: the register
+# refuses unknown measurement fields, and submit_measurement() posts the whole dict, so a new
+# result key would break every submission. Cost and latency are also not evidence -- they say what
+# the instrument charged, not what it found. Kept beside the run instead, where an experimenter can
+# read it without a hand-rolled wrapper around chat(), which is what everyone has had to write so
+# far (Rosetta rebuilt exactly this to answer "what did the panel cost").
+_CELL_TELEMETRY: list = []
+
+
+def reset_usage() -> None:
+    """Clear per-cell telemetry. Called by run_panel so each run reports only its own cells."""
+    _CELL_TELEMETRY.clear()
+
+
+def usage_report():
+    """Per-reader wall-clock and PROVIDER-REPORTED token usage for the cells bought so far.
+
+    Tokens come from the provider's own `usage` block, never from a local estimate: an estimate
+    would be a second opinion about someone else's bill. A provider that reports no usage shows
+    null token fields rather than a plausible-looking zero, because zero is a claim.
+    """
+    per = {}
+    for row in _CELL_TELEMETRY:
+        acc = per.setdefault(row["reader"], {"cells": 0, "wall_s": 0.0, "prompt_tokens": 0,
+                                             "completion_tokens": 0, "cells_without_usage": 0})
+        acc["cells"] += 1
+        acc["wall_s"] = round(acc["wall_s"] + row["wall_s"], 3)
+        if row["usage"] is None:
+            acc["cells_without_usage"] += 1
+        else:
+            acc["prompt_tokens"] += int(row["usage"].get("prompt_tokens") or 0)
+            acc["completion_tokens"] += int(row["usage"].get("completion_tokens") or 0)
+    for acc in per.values():
+        if acc["cells_without_usage"] == acc["cells"]:
+            acc["prompt_tokens"] = acc["completion_tokens"] = None
+        acc["mean_wall_s"] = round(acc["wall_s"] / acc["cells"], 3) if acc["cells"] else None
+    total_cells = sum(a["cells"] for a in per.values())
+    return {"kind": "ainglish.panel.usage-report.v1", "cells": total_cells,
+            "wall_s": round(sum(a["wall_s"] for a in per.values()), 3), "by_reader": per}
+
+
+def _record_cell(endpoint, started, data) -> None:
+    usage = data.get("usage") if isinstance(data, dict) else None
+    _CELL_TELEMETRY.append({"reader": endpoint.get("name", "?"),
+                            "wall_s": round(time.time() - started, 3),
+                            "usage": usage if isinstance(usage, dict) else None})
+
+
 def chat(endpoint, prompt):
     """One deterministic completion, as (text, truncated).
 
@@ -664,7 +713,9 @@ def chat(endpoint, prompt):
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
         req = urllib.request.Request(ep["base_url"].rstrip("/") + "/v1/messages",
                                      json.dumps(body).encode(), headers)
+        _started = time.time()
         data = _fetch(req, timeout=bounds["timeout_s"])
+        _record_cell(ep, _started, data)
         return ("".join(b.get("text", "") for b in data.get("content", [])),
                 data.get("stop_reason") == "max_tokens")
     body = {"model": ep["model"], **sampling, "max_tokens": bounds["max_tokens"],
@@ -674,7 +725,9 @@ def chat(endpoint, prompt):
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(ep["base_url"].rstrip("/") + "/chat/completions",
                                  json.dumps(body).encode(), headers)
+    _started = time.time()
     data = _fetch(req, timeout=bounds["timeout_s"])
+    _record_cell(ep, _started, data)
     choice = data["choices"][0]
     return choice["message"]["content"], choice.get("finish_reason") == "length"
 
@@ -1964,6 +2017,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # For the stateless single-turn completions this harness makes, that is the cheaper of the two
     # risks — and unlike the old ordering it is a risk you can see in the manifest, alongside the
     # provider-aware sampling setting each reader actually used.
+    reset_usage()   # this run reports its own cells only
     calib_rows = run_items(calib, both_arms=True, stage="calibration")
     if calib_rows is None or _is_panel_refusal(calib_rows):
         return calib_rows
@@ -4128,6 +4182,23 @@ def selftest():
     finally:
         if saved_openai_key is not None:
             os.environ["OPENAI_API_KEY"] = saved_openai_key
+
+    # --- usage telemetry ---------------------------------------------------------------------
+    reset_usage()
+    assert usage_report()["cells"] == 0, "reset_usage must clear the accumulator"
+    _record_cell({"name": "r1"}, time.time() - 1.5, {"usage": {"prompt_tokens": 10, "completion_tokens": 4}})
+    _record_cell({"name": "r1"}, time.time() - 0.5, {"usage": {"prompt_tokens": 6, "completion_tokens": 2}})
+    _record_cell({"name": "r2"}, time.time() - 0.2, {})          # provider reported no usage block
+    _rep = usage_report()
+    assert _rep["cells"] == 3, _rep
+    _r1 = _rep["by_reader"]["r1"]
+    assert _r1["cells"] == 2 and _r1["prompt_tokens"] == 16 and _r1["completion_tokens"] == 6, _r1
+    assert _r1["wall_s"] >= 1.9 and _r1["mean_wall_s"] is not None, _r1
+    # A provider reporting no usage must show null, never a plausible-looking zero: zero is a claim
+    # about someone else's bill, and a zero that means "unknown" is the shape that gets quoted.
+    _r2 = _rep["by_reader"]["r2"]
+    assert _r2["prompt_tokens"] is None and _r2["cells_without_usage"] == 1, _r2
+    reset_usage()
 
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
