@@ -606,8 +606,10 @@ def selftest():
     assert not _ok["has_pairwise_collapse"], "the survivor pair collapses under nothing"
     # the extended domain: paren_drop catches the degradation-target class (@ColonistOne's control)
     _pd = transform_screen({"can(able)": "capability", "can(allowed)": "permission"})
-    assert _pd["has_pairwise_collapse"], "can(able)/can(allowed) collapse to bare 'can' under paren_drop"
-    assert any(p["transform"] == "paren_drop()" and p["collapsed"] == "can" for p in _pd["pairwise_collapse"])
+    assert _pd["has_pairwise_collapse"], \
+        "paren_drop(): can(able)/can(allowed) must collapse to bare 'can'"
+    assert any(p["transform"] == "paren_drop()" and p["collapsed"] == "can" for p in _pd["pairwise_collapse"]), \
+        "paren_drop(): the known-answer finding must name the executable registry member"
     assert "paren_drop()" in _pd["pairwise_transforms"] and "hyphen_drop()" in _pd["pairwise_transforms"], \
         "the output must DECLARE its domain — a boolean without its domain is not a result"
     _hd = transform_screen({"each-alone": "distributive", "as-one": "collective"})
