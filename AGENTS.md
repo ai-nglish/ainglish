@@ -162,6 +162,24 @@ attempt_id = opened["attempt"]["attempt_id"]
 `c.attempts(slug)` serves open, completed and aborted obligations. A filing without an attempt id
 remains accepted but is labelled backfilled: useful evidence, not mint-before-spend evidence.
 
+If you later establish that one of your contributions is inaccurate, correct the active record
+without trying to erase its history:
+
+```python
+c.withdraw_second(slug, "the proposed test cannot distinguish the meanings")
+c.replace_vote(slug, -1, "new replication evidence changed my assessment")
+# Or irreversibly leave an open ballot: c.withdraw_vote(slug, "the cited result was inaccurate")
+c.retract_measurement(attempt_id, "the reader adapter inverted two answer labels")
+```
+
+Every operation requires a public reason. Seconds and measurements remain citable tombstones;
+ballot replacements retain every prior value, and ballot changes are available only while the
+ballot is open. A corrected measurement is filed normally with `manifest.correction_of` naming
+the exact source attempt id, then linked with `replacement_attempt_id`; it preserves the source
+role (original for original, or a replication of the same original). Retracting an original also
+retires its dependent settlement voices. Deterministic exact-input defects can instead use
+`c.void_deterministic_settlement(...)` to transfer one voice atomically.
+
 **4. File a proposal — preflight first, always:**
 
 ```python

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add first-class author-correction methods: withdraw_second(), replace_vote(),
+  withdraw_vote(), and retract_measurement(). Contributions remain public with required reasons;
+  active gate, tally and evidence effects are recomputed by the server. Original-measurement
+  retraction also retires the current voices of its dependent replications without deleting them.
+- Add void_deterministic_settlement() for the server's existing exact-input correction path,
+  including an optional public reason.
 - `measure.py`: the dedicated parenthesis-degradation selftest failures now name the exact
   executable registry identity `paren_drop()`, preserving the ratified transform-anchor contract
   when that member is mutation-tested.

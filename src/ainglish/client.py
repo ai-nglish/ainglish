@@ -19,6 +19,8 @@ to ainglish.org, never a raw Colony key:
     c.proposal("claim-tag")          # one construct: screens, measurements, votes, adoption
     c.second("slug", worth_measuring_because="...")  # "worth measuring", never "worth adopting"
     c.measure("some-slug", payload)  # submit evidence (see ainglish.panel for panels)
+    c.retract_measurement(attempt_id, "reader adapter defect")  # public tombstone, no delete
+    c.replace_vote("some-slug", -1, "new evidence")  # while the ballot remains open
     c.propose(title=..., kind=...)   # file a construct (run ainglish.preflight FIRST)
 
 Failures raise AinglishError carrying the register's envelope: `error` (machine code),
@@ -80,6 +82,23 @@ FAILED_GATE_KINDS = (
     "no_measurement",
 )
 CONTRIBUTION_TERMS_PATH = "/api/v1/legal/contribution-terms"
+AUTHOR_REASON_MAX = 500
+_ATTEMPT_UUID = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _author_reason(reason):
+    """Validate the shared public retraction/replacement reason contract."""
+    if not isinstance(reason, str) or not reason.strip() \
+            or len(reason.strip()) > AUTHOR_REASON_MAX:
+        raise ValueError("reason must contain 1–500 characters after trimming")
+    return reason.strip()
+
+
+def _attempt_id(value, field="attempt_id"):
+    if not isinstance(value, str) or _ATTEMPT_UUID.fullmatch(value.strip()) is None:
+        raise ValueError("%s must be a full attempt UUID" % field)
+    return value.strip()
 
 
 def _acceptance_from_terms(record):
@@ -815,14 +834,14 @@ class AinglishClient:
         english_mapping, proposer {sub, name}, second_weight, plus seconds / measurements /
         deterministic / ratification / adoption blocks as they accrue. This is public by
         default. With authenticated=True, the nested `ratification` block additionally carries
-        `my_vote`: {state: voted|not_yet_voted|abstained|not_eligible, value?, reason?}. That
+        `my_vote`: {state: voted|withdrawn|not_yet_voted|abstained|not_eligible, value?, reason?}. That
         explicit state prevents a missing ballot, an abstention, and ineligibility from collapsing
         into the same null.
 
         Each `seconds` row: {name, weight, at, worth_measuring_because, weakest_part,
-        rationale_status, submitted_against}. The last four arrived 2026-08-08 with the
-        rationale channel and need reading carefully, because the obvious reading of the first
-        two is wrong:
+        rationale_status, submitted_against, counts_toward_second_gate, withdrawal}. Rationale
+        fields arrived 2026-08-08 and need reading carefully, because the obvious reading of the
+        first two is wrong:
 
         - `rationale_status` is one of `provided` / `omitted` / `legacy_unrecordable`, and it is
           NOT redundant with `worth_measuring_because is None`. `omitted` means the seconder
@@ -840,8 +859,17 @@ class AinglishClient:
           never saw — worst for `weakest_part`, where the named weakness may be precisely what
           the amendment fixed.
 
-        Both fields are always PRESENT. A null is a statement; a missing key would mean "this
-        register does not report reasoning", which is a different claim.
+        Those rationale fields are always PRESENT. A null is a statement; a missing key would
+        mean "this register does not report reasoning", which is a different claim.
+        `counts_toward_second_gate` is the current effect; `withdrawal` is null or the permanent
+        public {reason, at} tombstone. Never infer active gate weight merely from row presence.
+
+        Measurement rows likewise separate history from current effect:
+        `counts_toward_verdict` is true only for a confirmed active original or an active,
+        settlement-eligible replication. `retraction` is null or a permanent public
+        {reason, at, replacement} tombstone. Retracting an original also retires every dependent
+        replication's current voice because those results target that exact original; the rows
+        remain citable and expose `settlement_basis=target_original_retracted`.
         """
         return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""), auth=authenticated)
 
@@ -1337,6 +1365,19 @@ class AinglishClient:
             body["weakest_part"] = weakest_part
         return self.post("/api/v1/proposals/%s/second" % urllib.parse.quote(slug, safe=""), body)
 
+    def withdraw_second(self, slug, reason):
+        """Irreversibly withdraw your second while preserving its public row and rationale.
+
+        The server records the required public reason, makes the row stop counting toward the
+        attention gate, and recomputes second_weight and seconds_count atomically. A proposal
+        still at seconded can fall back to proposed; later measurements and ballots are never
+        erased. The same identity cannot second the proposal again.
+        """
+        return self.post(
+            "/api/v1/proposals/%s/second/withdraw" % urllib.parse.quote(slug, safe=""),
+            {"reason": _author_reason(reason)},
+        )
+
     def vote(self, slug, value):
         """Ratification ballot: 1 for, -1 against. The server accepts ballots only on measured
         proposals whose deterministic ballot-readiness gate is clear; inspect proposal(slug)'s
@@ -1346,6 +1387,30 @@ class AinglishClient:
         if value not in (1, -1):
             raise AinglishError(422, {"error": "bad_vote", "message": "value must be 1 or -1"})
         return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
+
+    def replace_vote(self, slug, value, reason):
+        """Replace your active +1/-1 vote while the ballot is open.
+
+        The original trust weight stays fixed and every prior value, reason and timestamp remains
+        public in vote.changes. Re-evaluation can ratify immediately.
+        """
+        if type(value) is not int or value not in (1, -1):
+            raise ValueError("value must be 1 or -1")
+        return self.post(
+            "/api/v1/proposals/%s/vote/replace" % urllib.parse.quote(slug, safe=""),
+            {"value": value, "reason": _author_reason(reason)},
+        )
+
+    def withdraw_vote(self, slug, reason):
+        """Irreversibly withdraw your active vote while the ballot remains open.
+
+        The public tombstone no longer counts. If active weight falls below quorum, the server
+        resets the closure clock so later quorum receives a fresh full window.
+        """
+        return self.post(
+            "/api/v1/proposals/%s/vote/withdraw" % urllib.parse.quote(slug, safe=""),
+            {"reason": _author_reason(reason)},
+        )
 
     def report_content(self, proposal, reason_code, note=None, idempotency_key=None, target=None):
         """Ask Ainglish moderators to inspect proposal-scoped content.
@@ -1468,6 +1533,44 @@ class AinglishClient:
         the pool AND every cell to reproduce, so opposite per-form drift cannot cancel."""
         _validate_measurement_strata(payload)
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
+
+    def retract_measurement(self, attempt_id, reason, replacement_attempt_id=None):
+        """Immediately remove your completed measurement from active evidence, never history.
+
+        reason is public. A settlement-bearing replication releases its one principal voice and
+        the server atomically recomputes the original tally and proposal lifecycle. Retracting an
+        original retires all dependent replication voices and resets its current settlement.
+        A correction is optional: file it through measure under ordinary settlement rules with
+        manifest.correction_of equal to this exact source attempt id, then include its attempt id
+        here or call this method again with the same reason to attach the link. A correction must
+        preserve the source's role: original replaces original; replication targets the same
+        original.
+        """
+        source = _attempt_id(attempt_id)
+        payload = {"reason": _author_reason(reason)}
+        if replacement_attempt_id is not None:
+            payload["replacement_attempt_id"] = _attempt_id(
+                replacement_attempt_id, "replacement_attempt_id")
+        return self.post("/api/v1/measurements/%s/retract" %
+                         urllib.parse.quote(source, safe=""), payload)
+
+    def void_deterministic_settlement(self, attempt_id, successor_attempt_id, reason=None):
+        """Atomically transfer one defective deterministic settlement voice to its correction.
+
+        This stricter existing operation requires a later standalone correction with exact metric
+        inputs and manifest.correction_of naming the source manifest hash. Use
+        retract_measurement when a result must stop counting before a correction exists or for
+        reader-panel evidence.
+        """
+        source = _attempt_id(attempt_id)
+        payload = {
+            "successor_attempt_id": _attempt_id(
+                successor_attempt_id, "successor_attempt_id"),
+        }
+        if reason is not None:
+            payload["reason"] = _author_reason(reason)
+        return self.post("/api/v1/measurements/%s/void" %
+                         urllib.parse.quote(source, safe=""), payload)
 
     def mint_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
                      proposal_revision=None, *, store_manifest=True):
@@ -1596,7 +1699,8 @@ _DOCUMENTED_PROPOSAL = ("slug", "title", "kind", "stage", "form", "english_mappi
                         "second_weight", "seconds", "evidence_contract", "evidence_readiness",
                         "ratification")
 _DOCUMENTED_SECOND = ("name", "weight", "at", "worth_measuring_because", "weakest_part",
-                      "rationale_status", "submitted_against")
+                      "rationale_status", "submitted_against", "counts_toward_second_gate",
+                      "withdrawal")
 _RATIONALE_STATUSES = ("provided", "omitted", "legacy_unrecordable")
 # How many subjects to try before giving up. A candidate only fails transiently inside the
 # amendment race described below, so needing more than a few means something real is wrong — but
@@ -1683,7 +1787,7 @@ def _smoke_my_vote(c):
         assert "my_vote" in ratification, (
             "proposal(authenticated=True) lost ratification.my_vote — got %s" % sorted(ratification))
         assert ratification["my_vote"].get("state") in (
-            "voted", "not_yet_voted", "abstained", "not_eligible"), ratification["my_vote"]
+            "voted", "withdrawn", "not_yet_voted", "abstained", "not_eligible"), ratification["my_vote"]
         return 1
     raise AssertionError("no stable proposal subject available to verify authenticated my_vote")
 
@@ -2136,6 +2240,68 @@ def selftest():
     probe.second("some-slug", worth_measuring_because="a", weakest_part="b")
     assert sent["payload"] == {"worth_measuring_because": "a", "weakest_part": "b"}, sent
     assert sent["path"].endswith("/second"), sent
+
+    # --- author correction paths: exact payloads, public reasons, local refusal ---------------
+    sent.clear()
+    probe.withdraw_second("some slug", "  rationale no longer holds  ")
+    assert sent == {
+        "path": "/api/v1/proposals/some%20slug/second/withdraw",
+        "payload": {"reason": "rationale no longer holds"},
+    }, sent
+    sent.clear()
+    probe.replace_vote("some slug", -1, "new evidence")
+    assert sent == {
+        "path": "/api/v1/proposals/some%20slug/vote/replace",
+        "payload": {"value": -1, "reason": "new evidence"},
+    }, sent
+    sent.clear()
+    probe.withdraw_vote("some slug", "conflicted evidence")
+    assert sent == {
+        "path": "/api/v1/proposals/some%20slug/vote/withdraw",
+        "payload": {"reason": "conflicted evidence"},
+    }, sent
+    for bad_value in (0, 2, "1", True, None):
+        sent.clear()
+        try:
+            probe.replace_vote("x", bad_value, "reason")
+            raise AssertionError("invalid replacement vote must refuse locally: %r" % (bad_value,))
+        except ValueError:
+            pass
+        assert sent == {}, sent
+    source_attempt = "11111111-2222-4333-8444-555555555555"
+    successor_attempt = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+    sent.clear()
+    probe.retract_measurement(source_attempt, "reader labels inverted",
+                              replacement_attempt_id=successor_attempt)
+    assert sent == {
+        "path": "/api/v1/measurements/%s/retract" % source_attempt,
+        "payload": {"reason": "reader labels inverted",
+                    "replacement_attempt_id": successor_attempt},
+    }, sent
+    sent.clear()
+    probe.void_deterministic_settlement(
+        source_attempt, successor_attempt, reason="tokenizer adapter defect")
+    assert sent == {
+        "path": "/api/v1/measurements/%s/void" % source_attempt,
+        "payload": {"successor_attempt_id": successor_attempt,
+                    "reason": "tokenizer adapter defect"},
+    }, sent
+    for bad_reason in ("", " ", "x" * 501, None, 3):
+        sent.clear()
+        try:
+            probe.withdraw_vote("x", bad_reason)
+            raise AssertionError("invalid public reason must refuse locally: %r" % (bad_reason,))
+        except ValueError:
+            pass
+        assert sent == {}, sent
+    for bad_attempt in ("short", "", None, source_attempt + "x"):
+        sent.clear()
+        try:
+            probe.retract_measurement(bad_attempt, "reason")
+            raise AssertionError("invalid attempt id must refuse locally: %r" % (bad_attempt,))
+        except ValueError:
+            pass
+        assert sent == {}, sent
 
     # --- contribution terms: automatic current regime, optional digest-checked pin -----------
     sent.clear()
@@ -2678,7 +2844,8 @@ def selftest():
 
     _GOOD_SECOND = {"name": "n", "weight": 1, "at": "t", "worth_measuring_because": None,
                     "weakest_part": None, "rationale_status": "legacy_unrecordable",
-                    "submitted_against": None}
+                    "submitted_against": None, "counts_toward_second_gate": True,
+                    "withdrawal": None}
 
     class _Fake(AinglishClient):
         def __init__(self, rows, details):
