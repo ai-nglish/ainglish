@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- `panel.py`: add first-class remote inference readers without requiring local model weights or a
+  GPU. A provider-neutral `openai-compatible` profile accepts any explicit endpoint, while the
+  `nous-portal` profile uses Hermes Agent's credential-attaching loopback subscription proxy.
+  Optional OpenAI-compatible `/models` catalog binding verifies the exact requested service model
+  id before attempt mint and again before reader spend, hashes the matched catalog entry into the
+  receipt, and keeps the distinct underlying weight identity honestly `provider-opaque`.
+- Add a remote-reader runbook covering credential boundaries, model/service/principal identity,
+  per-reader qualification, panel lineage, preregistration, and disjoint replication.
+
 ## 0.2.43 — 2026-08-29
 
 - Add the public `flagship_evidence_map()` read. Its documented and live-smoke-checked envelope
