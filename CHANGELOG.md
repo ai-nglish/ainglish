@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `panel.py`: add a first-class `opencode-zen` remote-reader profile. A frozen reader explicitly
+  selects Zen's OpenAI chat/completions, Responses, Anthropic Messages, or Google generateContent
+  wire; the preset supplies secure environment-only credentials and exact `/models` catalog
+  binding. Protocol-specific request, response, sampling, output-bound and redirect-safety tests
+  prevent a mutable model-to-route guess or a credential-bearing agent session from masquerading
+  as a reproducible raw reader.
+- Expand the remote-reader runbook with Linux/OpenCode setup, all four Zen route mappings, a
+  two-request non-governance acceptance check, receipt interpretation, and holdout/data-use rules.
+
 - Document that proposal-embedded measurement rows intentionally redact their large manifests,
   show how to dereference the full artifact with `AinglishClient.measurement()`, and distinguish
   original-item audit/reproduction from settlement-eligible fresh-input confirmation.

@@ -29,17 +29,19 @@ POST /api/v1/proposals/{slug}/measurements — with the methodology enforced by 
                          only spends measurements whose whole interval clears neutral.
 
 Adapters: a panel entry is {"name", "provider", "model", "precision"?} — providers: openai,
-anthropic (native /v1/messages), openrouter, groq, ollama, nous-portal — or use
+anthropic (native /v1/messages), openrouter, groq, ollama, nous-portal, opencode-zen — or use
 provider="openai-compatible" with an explicit {"base_url", "api_key_env"} for another hosted
 service or local credential-attaching proxy (vllm, llama.cpp, any gateway). Sampling settings
 are provider-aware and ride in the receipt: OpenAI-compatible readers default to temperature=0;
-native Anthropic omits the deprecated parameter unless the manifest explicitly supplies one.
+native Anthropic and Responses readers omit temperature unless the manifest explicitly supplies
+one, while Google uses its native generationConfig field names.
 Ollama readers are bound to the live model digest before spend; providers that expose no weight
-digest say so explicitly. OpenAI-compatible services may opt into an exact ``/models`` catalog
-binding; this proves the requested service model id was present before mint and spend, but is
-explicitly not a weight digest. Seed/top-p/top-k/context settings are either transmitted and
-recorded or recorded as ``provider-default`` rather than disappearing into an unstated default. Pure
-stdlib. A panelist whose key env is unset refuses at startup rather than silently 401-ing mid-run.
+digest say so explicitly. Services may opt into an exact OpenAI-shaped ``/models`` catalog binding
+regardless of their inference wire; this proves the requested service model id was present before
+mint and spend, but is explicitly not a weight digest. Seed/top-p/top-k/context settings are either
+transmitted and recorded or recorded as ``provider-default`` rather than disappearing into an
+unstated default. Pure stdlib. A panelist whose key env is unset refuses at startup rather than
+silently 401-ing mid-run.
 "precision" labels flow into per_member results, so a panel disagreement is a diagnosis (WHICH
 precision diverged), and into the manifest spec (name@precision) so replications re-run the same pool.
 
@@ -412,7 +414,8 @@ def _execute_cell_plan(plans, ask_fn, contract, consume):
 
 def _fetch(req, timeout=None):
     """One HTTP round trip. Transport faults are translated; nothing else is swallowed."""
-    sensitive = any(k.casefold() in ("authorization", "x-api-key") for k, _v in req.header_items())
+    sensitive = any(k.casefold() in ("authorization", "x-api-key", "x-goog-api-key")
+                    for k, _v in req.header_items())
     if timeout is None:
         timeout = TRANSPORT_BOUNDS["timeout_s"]
     try:
@@ -435,6 +438,9 @@ def _fetch(req, timeout=None):
 # "openai-compatible" covers most of the world: a caller supplies its base_url and optional
 # api_key_env. "nous-portal" talks to Hermes Agent's raw subscription proxy, which attaches its
 # short-lived OAuth-derived upstream credential itself; no Nous credential enters this process.
+# OpenCode Zen exposes one catalog but routes model ids over four protocol families. Its preset
+# deliberately has no default ``api``: a frozen reader must name the exact wire instead of letting
+# a mutable catalog silently choose a different request/response contract after preregistration.
 PRESETS = {
     "openai":     {"api": "openai",    "base_url": "https://api.openai.com/v1",    "api_key_env": "OPENAI_API_KEY"},
     "anthropic":  {"api": "anthropic", "base_url": "https://api.anthropic.com",    "api_key_env": "ANTHROPIC_API_KEY"},
@@ -459,7 +465,14 @@ PRESETS = {
         "api_key_env": "NOUS_API_KEY",
         "model_catalog": "openai:/models",
     },
+    "opencode-zen": {
+        "base_url": "https://opencode.ai/zen/v1",
+        "api_key_env": "OPENCODE_API_KEY",
+        "model_catalog": "openai:/models",
+    },
 }
+
+SUPPORTED_APIS = ("openai", "responses", "anthropic", "google")
 
 # Every transport bound a panelist runs under, with its default — and the ONE list both request
 # builders read. The anthropic branch has carried max_tokens since the first version and the
@@ -493,6 +506,23 @@ except Exception:
 USER_AGENT = f"ainglish-python/{HARNESS_VERSION}"
 
 
+def _api_for(endpoint):
+    """Return the frozen wire protocol, refusing ambiguous or unknown adapters."""
+    provider = endpoint.get("provider", "")
+    api = endpoint.get("api", PRESETS.get(provider, {}).get("api"))
+    if api is None:
+        if provider == "opencode-zen":
+            raise SystemExit(
+                f"panel entry {endpoint.get('name', '?')!r}: provider 'opencode-zen' requires an "
+                "explicit api ('openai', 'responses', 'anthropic', or 'google'); copy the wire "
+                "for the exact model id from OpenCode Zen's endpoint table.")
+        api = "openai"
+    if api not in SUPPORTED_APIS:
+        raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: unsupported api {api!r}; "
+                         f"choose one of {', '.join(SUPPORTED_APIS)}.")
+    return api
+
+
 def resolve(endpoint):
     """Merge a provider preset under the entry's own keys (the entry wins)."""
     preset = PRESETS.get(endpoint.get("provider", ""), {})
@@ -501,6 +531,7 @@ def resolve(endpoint):
     if "base_url" not in merged:
         raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: no provider preset or base_url. "
                          f"Known providers: {', '.join(sorted(PRESETS))}, or set base_url explicitly.")
+    merged["api"] = _api_for(endpoint)
     return merged
 
 
@@ -533,8 +564,8 @@ def temperature_for(endpoint):
     if "temperature" in endpoint:
         value = endpoint["temperature"]
     else:
-        api = endpoint.get("api", PRESETS.get(endpoint.get("provider", ""), {}).get("api", "openai"))
-        value = None if api == "anthropic" else 0
+        api = _api_for(endpoint)
+        value = None if api in ("anthropic", "responses") else 0
     if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
                               or not 0 <= value <= 2):
         raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: temperature must be null "
@@ -545,23 +576,23 @@ def temperature_for(endpoint):
 def sampler_settings(endpoint):
     """Effective non-temperature sampler settings, including typed provider defaults.
 
-    This harness speaks OpenAI-compatible chat or native Anthropic. Ollama's OpenAI-compatible
-    endpoint officially accepts ``seed`` and ``top_p`` but not ``top_k`` or ``num_ctx``; the latter
-    must be baked into a Modelfile/native provider configuration and are therefore recorded as
-    provider defaults. A declared value that cannot reach the selected wire refuses instead of
-    becoming receipt theatre.
+    This harness speaks OpenAI-compatible chat, OpenAI Responses, native Anthropic Messages, or
+    Google generateContent. Ollama's OpenAI-compatible endpoint officially accepts ``seed`` and
+    ``top_p`` but not ``top_k`` or ``num_ctx``; the latter must be baked into a Modelfile/native
+    provider configuration and are therefore recorded as provider defaults. A declared value that
+    cannot reach the selected wire refuses instead of becoming receipt theatre.
     """
     provider = endpoint.get("provider", "")
-    api = endpoint.get("api", PRESETS.get(provider, {}).get("api", "openai"))
+    api = _api_for(endpoint)
     out = {key: "provider-default" for key in SAMPLER_KEYS}
 
     if "seed" in endpoint:
         value = endpoint["seed"]
         if isinstance(value, bool) or not isinstance(value, int):
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: seed must be an integer.")
-        if api != "openai":
+        if api not in ("openai", "google"):
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: seed is not transmitted "
-                             "by the native Anthropic adapter; omit it or use a transport that "
+                             "by the selected adapter; omit it or use a transport that "
                              "supports a declared seed.")
         out["seed"] = value
 
@@ -578,10 +609,10 @@ def sampler_settings(endpoint):
         value = endpoint["top_k"]
         if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: top_k must be a positive integer.")
-        if api != "anthropic":
+        if api not in ("anthropic", "google"):
             detail = ("Ollama's OpenAI-compatible chat endpoint does not accept top_k; bake it "
                       "into a digest-pinned Modelfile") if provider == "ollama" else (
-                          "the OpenAI-compatible adapter does not portably transmit top_k")
+                          "the selected adapter does not portably transmit top_k")
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: {detail}, or omit it so "
                              "the receipt records provider-default.")
         out["top_k"] = value
@@ -591,9 +622,10 @@ def sampler_settings(endpoint):
         if not isinstance(value, str) or value not in REASONING_EFFORT_VALUES:
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: reasoning_effort must be one of "
                              f"{', '.join(REASONING_EFFORT_VALUES)}.")
-        if api != "openai":
+        if api not in ("openai", "responses"):
             raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: reasoning_effort is transmitted only "
-                             "by the OpenAI-compatible adapter; omit it so the receipt records provider-default.")
+                             "by the OpenAI-compatible chat and Responses adapters; omit it so the "
+                             "receipt records provider-default.")
         out["reasoning_effort"] = value
     if "num_ctx" in endpoint:
         value = endpoint["num_ctx"]
@@ -608,12 +640,18 @@ def sampler_settings(endpoint):
 
 
 def request_sampling(endpoint):
-    """Only settings that the selected adapter actually places on the wire."""
+    """Only settings the selected adapter places on its wire, in that wire's field shape."""
     settings = sampler_settings(endpoint)
     sent = {key: value for key, value in settings.items() if value != "provider-default"}
     temperature = temperature_for(endpoint)
     if temperature is not None:
         sent["temperature"] = temperature
+    api = _api_for(endpoint)
+    if api == "responses" and "reasoning_effort" in sent:
+        sent["reasoning"] = {"effort": sent.pop("reasoning_effort")}
+    elif api == "google":
+        google_names = {"top_p": "topP", "top_k": "topK"}
+        sent = {google_names.get(key, key): value for key, value in sent.items()}
     return sent
 
 
@@ -687,6 +725,8 @@ def ollama_model_digest(endpoint, fetch_fn=_fetch):
 def openai_model_catalog_binding(endpoint, fetch_fn=_fetch):
     """Bind an exact requested id to one OpenAI-compatible ``/models`` catalog entry.
 
+    The catalog shape is independent of the completion wire. OpenCode Zen, for example, exposes
+    one OpenAI-shaped catalog for chat/completions, Responses, Messages and generateContent models.
     This is service identity, not weight identity. A hosted alias can move between weights or
     backends while retaining the same id; the receipt therefore carries a hash of the live catalog
     entry under ``model_catalog_binding`` while ``model_digest`` remains null. Calling this once
@@ -694,9 +734,6 @@ def openai_model_catalog_binding(endpoint, fetch_fn=_fetch):
     into a refusal rather than an unstated instrument change.
     """
     resolved = resolve(endpoint)
-    if resolved.get("api", "openai") != "openai":
-        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: model_catalog='openai:/models' "
-                         "requires the OpenAI-compatible adapter.")
     base = str(resolved["base_url"]).rstrip("/")
     key_env = resolved.get("api_key_env") or ""
     key = os.environ.get(key_env, "") if key_env else ""
@@ -1030,10 +1067,10 @@ def _record_cell(endpoint, started, data, outcome="ok") -> None:
 def chat(endpoint, prompt):
     """One deterministic completion, as (text, truncated).
 
-    api='openai' (chat/completions) or api='anthropic' (v1/messages). `truncated` is the transport
-    saying it stopped at the token bound rather than at an answer — the model never reached the
-    option list. Returned separately because that is a fault, not a read, and the caller has to be
-    able to tell the difference.
+    api='openai' (chat/completions), 'responses', 'anthropic' (Messages), or 'google'
+    (generateContent). `truncated` is the transport saying it stopped at the declared output-token
+    bound rather than at an answer — the model never reached the option list. Returned separately
+    because that is a fault, not a read, and the caller has to be able to tell the difference.
     """
     ep = resolve(endpoint)
     key = os.environ.get(ep.get("api_key_env") or "", "")
@@ -1047,12 +1084,14 @@ def chat(endpoint, prompt):
             raise SystemExit(f"REFUSING: {exc}") from None
     bounds = bounds_for(endpoint)
     sampling = request_sampling(endpoint)
-    if ep.get("api", "openai") == "anthropic":
+    api = ep["api"]
+    if api == "anthropic":
         body = {"model": ep["model"], **sampling, "max_tokens": bounds["max_tokens"],
                 "messages": [{"role": "user", "content": prompt}]}
         headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT,
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
-        req = urllib.request.Request(ep["base_url"].rstrip("/") + "/v1/messages",
+        path = "/messages" if ep.get("provider") == "opencode-zen" else "/v1/messages"
+        req = urllib.request.Request(ep["base_url"].rstrip("/") + path,
                                      json.dumps(body).encode(), headers)
         _started = time.monotonic()
         try:
@@ -1064,6 +1103,57 @@ def chat(endpoint, prompt):
         _record_cell(ep, _started, data)
         return ("".join(b.get("text", "") for b in data.get("content", [])),
                 data.get("stop_reason") == "max_tokens")
+    if api == "responses":
+        body = {"model": ep["model"], **sampling, "max_output_tokens": bounds["max_tokens"],
+                "input": prompt, "store": False}
+        headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
+        req = urllib.request.Request(ep["base_url"].rstrip("/") + "/responses",
+                                     json.dumps(body).encode(), headers)
+        _started = time.monotonic()
+        try:
+            data = _fetch(req, timeout=bounds["timeout_s"])
+        except BaseException:
+            _record_cell(ep, _started, None, outcome="error")
+            raise
+        _record_cell(ep, _started, data)
+        chunks = []
+        for item in data.get("output", []):
+            if not isinstance(item, dict) or item.get("type") != "message":
+                continue
+            for part in item.get("content", []):
+                if isinstance(part, dict) and part.get("type") == "output_text":
+                    chunks.append(str(part.get("text", "")))
+        text = "".join(chunks)
+        if not text and isinstance(data.get("output_text"), str):
+            text = data["output_text"]
+        incomplete = data.get("incomplete_details") or {}
+        return text, (data.get("status") == "incomplete" and
+                      incomplete.get("reason") == "max_output_tokens")
+    if api == "google":
+        generation = {"maxOutputTokens": bounds["max_tokens"], **sampling}
+        body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": generation}
+        headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
+        if key:
+            headers["x-goog-api-key"] = key
+        model = urllib.parse.quote(str(ep["model"]), safe="")
+        req = urllib.request.Request(
+            ep["base_url"].rstrip("/") + "/models/" + model + ":generateContent",
+            json.dumps(body).encode(), headers)
+        _started = time.monotonic()
+        try:
+            data = _fetch(req, timeout=bounds["timeout_s"])
+        except BaseException:
+            _record_cell(ep, _started, None, outcome="error")
+            raise
+        _record_cell(ep, _started, data)
+        candidate = data["candidates"][0]
+        text = "".join(
+            str(part.get("text", "")) for part in candidate.get("content", {}).get("parts", [])
+            if isinstance(part, dict) and not part.get("thought", False))
+        return text, candidate.get("finishReason") == "MAX_TOKENS"
     body = {"model": ep["model"], **sampling, "max_tokens": bounds["max_tokens"],
             "messages": [{"role": "user", "content": prompt}]}
     headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
@@ -3494,6 +3584,22 @@ def selftest():
             os.environ.pop("NOUS_API_KEY", None)
         else:
             os.environ["NOUS_API_KEY"] = _saved_nous
+    r = resolve({"name": "x", "provider": "opencode-zen", "model": "gpt-example",
+                 "api": "responses"})
+    assert r["base_url"] == "https://opencode.ai/zen/v1"
+    assert r["api_key_env"] == "OPENCODE_API_KEY" and r["api"] == "responses"
+    assert r["model_catalog"] == "openai:/models"
+    try:
+        resolve({"name": "ambiguous-zen", "provider": "opencode-zen", "model": "gpt-example"})
+        raise AssertionError("OpenCode Zen silently guessed a mutable model-to-wire route")
+    except SystemExit as exc:
+        assert "requires an explicit api" in str(exc)
+    try:
+        resolve({"name": "bad-wire", "provider": "opencode-zen", "model": "gpt-example",
+                 "api": "chat-ish"})
+        raise AssertionError("an unknown adapter wire reached inference")
+    except SystemExit as exc:
+        assert "unsupported api" in str(exc)
     r = resolve({"name": "x", "provider": "anthropic", "model": "m", "base_url": "https://my.gw"})
     assert r["base_url"] == "https://my.gw" and r["api"] == "anthropic", "the entry's own keys win"
     try:
@@ -3579,6 +3685,36 @@ def selftest():
         "digest_source": "provider-catalog:openai:/models",
     }]
 
+    # OpenCode Zen's /models catalog is OpenAI-shaped even when the selected model's completion
+    # wire is Responses, Anthropic Messages, or Google generateContent. Catalog binding must not
+    # falsely equate the selector shape with the inference protocol.
+    zen_catalog_requests = []
+
+    def fake_zen_models(req):
+        zen_catalog_requests.append((req.full_url, dict(req.header_items())))
+        return {"object": "list", "data": [{"id": "gpt-example", "object": "model"}]}
+
+    had_zen_key = "OPENCODE_API_KEY" in os.environ
+    old_zen_key = os.environ.get("OPENCODE_API_KEY")
+    os.environ["OPENCODE_API_KEY"] = "selftest"
+    try:
+        zen_bound = {"panel": [{"name": "zen-response", "provider": "opencode-zen",
+                                  "api": "responses", "model": "gpt-example",
+                                  "precision": "provider-served"}]}
+        prepare_reader_instruments(zen_bound, fetch_fn=fake_zen_models)
+    finally:
+        if had_zen_key:
+            os.environ["OPENCODE_API_KEY"] = old_zen_key
+        else:
+            os.environ.pop("OPENCODE_API_KEY", None)
+    assert zen_catalog_requests[0][0] == "https://opencode.ai/zen/v1/models"
+    assert any(key.casefold() == "authorization" and value == "Bearer selftest"
+               for key, value in zen_catalog_requests[0][1].items())
+    zen_receipt = reader_receipt(zen_bound["panel"][0])
+    assert zen_receipt["provider"] == "opencode-zen" and zen_receipt["api"] == "responses"
+    assert zen_receipt["model_catalog_binding"]["requested_model"] == "gpt-example"
+    assert "api_key_env" not in zen_receipt and "OPENCODE_API_KEY" not in json.dumps(zen_receipt)
+
     # The second preparation occurs after mint and immediately before reader spend. A catalog
     # move between those two points closes the attempt as an evidenced abort instead of silently
     # changing instruments beneath its commitment.
@@ -3658,6 +3794,8 @@ def selftest():
     def _capture(payload):
         def fake(req, timeout=None, sensitive=False):
             sent["body"] = json.loads(req.data)
+            sent["url"] = req.full_url
+            sent["headers"] = dict(req.header_items())
             sent["sensitive"] = sensitive
             sent["timeout"] = timeout
             return _Resp(payload)
@@ -3665,31 +3803,79 @@ def selftest():
 
     _ok_openai = {"choices": [{"message": {"content": "yes"}, "finish_reason": "stop"}]}
     _ok_anthropic = {"content": [{"text": "yes"}], "stop_reason": "end_turn"}
-    real_open, had_key = _open, "ANTHROPIC_API_KEY" in os.environ
-    os.environ.setdefault("ANTHROPIC_API_KEY", "selftest")
+    _ok_responses = {
+        "status": "completed",
+        "output": [
+            {"type": "reasoning", "summary": []},
+            {"type": "message", "content": [{"type": "output_text", "text": "yes"}]},
+        ],
+    }
+    _ok_google = {"candidates": [{
+        "content": {"parts": [{"text": "private rationale", "thought": True}, {"text": "yes"}]},
+        "finishReason": "STOP",
+    }]}
+    real_open = _open
+    prior_test_keys = {name: os.environ.get(name)
+                       for name in ("ANTHROPIC_API_KEY", "OPENCODE_API_KEY")}
+    os.environ["ANTHROPIC_API_KEY"] = "selftest"
+    os.environ["OPENCODE_API_KEY"] = "selftest"
     try:
-        bodies, sensitivities, timeouts = {}, {}, {}
+        reset_usage()
+        bodies, sensitivities, timeouts, urls, headers = {}, {}, {}, {}, {}
         for label, entry, payload in (
             ("openai-compatible", {"name": "o", "provider": "ollama", "model": "m"}, _ok_openai),
             ("anthropic", {"name": "a", "provider": "anthropic", "model": "m"}, _ok_anthropic),
+            ("zen-responses", {"name": "zr", "provider": "opencode-zen", "api": "responses",
+                               "model": "gpt-example"}, _ok_responses),
+            ("zen-anthropic", {"name": "za", "provider": "opencode-zen", "api": "anthropic",
+                               "model": "claude-example"}, _ok_anthropic),
+            ("zen-google", {"name": "zg", "provider": "opencode-zen", "api": "google",
+                            "model": "gemini-example"}, _ok_google),
         ):
             _open = _capture(payload)
             assert chat(entry, "hi") == ("yes", False), f"{label}: clean completion"
             bodies[label] = sent["body"]
             sensitivities[label] = sent["sensitive"]
             timeouts[label] = sent["timeout"]
+            urls[label] = sent["url"]
+            headers[label] = sent["headers"]
+        _transport_usage = usage_report()
+        assert _transport_usage["cells"] == 5 and _transport_usage["failed_cells"] == 0, \
+            "every supported transport must retain one telemetry row per bought reader cell"
+        assert set(_transport_usage["by_reader"]) == {"o", "a", "zr", "za", "zg"}, \
+            "a first-class adapter must not bypass the shared cell journal"
         assert sensitivities["anthropic"] is True, "x-api-key requests must use the guarded opener"
+        assert sensitivities["zen-responses"] is True, "bearer requests must use the guarded opener"
+        assert sensitivities["zen-google"] is True, "x-goog-api-key requests must use the guarded opener"
         for label, body in bodies.items():
-            assert body.get("max_tokens") == TRANSPORT_BOUNDS["max_tokens"], \
-                f"{label} request body dropped the declared max_tokens bound"
             assert "timeout_s" not in body, \
                 f"{label} leaked the harness timeout into a provider request body"
             assert timeouts[label] == TRANSPORT_BOUNDS["timeout_s"], \
                 f"{label} did not apply the declared timeout to the HTTP request"
+        assert bodies["openai-compatible"]["max_tokens"] == TRANSPORT_BOUNDS["max_tokens"]
+        assert bodies["anthropic"]["max_tokens"] == TRANSPORT_BOUNDS["max_tokens"]
+        assert bodies["zen-anthropic"]["max_tokens"] == TRANSPORT_BOUNDS["max_tokens"]
+        assert bodies["zen-responses"]["max_output_tokens"] == TRANSPORT_BOUNDS["max_tokens"]
+        assert bodies["zen-google"]["generationConfig"]["maxOutputTokens"] == TRANSPORT_BOUNDS["max_tokens"]
+        assert urls["zen-responses"] == "https://opencode.ai/zen/v1/responses"
+        assert urls["zen-anthropic"] == "https://opencode.ai/zen/v1/messages"
+        assert urls["zen-google"] == \
+            "https://opencode.ai/zen/v1/models/gemini-example:generateContent"
+        assert headers["zen-responses"].get("Authorization") == "Bearer selftest"
+        assert headers["zen-anthropic"].get("X-api-key") == "selftest"
+        assert headers["zen-google"].get("X-goog-api-key") == "selftest"
+        assert bodies["zen-responses"]["input"] == "hi" and \
+            bodies["zen-responses"]["store"] is False
+        assert bodies["zen-google"]["contents"] == [{
+            "role": "user", "parts": [{"text": "hi"}]}]
         assert bodies["openai-compatible"]["temperature"] == 0, \
             "OpenAI-compatible direct classifiers retain deterministic sampling by default"
         assert "temperature" not in bodies["anthropic"], \
             "native Anthropic must omit the parameter current models reject as deprecated"
+        assert "temperature" not in bodies["zen-responses"], \
+            "Responses readers must default to the provider sampler instead of forcing a value a reasoning model may reject"
+        assert bodies["zen-google"]["generationConfig"]["temperature"] == 0, \
+            "Google direct classifiers retain deterministic sampling by default"
         assert reader_receipt({"name": "a", "provider": "anthropic", "model": "m"})["temperature"] is None, \
             "omission is still explicit in the re-runnable reader receipt"
         default_sampler = reader_receipt({"name": "o", "provider": "ollama", "model": "m"})
@@ -3706,7 +3892,12 @@ def selftest():
         try:
             sampler_settings({"name": "r", "provider": "anthropic", "model": "m", "reasoning_effort": "low"}); raise AssertionError("anthropic accepted reasoning_effort")
         except SystemExit as exc:
-            assert "OpenAI-compatible adapter" in str(exc)
+            assert "Responses adapters" in str(exc)
+        zen_reasoning = request_sampling({"name": "r", "provider": "opencode-zen",
+                                          "api": "responses", "model": "gpt-example",
+                                          "reasoning_effort": "low"})
+        assert zen_reasoning == {"reasoning": {"effort": "low"}}, \
+            "Responses reasoning effort must use the nested official wire shape"
         assert {key: default_sampler[key] for key in SAMPLER_KEYS} == {
             key: "provider-default" for key in SAMPLER_KEYS}, \
             "every undeclared sampler default must be typed rather than silently omitted"
@@ -3745,6 +3936,19 @@ def selftest():
         chat({"name": "a", "provider": "anthropic", "model": "m", "top_k": 32}, "hi")
         assert sent["body"]["top_k"] == 32, "native Anthropic top_k must reach the wire"
 
+        _open = _capture(_ok_google)
+        chat({"name": "zg", "provider": "opencode-zen", "api": "google",
+              "model": "gemini-example", "seed": 17, "top_p": 0.85, "top_k": 32}, "hi")
+        google_sampling = sent["body"]["generationConfig"]
+        assert google_sampling["seed"] == 17 and google_sampling["topP"] == 0.85
+        assert google_sampling["topK"] == 32 and google_sampling["temperature"] == 0
+        google_receipt = reader_receipt(
+            {"name": "zg", "provider": "opencode-zen", "api": "google",
+             "model": "gemini-example", "seed": 17, "top_p": 0.85, "top_k": 32})
+        assert google_receipt["seed"] == 17 and google_receipt["top_p"] == 0.85
+        assert google_receipt["top_k"] == 32, \
+            "the receipt keeps provider-neutral setting names even when Google's wire is camelCase"
+
         for unsupported in ({"top_k": 40}, {"num_ctx": 8192}):
             try:
                 sampler_settings({"name": "o", "provider": "ollama", "model": "m", **unsupported})
@@ -3774,7 +3978,7 @@ def selftest():
         assert "A: yes" in sent["body"]["messages"][0]["content"]
         assert "B: no" in sent["body"]["messages"][0]["content"]
 
-        # Truncation must never be graded — on either transport. The fragment here CONTAINS a valid
+        # Truncation must never be graded — on any transport. The fragment here CONTAINS a valid
         # option, so before the check it graded as a CORRECT answer: a transport fault could raise
         # an arm's accuracy. That is why this is a dead cell and not merely a wrong one.
         for label, entry, payload in (
@@ -3783,6 +3987,15 @@ def selftest():
                            "finish_reason": "length"}]}),
             ("anthropic", {"name": "a", "provider": "anthropic", "model": "m"},
              {"content": [{"text": "process-ran, and the reason is"}], "stop_reason": "max_tokens"}),
+            ("responses", {"name": "zr", "provider": "opencode-zen", "api": "responses",
+                           "model": "gpt-example"},
+             {"status": "incomplete", "incomplete_details": {"reason": "max_output_tokens"},
+              "output": [{"type": "message", "content": [
+                  {"type": "output_text", "text": "process-ran, and the reason is"}]}]}),
+            ("google", {"name": "zg", "provider": "opencode-zen", "api": "google",
+                        "model": "gemini-example"},
+             {"candidates": [{"content": {"parts": [
+                  {"text": "process-ran, and the reason is"}]}, "finishReason": "MAX_TOKENS"}]}),
         ):
             _open = _capture(payload)
             _cut = ask(entry, "text", "q?", ["process-ran", "cannot tell"],
@@ -3815,8 +4028,11 @@ def selftest():
             "copied prose is still an off-option diagnostic, not a valid choice"
     finally:
         _open = real_open
-        if not had_key:
-            os.environ.pop("ANTHROPIC_API_KEY", None)
+        for name, previous in prior_test_keys.items():
+            if previous is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = previous
 
     # …and a dead cell must reach the yield guard, which is what makes it safe not to grade it:
     # an all-truncated run emits nothing rather than a delta over an empty denominator.
