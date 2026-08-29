@@ -29,13 +29,16 @@ POST /api/v1/proposals/{slug}/measurements — with the methodology enforced by 
                          only spends measurements whose whole interval clears neutral.
 
 Adapters: a panel entry is {"name", "provider", "model", "precision"?} — providers: openai,
-anthropic (native /v1/messages), openrouter, groq, ollama — or set {"base_url", "api", "api_key_env"}
-explicitly for anything else OpenAI-compatible (vllm, llama.cpp, any gateway). Sampling settings
+anthropic (native /v1/messages), openrouter, groq, ollama, nous-portal — or use
+provider="openai-compatible" with an explicit {"base_url", "api_key_env"} for another hosted
+service or local credential-attaching proxy (vllm, llama.cpp, any gateway). Sampling settings
 are provider-aware and ride in the receipt: OpenAI-compatible readers default to temperature=0;
 native Anthropic omits the deprecated parameter unless the manifest explicitly supplies one.
 Ollama readers are bound to the live model digest before spend; providers that expose no weight
-digest say so explicitly. Seed/top-p/top-k/context settings are either transmitted and recorded or
-recorded as ``provider-default`` rather than disappearing into an unstated default. Pure
+digest say so explicitly. OpenAI-compatible services may opt into an exact ``/models`` catalog
+binding; this proves the requested service model id was present before mint and spend, but is
+explicitly not a weight digest. Seed/top-p/top-k/context settings are either transmitted and
+recorded or recorded as ``provider-default`` rather than disappearing into an unstated default. Pure
 stdlib. A panelist whose key env is unset refuses at startup rather than silently 401-ing mid-run.
 "precision" labels flow into per_member results, so a panel disagreement is a diagnosis (WHICH
 precision diverged), and into the manifest spec (name@precision) so replications re-run the same pool.
@@ -134,19 +137,26 @@ def _origin(url):
     return p.scheme.lower(), (p.hostname or "").lower(), port
 
 
+def _is_loopback_endpoint(url):
+    """True only for an explicit HTTP(S) loopback endpoint."""
+    p = urllib.parse.urlsplit(url)
+    if p.scheme.lower() not in ("http", "https"):
+        return False
+    host = (p.hostname or "").lower().rstrip(".")
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def _require_secure_credential_url(url, purpose):
     """Refuse cleartext credential transport, except to an explicit loopback endpoint."""
     p = urllib.parse.urlsplit(url)
     if p.scheme.lower() == "https":
         return
-    host = (p.hostname or "").lower().rstrip(".")
-    loopback = host == "localhost" or host.endswith(".localhost")
-    if host:
-        try:
-            loopback = loopback or ipaddress.ip_address(host).is_loopback
-        except ValueError:
-            pass
-    if p.scheme.lower() == "http" and loopback:
+    if p.scheme.lower() == "http" and _is_loopback_endpoint(url):
         return
     raise ValueError(
         f"{purpose} would send credentials to {url!r} without HTTPS; use https://, or an explicit "
@@ -212,13 +222,23 @@ def _fetch(req, timeout=None):
 # ------------------------------------------------------------------ adapters
 # Provider presets: a panel entry can be just {"name", "provider", "model", "precision"?} and the
 # transport details resolve from here. Explicit base_url/api/api_key_env on the entry always win.
-# "openai-compatible" covers most of the world: OpenAI, ollama, llama.cpp, vLLM, OpenRouter, groq…
+# "openai-compatible" covers most of the world: a caller supplies its base_url and optional
+# api_key_env. "nous-portal" talks to Hermes Agent's raw subscription proxy, which attaches its
+# short-lived OAuth-derived upstream credential itself; no Nous credential enters this process.
 PRESETS = {
     "openai":     {"api": "openai",    "base_url": "https://api.openai.com/v1",    "api_key_env": "OPENAI_API_KEY"},
     "anthropic":  {"api": "anthropic", "base_url": "https://api.anthropic.com",    "api_key_env": "ANTHROPIC_API_KEY"},
     "openrouter": {"api": "openai",    "base_url": "https://openrouter.ai/api/v1", "api_key_env": "OPENROUTER_API_KEY"},
     "groq":       {"api": "openai",    "base_url": "https://api.groq.com/openai/v1", "api_key_env": "GROQ_API_KEY"},
     "ollama":     {"api": "openai",    "base_url": "http://localhost:11434/v1",    "api_key_env": ""},
+    "openai-compatible": {"api": "openai", "api_key_env": ""},
+    "nous-portal": {
+        "api": "openai",
+        "base_url": "http://127.0.0.1:8645/v1",
+        "api_key_env": "",
+        "model_catalog": "openai:/models",
+        "credential_boundary": "credential-attaching-loopback-proxy",
+    },
 }
 
 # Every transport bound a panelist runs under, with its default — and the ONE list both request
@@ -444,15 +464,69 @@ def ollama_model_digest(endpoint, fetch_fn=_fetch):
     return _normal_model_digest(candidates[0].get("digest"), "Ollama model digest")
 
 
+def openai_model_catalog_binding(endpoint, fetch_fn=_fetch):
+    """Bind an exact requested id to one OpenAI-compatible ``/models`` catalog entry.
+
+    This is service identity, not weight identity. A hosted alias can move between weights or
+    backends while retaining the same id; the receipt therefore carries a hash of the live catalog
+    entry under ``model_catalog_binding`` while ``model_digest`` remains null. Calling this once
+    before mint and again before reader spend turns a missing, duplicated, or moved catalog entry
+    into a refusal rather than an unstated instrument change.
+    """
+    resolved = resolve(endpoint)
+    if resolved.get("api", "openai") != "openai":
+        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: model_catalog='openai:/models' "
+                         "requires the OpenAI-compatible adapter.")
+    base = str(resolved["base_url"]).rstrip("/")
+    key_env = resolved.get("api_key_env") or ""
+    key = os.environ.get(key_env, "") if key_env else ""
+    headers = {"User-Agent": USER_AGENT}
+    if key:
+        try:
+            _require_secure_credential_url(base, f"panel entry {resolved.get('name', '?')!r} model catalog lookup")
+        except ValueError as exc:
+            raise SystemExit(f"REFUSING: {exc}") from None
+        headers["Authorization"] = f"Bearer {key}"
+    req = urllib.request.Request(base + "/models", headers=headers)
+    try:
+        payload = fetch_fn(req)
+    except Exception as exc:
+        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: could not resolve the "
+                         f"OpenAI-compatible /models catalog before reader spend "
+                         f"({type(exc).__name__}: {exc}).") from None
+    rows = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: OpenAI-compatible /models "
+                         "returned no data array; remove model_catalog to accept a provider-opaque "
+                         "reader, or use a service that exposes the catalog contract.")
+    wanted = str(resolved.get("model") or "")
+    matches = [row for row in rows if isinstance(row, dict) and row.get("id") == wanted]
+    if len(matches) != 1:
+        raise SystemExit(f"panel entry {resolved.get('name', '?')!r}: OpenAI-compatible /models "
+                         f"matched {len(matches)} entries for exact model id {wanted!r}; select one "
+                         "exact catalog id before reader spend.")
+    canonical = json.dumps(matches[0], sort_keys=True, separators=(",", ":"),
+                           ensure_ascii=False).encode()
+    return {
+        "source": "openai:/models",
+        "requested_model": wanted,
+        "entry_sha256": "sha256:" + hashlib.sha256(canonical).hexdigest(),
+        "weight_identity": "provider-opaque",
+    }
+
+
 def prepare_reader_instruments(manifest, fetch_fn=_fetch):
-    """Bind every reader to a typed weight edition before any model call.
+    """Bind every reader to the strongest identity its serving adapter exposes.
 
     Ollama exposes a content digest, so absence or mismatch refuses. Hosted/custom providers that
-    expose no digest through this adapter carry an explicit null/provider-opaque receipt and may
-    not smuggle an unverifiable operator-declared digest into the manifest.
+    expose an OpenAI-compatible catalog may bind the exact requested service id and catalog-entry
+    hash. That remains provider-opaque at the weight layer. Providers exposing neither carry an
+    explicit null/provider-opaque receipt. No hosted reader may smuggle an unverifiable operator-
+    declared weight digest into the manifest.
     """
     for endpoint in manifest.get("panel", []):
-        provider = resolve(endpoint).get("provider", "")
+        resolved = resolve(endpoint)
+        provider = resolved.get("provider", "")
         declared = endpoint.get("model_digest")
         if provider == "ollama":
             live = ollama_model_digest(endpoint, fetch_fn=fetch_fn)
@@ -468,7 +542,22 @@ def prepare_reader_instruments(manifest, fetch_fn=_fetch):
                                  "does not expose a digest through this adapter; remove the unverifiable "
                                  "model_digest or add a provider-specific verifier.")
             endpoint["model_digest"] = None
-            endpoint["digest_source"] = "provider-opaque"
+            catalog = resolved.get("model_catalog")
+            if catalog is not None and catalog != "openai:/models":
+                raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: unsupported model_catalog "
+                                 f"{catalog!r}; the supported value is 'openai:/models'.")
+            if catalog == "openai:/models":
+                live_binding = openai_model_catalog_binding(endpoint, fetch_fn=fetch_fn)
+                declared_binding = endpoint.get("model_catalog_binding")
+                if declared_binding is not None and declared_binding != live_binding:
+                    raise SystemExit(f"panel entry {endpoint.get('name', '?')!r}: live /models catalog "
+                                     "binding does not match the previously prepared binding. "
+                                     "Refusing before reader spend.")
+                endpoint["model_catalog_binding"] = live_binding
+                endpoint["digest_source"] = "provider-catalog:openai:/models"
+            else:
+                endpoint.pop("model_catalog_binding", None)
+                endpoint["digest_source"] = "provider-opaque"
         endpoint[_INSTRUMENT_PREPARATION_KEY] = {
             "entry_point": "prepare_reader_instruments",
             "binding": endpoint["digest_source"],
@@ -533,6 +622,12 @@ def reader_receipt(endpoint):
     else:
         out["model_digest"] = resolved.get("model_digest")
         out["digest_source"] = resolved.get("digest_source") or "unbound"
+    if resolved.get("model_catalog") is not None:
+        out["model_catalog"] = resolved["model_catalog"]
+    if resolved.get("model_catalog_binding") is not None:
+        out["model_catalog_binding"] = dict(resolved["model_catalog_binding"])
+    if resolved.get("credential_boundary") is not None:
+        out["credential_boundary"] = resolved["credential_boundary"]
     out["instrument_preparation"] = dict(preparation)
     # The answer-binding protocol is part of the reader instrument. A result produced when the
     # model copied a long option label is not byte-for-byte comparable with one produced when it
@@ -2506,6 +2601,12 @@ def selftest():
     # base_url refuses loudly (a screen never observed rejecting anything is decoration).
     r = resolve({"name": "x", "provider": "ollama", "model": "m"})
     assert r["base_url"].startswith("http://localhost:11434") and r["api"] == "openai"
+    r = resolve({"name": "x", "provider": "openai-compatible", "model": "m",
+                 "base_url": "https://reader.example/v1", "api_key_env": "READER_KEY"})
+    assert r["base_url"] == "https://reader.example/v1" and r["api"] == "openai"
+    r = resolve({"name": "x", "provider": "nous-portal", "model": "vendor/model"})
+    assert r["base_url"] == "http://127.0.0.1:8645/v1"
+    assert r["model_catalog"] == "openai:/models" and not r["api_key_env"]
     r = resolve({"name": "x", "provider": "anthropic", "model": "m", "base_url": "https://my.gw"})
     assert r["base_url"] == "https://my.gw" and r["api"] == "anthropic", "the entry's own keys win"
     try:
@@ -2552,6 +2653,77 @@ def selftest():
         raise AssertionError("an unverifiable hosted model digest entered the receipt")
     except SystemExit as exc:
         assert "does not expose a digest" in str(exc)
+
+    # A remote catalog id is stronger than a bare mutable alias but weaker than a weight digest.
+    # Bind the complete matching entry, state the remaining opacity, and prove a credential-
+    # attaching loopback proxy receives no upstream secret from this harness.
+    catalog_entry = {"id": "vendor/model", "object": "model", "owned_by": "vendor"}
+    catalog_requests = []
+
+    def fake_models(req):
+        catalog_requests.append((req.full_url, dict(req.header_items())))
+        return {"object": "list", "data": [catalog_entry, {"id": "other/model"}]}
+
+    remote = {"panel": [{"name": "portal-reader", "provider": "nous-portal",
+                          "model": "vendor/model", "precision": "provider-served"}]}
+    prepare_reader_instruments(remote, fetch_fn=fake_models)
+    expected_entry_hash = "sha256:" + hashlib.sha256(json.dumps(
+        catalog_entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+    remote_entry = remote["panel"][0]
+    assert catalog_requests[0][0] == "http://127.0.0.1:8645/v1/models"
+    assert not any(key.casefold() == "authorization" for key in catalog_requests[0][1]), \
+        "the harness must not receive or forward a hosted-service credential through a local proxy"
+    assert remote_entry["model_digest"] is None
+    assert remote_entry["digest_source"] == "provider-catalog:openai:/models"
+    assert remote_entry["model_catalog_binding"] == {
+        "source": "openai:/models",
+        "requested_model": "vendor/model",
+        "entry_sha256": expected_entry_hash,
+        "weight_identity": "provider-opaque",
+    }
+    remote_receipt = reader_receipt(remote_entry)
+    assert remote_receipt["model_catalog"] == "openai:/models"
+    assert remote_receipt["model_catalog_binding"] == remote_entry["model_catalog_binding"]
+    assert remote_receipt["credential_boundary"] == "credential-attaching-loopback-proxy"
+    assert "api_key_env" not in remote_receipt and "authorization" not in {
+        key.casefold() for key in remote_receipt}, "reader receipts must remain credential-free"
+    assert instrument_preparation_receipt(remote["panel"])["binding"] == [{
+        "reader": "portal-reader@provider-served",
+        "digest_source": "provider-catalog:openai:/models",
+    }]
+
+    # The second preparation occurs after mint and immediately before reader spend. A catalog
+    # move between those two points closes the attempt as an evidenced abort instead of silently
+    # changing instruments beneath its commitment.
+    try:
+        prepare_reader_instruments(remote, fetch_fn=lambda _req: {
+            "data": [{**catalog_entry, "owned_by": "changed-route"}]})
+        raise AssertionError("a changed hosted catalog entry reached reader spend")
+    except SystemExit as exc:
+        assert "does not match the previously prepared binding" in str(exc)
+
+    for bad_catalog, expected_message in (
+            ({"data": []}, "matched 0 entries"),
+            ({"data": [catalog_entry, dict(catalog_entry)]}, "matched 2 entries"),
+            ({"models": [catalog_entry]}, "returned no data array"),
+    ):
+        try:
+            prepare_reader_instruments(
+                {"panel": [{"name": "missing", "provider": "openai-compatible",
+                            "base_url": "https://reader.example/v1", "model": "vendor/model",
+                            "model_catalog": "openai:/models"}]},
+                fetch_fn=lambda _req, payload=bad_catalog: payload)
+            raise AssertionError("a malformed or ambiguous hosted catalog reached reader spend")
+        except SystemExit as exc:
+            assert expected_message in str(exc)
+    try:
+        prepare_reader_instruments(
+            {"panel": [{"name": "bad-selector", "provider": "openai-compatible",
+                        "base_url": "https://reader.example/v1", "model": "vendor/model",
+                        "model_catalog": "vendor-specific"}]})
+        raise AssertionError("an unsupported model catalog selector reached reader spend")
+    except SystemExit as exc:
+        assert "unsupported model_catalog" in str(exc)
 
     # urllib's default handler forwards Authorization/x-api-key across origins. The request must
     # be stopped before a redirect can replay a provider key (or a credential in a 307 body).
@@ -3937,6 +4109,22 @@ def selftest():
             raise AssertionError("an invalid transport bound reached attempt minting")
         except SystemExit as exc:
             assert "before attempt mint" in str(exc) and "positive integer" in str(exc)
+        _validate_real_reader_configuration(
+            {"panel": [{"name": "portal", "provider": "nous-portal",
+                        "model": "vendor/model"}]}, ask)
+        for bad_boundary in (
+                {"name": "public-proxy", "provider": "openai-compatible",
+                 "base_url": "https://reader.example/v1", "model": "vendor/model",
+                 "credential_boundary": "credential-attaching-loopback-proxy"},
+                {"name": "invented-boundary", "provider": "openai-compatible",
+                 "base_url": "http://127.0.0.1:9000/v1", "model": "vendor/model",
+                 "credential_boundary": "trust-me"},
+        ):
+            try:
+                _validate_real_reader_configuration({"panel": [bad_boundary]}, ask)
+                raise AssertionError("an unchecked credential-boundary label reached attempt minting")
+            except SystemExit as exc:
+                assert "before attempt mint" in str(exc) and "credential" in str(exc)
     finally:
         if saved_openai_key is not None:
             os.environ["OPENAI_API_KEY"] = saved_openai_key
@@ -4174,6 +4362,15 @@ def _validate_real_reader_configuration(manifest, ask_fn, context="attempt mint"
         name = resolved.get("name", "?")
         if not resolved.get("model"):
             raise SystemExit(f"REFUSING before {context}: panel entry {name!r} needs a non-empty model.")
+        boundary = resolved.get("credential_boundary")
+        if boundary is not None:
+            if boundary != "credential-attaching-loopback-proxy":
+                raise SystemExit(f"REFUSING before {context}: panel entry {name!r} has unsupported "
+                                 f"credential_boundary {boundary!r}.")
+            if not _is_loopback_endpoint(str(resolved["base_url"])):
+                raise SystemExit(f"REFUSING before {context}: panel entry {name!r} may claim a "
+                                 "credential-attaching-loopback-proxy only at an explicit HTTP(S) "
+                                 "localhost/loopback URL.")
         # Validate every setting consumed by chat(), without making a network call.
         for bound, value in bounds.items():
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
