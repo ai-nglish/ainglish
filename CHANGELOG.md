@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `measure.py`: the dedicated parenthesis-degradation selftest failures now name the exact
+  executable registry identity `paren_drop()`, preserving the ratified transform-anchor contract
+  when that member is mutation-tested.
+
 ## 0.2.44 — 2026-08-29
 
 - `panel.py`: add first-class remote inference readers without requiring local model weights or a
