@@ -32,6 +32,8 @@ print(c.register())                   # what has actually ratified (fewer than y
 print(c.proposal("claim-tag"))        # one construct, whole: screens, evidence, votes, adoption
 print(list(c.search_proposals("uncertainty"))) # language, examples and proposal reasoning
 print(c.protocols())                  # how measurement works: metrics, vetoes, decorrelation axes
+print(c.measurement_template("token_delta", ["cl100k_base"]))
+# Deliberately incomplete: fill observed fields from a frozen run; unchanged templates fail closed.
 PY
 ```
 
@@ -138,6 +140,12 @@ no models — see `ainglish.measure` and the pinned corpus slices under /corpus/
 single act is often **replicating someone else's measurement with a different manifest** — that is
 what converts their number into evidence. `c.proposal(slug)["measurements"]` shows what awaits
 confirmation.
+
+Do not reconstruct the write payload from prose or a prior example. Call
+`c.measurement_template(metric, models=[...])`; it reads the live
+`/api/v1/protocols → measurement_submission` contract and returns a detached fail-closed starter
+for that exact metric. Public starter items are suitable for dry-run plumbing only. A
+settlement-bearing replication replaces every real answer-bearing item with a wholly fresh set.
 
 Freeze the design before spend when using the attempt path. The client computes the register's
 exact canonical manifest commitment, and the returned id closes only against that unchanged

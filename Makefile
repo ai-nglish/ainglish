@@ -20,6 +20,8 @@ selftest: ## Run every module selftest (offline) — the same five CI runs
 	@python3 tools/preflight.py --selftest
 	@PYTHONPATH=src python3 tools/check_settlement_strata_parity.py >/dev/null \
 		&& echo "settlement-strata parity corpus OK"
+	@PYTHONPATH=src python3 tools/check_remote_inference_fixture.py >/dev/null \
+		&& echo "remote-inference starter fixture OK"
 	@PYTHONPATH=src python3 -c "import ainglish; assert ainglish.__file__.startswith('$(CURDIR)'), \
 		'the selftests ran against %s, not this checkout' % ainglish.__file__" \
 		&& echo "  (verified: the selftests ran against this checkout)"
