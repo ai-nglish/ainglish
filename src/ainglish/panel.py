@@ -1538,8 +1538,147 @@ def _validate_item_block(items, label):
     return True
 
 
+# 1/8 exactly. The floor lands in the content-addressed manifest, and the register's
+# environments disagree on PHP's serialize_precision, so a threshold must be a
+# binary-exact decimal or the same gate hashes differently on prod and CI. 0.15 is not
+# representable; 0.125 is, and the client's portability guard refuses the difference.
+CALIBRATION_MIN_GAP = 0.125
+CALIBRATION_MIN_RECOVERED = 0.5
+CALIBRATION_RULE = "headroom-relative-v1"
+CALIBRATION_RULE_LEGACY = "absolute-gap-v1"
+
+
+# Accuracies are ratios of small integers, so a threshold a run meets EXACTLY is routinely
+# unrepresentable: 8/12 against 4/12 gives recovered = 0.49999999999999994, short of one half by
+# 5.6e-17, and a bare `<` refuses a panel whose exact value is exactly 1/2. That refusal arrives
+# after the calibration cells are already paid for and reads as inexplicable. The tolerance is
+# absolute because every quantity here lives in [0, 1], and is ~8 orders of magnitude above the
+# representation error while staying far below any difference a control set can express.
+_GATE_EPSILON = 1e-9
+
+
+def _at_least(value, threshold):
+    """`value >= threshold`, tolerant of float representation at the boundary."""
+    return value >= threshold - _GATE_EPSILON
+
+
+def declared_calibration_gate(manifest):
+    """The gate a manifest DECLARES, as (min_gap, min_recovered, rule).
+
+    ONE source of truth. The preregistered `admissibility_gates` statement and the gate that
+    actually runs are both derived from this, so a minted attempt cannot claim a gate the run
+    never applied — which is what a frozen "planted calibration gap >= 0.5" string did once the
+    default became a two-part rule (@dexagon-ai, #122).
+    """
+    rule = (CALIBRATION_RULE_LEGACY
+            if "calibration_min_gap" in manifest and "calibration_min_recovered" not in manifest
+            else CALIBRATION_RULE)
+    return (manifest.get("calibration_min_gap", CALIBRATION_MIN_GAP),
+            manifest.get("calibration_min_recovered", CALIBRATION_MIN_RECOVERED),
+            rule)
+
+
+def calibration_gate_statement(manifest):
+    """The effective calibration gate as one preregisterable line."""
+    min_gap, min_recovered, rule = declared_calibration_gate(manifest)
+    if rule == CALIBRATION_RULE_LEGACY:
+        return f"calibration gate {rule}: planted-effect gap >= {min_gap}"
+    return (f"calibration gate {rule}: planted-effect gap >= {min_gap} "
+            f"and recovered >= {min_recovered} of headroom")
+
+
+def calibration_verdict(detectable, undetectable, min_gap=CALIBRATION_MIN_GAP,
+                        min_recovered=CALIBRATION_MIN_RECOVERED, rule=CALIBRATION_RULE):
+    """Score the positive control against the headroom the control set actually leaves.
+
+    The gate used to compare (detectable - undetectable) against a constant 0.5. That is an
+    ABSOLUTE gap, but the largest gap a control set can produce is 1 - undetectable, and the
+    unplanted arm's floor is set by the CONSTRUCT, not by the reader: on a disambiguation item the
+    bare form still leaks enough context to be answered correctly about half the time, so the
+    maximum attainable gap is about 0.5 and a 0.5 bar is unreachable however well the marker is
+    read. Two agents hit this independently on frozen sets whose planted arms scored 0.92 and 1.00
+    -- the marker was read cleanly and the panel was refused anyway, buying zero real cells.
+
+    So ask what the control is actually for: of the accuracy the marker COULD recover, how much
+    did it? recovered = gap / headroom. A small absolute floor stays alongside it, because a ratio
+    on its own would pass a four-point gap over an unplanted arm already sitting at 0.95.
+    """
+    legacy = rule == CALIBRATION_RULE_LEGACY
+    verdict = {
+        "rule": rule,
+        "detectable": detectable,
+        "other": undetectable,
+        "gap": None,
+        "headroom": None,
+        "recovered": None,
+        "min_gap": min_gap,
+        "min_recovered": None if legacy else min_recovered,
+        "passed": False,
+        "failure": None,
+    }
+    if detectable is None or undetectable is None:
+        verdict["failure"] = "incomplete"
+        return verdict
+    verdict["gap"] = gap = detectable - undetectable
+    verdict["headroom"] = headroom = 1.0 - undetectable
+    if headroom > 0:
+        verdict["recovered"] = gap / headroom
+    if legacy:
+        # A manifest that declared an absolute gap and nothing else PRE-REGISTERED that gate.
+        # Supplying an undeclared second condition would change its admissibility after the fact,
+        # which is the one thing a manifest-carried gate exists to prevent (@dexagon-ai, #122:
+        # declared 0.25 with planted 0.60 / other 0.30 passed the declared rule and this branch
+        # refused it at recovered 0.4286). So a declared absolute gate stays exactly itself.
+        if not _at_least(gap, min_gap):
+            verdict["failure"] = "gap_below_floor"
+        else:
+            verdict["passed"] = True
+        return verdict
+    if headroom <= 0:
+        # Neither a reader failure nor a construct failure: the control items cannot discriminate
+        # because the unplanted arm already answers all of them. Naming it a SET-DESIGN failure
+        # stops it being read as "this panel cannot detect".
+        verdict["failure"] = "no_headroom"
+        return verdict
+    if not _at_least(gap, min_gap):
+        verdict["failure"] = "gap_below_floor"
+    elif not _at_least(verdict["recovered"], min_recovered):
+        verdict["failure"] = "recovered_below_threshold"
+    else:
+        verdict["passed"] = True
+    return verdict
+
+
+def calibration_failure_detail(verdict):
+    """Render a refusal that names WHICH of the two conditions failed, with both numbers."""
+    d, o = verdict["detectable"], verdict["other"]
+    if verdict["failure"] == "incomplete":
+        return f"planted arm {d} vs other {o} -- the control produced no scorable pair"
+    if verdict["failure"] == "no_headroom":
+        return (f"the unplanted arm already scores {o:.2f}, leaving no headroom for a planted "
+                "effect -- the control items cannot discriminate, so this is a control-set "
+                "design failure, not a reader failure")
+    core = (f"planted arm {d:.2f} vs other {o:.2f}: gap {verdict['gap']:.4f}, headroom "
+            f"{verdict['headroom']:.4f}, recovered {verdict['recovered']:.4f}")
+    if verdict["failure"] == "gap_below_floor":
+        return core + f" -- the absolute gap is under the {verdict['min_gap']} floor"
+    return core + (f" -- the marker recovered {verdict['recovered']:.2f} of the available "
+                   f"headroom, under the {verdict['min_recovered']} threshold")
+
+
+def calibration_receipt(verdict, planted_arm):
+    """The outcome half of the gate, rounded for the receipt."""
+    def r(x):
+        return None if x is None else round(x, 4)
+    return {"planted_arm": planted_arm, "detectable": r(verdict["detectable"]),
+            "other": r(verdict["other"]), "gap": r(verdict["gap"]),
+            "headroom": r(verdict["headroom"]), "recovered": r(verdict["recovered"]),
+            "min_gap": verdict["min_gap"], "min_recovered": verdict["min_recovered"],
+            "rule": verdict["rule"], "passed": verdict["passed"]}
+
+
 def _validate_panel_declarations(manifest, panel):
-    """Return (planted_arm, calibration_min_gap), or None on a zero-cost refusal."""
+    """Return (planted_arm, min_gap, min_recovered, rule), or None on a zero-cost refusal."""
     metric = manifest.get("metric")
     if metric not in ("comprehension_accuracy_delta", "interpretation_entropy_delta", "learnability",
                       "robustness_delta"):
@@ -1561,17 +1700,29 @@ def _validate_panel_declarations(manifest, panel):
               f"must be 'ainglish'; got {planted_arm!r}. No reader cell was bought.")
         return None
 
-    raw_gap = manifest.get("calibration_min_gap", 0.5)
-    try:
-        if isinstance(raw_gap, bool):
-            raise ValueError("boolean thresholds are not numbers")
-        min_gap = float(raw_gap)
-        if not math.isfinite(min_gap) or not (0 <= min_gap <= 1):
-            raise ValueError("the accuracy gap must be finite and between 0 and 1")
-    except (TypeError, ValueError, OverflowError) as exc:
-        print(f"REFUSING to run: invalid calibration_min_gap {raw_gap!r} ({exc}). "
-              "No reader cell was bought.")
-        return None
+    thresholds = {}
+    for key, default in (("calibration_min_gap", CALIBRATION_MIN_GAP),
+                         ("calibration_min_recovered", CALIBRATION_MIN_RECOVERED)):
+        raw = manifest.get(key, default)
+        try:
+            if isinstance(raw, bool):
+                raise ValueError("boolean thresholds are not numbers")
+            value = float(raw)
+            if not math.isfinite(value) or not (0 <= value <= 1):
+                raise ValueError("the threshold must be finite and between 0 and 1")
+        except (TypeError, ValueError, OverflowError) as exc:
+            print(f"REFUSING to run: invalid {key} {raw!r} ({exc}). "
+                  "No reader cell was bought.")
+            return None
+        thresholds[key] = value
+    min_gap = thresholds["calibration_min_gap"]
+    min_recovered = thresholds["calibration_min_recovered"]
+    # WHICH RULE a run is judged under follows from what the manifest DECLARED, never from the
+    # SDK's current preference. A runspec that named an absolute gap and no recovery threshold
+    # pre-registered an absolute gate; honouring it exactly is what keeps an old declared
+    # experiment re-runnable, and the rule name rides in the manifest so the regime is visible.
+    # Read from the shared helper so the preregistered statement cannot drift from the live gate.
+    rule = declared_calibration_gate(manifest)[2]
 
     neff = manifest.get("panel_neff")
     if neff is not None and (isinstance(neff, bool) or not isinstance(neff, int)
@@ -1599,7 +1750,7 @@ def _validate_panel_declarations(manifest, panel):
                   "500 characters when supplied. No reader cell was bought.")
             return None
 
-    return planted_arm, min_gap
+    return planted_arm, min_gap, min_recovered, rule
 
 
 def _validate_learnability_v2(manifest, real, calibration):
@@ -1685,7 +1836,8 @@ def _validate_learnability_v2(manifest, real, calibration):
     return True
 
 
-def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
+def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRATION_MIN_GAP,
+                   min_recovered=CALIBRATION_MIN_RECOVERED, rule=CALIBRATION_RULE):
     """robustness_delta v4: DIFFERENTIAL degradation under one corruption event, in PERCENTAGE
     POINTS (the API contract's unit — accuracy differences scale by 100 exactly as the
     comprehension branch's do).
@@ -1847,13 +1999,16 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
             return None
     det = acc(calib, planted_arm, "baseline")
     und = acc(calib, "english" if planted_arm != "english" else "ainglish", "baseline")
-    if det is None or und is None or (det - und) < min_gap:
-        print(f"CALIBRATION FAILED: planted-effect gap {det} vs {und} at baseline — this panel "
-              "cannot read the intact forms, so corrupted misses would be unattributable. No "
-              f"measurement emitted, and no real cell was bought ({len(items) * len(panel) * 4} saved).")
+    verdict = calibration_verdict(det, und, min_gap, min_recovered, rule)
+    if not verdict["passed"]:
+        print(f"CALIBRATION FAILED ({verdict['failure']}): {calibration_failure_detail(verdict)} "
+              "at baseline — this panel cannot read the intact forms, so corrupted misses would "
+              "be unattributable. No measurement emitted, and no real cell was bought "
+              f"({len(items) * len(panel) * 4} saved).")
         return None
-    print(f"calibration: planted arm {det:.2f} vs other {und:.2f} — panel can read the intact "
-          f"forms. {len(items) * len(panel) * 4} real cells to go.")
+    print(f"calibration: planted arm {det:.2f} vs other {und:.2f} — recovered "
+          f"{verdict['recovered']:.2f} of {verdict['headroom']:.2f} headroom; panel can read the "
+          f"intact forms. {len(items) * len(panel) * 4} real cells to go.")
 
     if not buy(items, ("baseline", "corrupted")):
         return None
@@ -1965,7 +2120,9 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
         "items_sha256": hashlib.sha256(json.dumps(calib, sort_keys=True, separators=(",", ":"),
                                                   ensure_ascii=False).encode()).hexdigest(),
         "counts": {"calibration": len(calib), "real": len(items)},
-        "planted_arm": planted_arm, "min_gap": min_gap, "ordering": "calibration-first",
+        "planted_arm": planted_arm, "min_gap": min_gap,
+        "min_recovered": None if rule == CALIBRATION_RULE_LEGACY else min_recovered,
+        "rule": rule, "ordering": "calibration-first",
     }
     # ROSTER IDENTITY IS name@precision when a precision is declared (@dexagon-ai, M17): the
     # server reconstructs each per_member row's identity as model + '@' + precision and requires
@@ -2027,9 +2184,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=0.5):
         "floor_cells": floors,
         "resample_down": resample,
         "yield_report": yield_report,
-        "calibration": {"planted_arm": planted_arm, "detectable": round(det, 4),
-                        "other": round(und, 4), "gap": round(det - und, 4),
-                        "min_gap": min_gap, "passed": True},
+        "calibration": calibration_receipt(verdict, planted_arm),
         "panel_models": [_labelled(p_) for p_ in panel],
         "panel_members": len(panel),
         "panel_agreement": panel_agreement,
@@ -2064,7 +2219,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     declarations = _validate_panel_declarations(manifest, panel)
     if declarations is None:
         return None
-    planted_arm, calibration_min_gap = declarations
+    planted_arm, calibration_min_gap, calibration_min_recovered, calibration_rule = declarations
 
     replicates_hash = manifest.get("replicates_hash")
     if replicates_hash is not None and (not isinstance(replicates_hash, str)
@@ -2135,7 +2290,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         except SystemExit as exc:
             print(exc)
             return None
-        return run_robustness(manifest, ask_fn, planted_arm, calibration_min_gap)
+        return run_robustness(manifest, ask_fn, planted_arm, calibration_min_gap,
+                              calibration_min_recovered, calibration_rule)
 
     calib = [i for i in items if i.get("calibration")]
     real = [i for i in items if not i.get("calibration")]
@@ -2446,30 +2602,41 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         )
         reader_detectable = reader_acc.get(planted_arm)
         reader_other = reader_acc.get(other_arm)
+        reader_verdict = calibration_verdict(
+            reader_detectable, reader_other, calibration_min_gap, calibration_min_recovered,
+            calibration_rule)
         calibration_by_reader[ep["name"]] = {
             "detectable": reader_detectable,
             "other": reader_other,
-            "gap": (None if reader_detectable is None or reader_other is None
-                    else reader_detectable - reader_other),
+            "gap": reader_verdict["gap"],
+            "headroom": reader_verdict["headroom"],
+            "recovered": reader_verdict["recovered"],
+            "passed": reader_verdict["passed"],
+            "failure": reader_verdict["failure"],
         }
-    if detectable is None or undetectable is None or (detectable - undetectable) < calibration_min_gap:
-        gap = None if detectable is None or undetectable is None else detectable - undetectable
-        message = (f"CALIBRATION FAILED: planted-effect gap {detectable} vs {undetectable} — this "
-                   "panel cannot detect a known difference, so its null on the real items is "
-                   "vacuous. No measurement emitted. (The panel failed its positive control, "
-                   "not the construct.)")
+    verdict = calibration_verdict(detectable, undetectable, calibration_min_gap,
+                                  calibration_min_recovered, calibration_rule)
+    if not verdict["passed"]:
+        # A no-headroom refusal is a control-SET failure, so it must not be filed under the
+        # reason that means "these readers cannot detect a known difference".
+        reason = "control_set" if verdict["failure"] == "no_headroom" else "competence"
+        message = (f"CALIBRATION FAILED ({verdict['failure']}): "
+                   f"{calibration_failure_detail(verdict)}. No measurement emitted. "
+                   + ("(The control set failed, not the panel and not the construct.)"
+                      if verdict["failure"] == "no_headroom"
+                      else "(The panel failed its positive control, not the construct.)"))
         return _panel_refusal(
-            "calibration", "competence", message,
+            "calibration", reason, message,
             attempted_cells["calibration"], 0,
-            {"planted_arm": planted_arm, "detectable": detectable,
-             "other": undetectable, "gap": gap, "min_gap": calibration_min_gap,
-             "by_reader": calibration_by_reader},
+            dict(calibration_receipt(verdict, planted_arm),
+                 failure=verdict["failure"], by_reader=calibration_by_reader),
             instrument_preparation=instrument_preparation_receipt(
                 panel, _manifest_unbound_entry_point(manifest)),
         )
     real_cell_plan = len(real) * len(panel) * (2 if manifest.get("metric") == "learnability" else 1)
-    print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — panel can "
-          f"detect. ctl(planted-items) passes. {real_cell_plan} real cells to go.")
+    print(f"calibration: planted arm {detectable:.2f} vs other {undetectable:.2f} — recovered "
+          f"{verdict['recovered']:.2f} of {verdict['headroom']:.2f} headroom; panel can detect. "
+          f"ctl(planted-items) passes. {real_cell_plan} real cells to go.")
 
     # A unit-interval learnability score needs every declared reader-item entry cell. A hash deal
     # is appropriate for a two-arm delta, but silently scores only a complementary half-sample
@@ -2733,6 +2900,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     spec["calibration"] = {
         "planted_arm": planted_arm,
         "min_gap": calibration_min_gap,
+        "min_recovered": (None if calibration_rule == CALIBRATION_RULE_LEGACY
+                          else calibration_min_recovered),
+        "rule": calibration_rule,
         "ordering": "calibration-first",
         "arm_exposure": "both-arms-per-reader-item",
         "cells": len(calib) * len(panel) * 2,
@@ -2776,10 +2946,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         "metric": metric, "value": value,
         "resample_down": resample,
         "yield_report": yield_report,
-        "calibration": {"planted_arm": planted_arm, "detectable": round(detectable, 4),
-                        "other": round(undetectable, 4),
-                        "gap": round(detectable - undetectable, 4),
-                        "min_gap": calibration_min_gap, "passed": True},
+        "calibration": calibration_receipt(verdict, planted_arm),
         "value_lo": round(lo, 4) if lo is not None else None,
         "value_hi": round(hi, 4) if hi is not None else None,
         "arms": arms,
@@ -3518,9 +3685,14 @@ def selftest():
     assert m["yield_report"]["cells"] == (8 + 4 * 2) * 2, \
         "real rows buy one arm/read; calibration rows buy both arms/read"
     assert m["calibration"] == {"planted_arm": "ainglish", "detectable": 1.0, "other": 0.0,
-                                "gap": 1.0, "min_gap": 0.5, "passed": True}
+                                "gap": 1.0, "headroom": 1.0, "recovered": 1.0,
+                                "min_gap": CALIBRATION_MIN_GAP,
+                                "min_recovered": CALIBRATION_MIN_RECOVERED,
+                                "rule": CALIBRATION_RULE, "passed": True}
     assert m["manifest"]["calibration"] == {
-        "planted_arm": "ainglish", "min_gap": 0.5, "ordering": "calibration-first",
+        "planted_arm": "ainglish", "min_gap": CALIBRATION_MIN_GAP,
+        "min_recovered": CALIBRATION_MIN_RECOVERED, "rule": CALIBRATION_RULE,
+        "ordering": "calibration-first",
         "arm_exposure": "both-arms-per-reader-item", "cells": 16,
     }, "the committed manifest must disclose the full positive-control exposure"
     assert m["manifest"]["items"] == items and "items_url" not in m["manifest"], \
@@ -4301,6 +4473,149 @@ def selftest():
     assert len(asked) == len([i for i in items if i.get("calibration")]) * len(bad["panel"]) * 2, \
         "exactly the calibration cells should have been spent"
 
+    # ---- HEADROOM-RELATIVE CALIBRATION GATE ----------------------------------------------
+    # The superseded gate compared the ABSOLUTE gap against a constant 0.5. But the largest gap a
+    # control set can produce is 1 - other, and the unplanted arm's floor is set by the CONSTRUCT:
+    # on a disambiguation item the bare form still leaks enough context to be answered correctly
+    # about half the time, so the maximum attainable gap is about 0.5 and the bar was unreachable
+    # however well the marker was read. Two agents hit this independently on frozen sets whose
+    # planted arms scored 0.92 and 1.00, each buying ZERO real cells. These cases pin the fix.
+    hr_calib = [
+        {"id": f"hc{k}", "calibration": True,
+         "english": f"Signal {k} cleared.",
+         "ainglish": f"Signal {k} cleared wit(counterparty-settled).",
+         "question": "Did a counterparty settle this?",
+         "options": ["yes", "cannot tell"], "answer": "yes"}
+        for k in range(8)
+    ]
+    hr_real = [
+        {"id": f"hr{k}",
+         "english": f"Batch {k} completed, and the evidence generator is of class process-ran.",
+         "ainglish": f"Batch {k} completed wit(process-ran).",
+         "question": "What class is the evidence generator?",
+         "options": ["process-ran", "visible", "cannot tell"], "answer": "process-ran"}
+        for k in range(4)
+    ]
+    hr_good = {"construct": "headroom-demo", "slug": "headroom-demo",
+               "metric": "comprehension_accuracy_delta", "seed": 11,
+               "items": hr_calib + hr_real,
+               "panel": [{"name": "reader-a"}, {"name": "reader-b"}]}
+
+    def hr_reader(planted_right, bare_right):
+        """A panel answering exactly planted_right/8 planted and bare_right/8 unplanted cells."""
+        def ask_(ep, text, q, options):
+            if text.startswith("Signal "):
+                k = int(text.split(" ")[1])
+                return "yes" if k < (planted_right if "wit(" in text else bare_right) else "cannot tell"
+            return "process-ran" if "wit(" in text else "cannot tell"
+        return ask_
+
+    # (a) The case both agents actually hit: the marker is read well, the bare arm is merely
+    # informative, and the ABSOLUTE gap can never reach 0.5 because the headroom is only 0.5.
+    admitted = run_panel(dict(hr_good), ask_fn=hr_reader(7, 4))
+    assert admitted is not None and not _is_panel_refusal(admitted), \
+        "planted 0.875 over a bare 0.50 recovers three quarters of the available headroom and " \
+        "must be ADMITTED; the constant-0.5 gate refused this and bought zero real cells"
+    hr_cal = admitted["calibration"]
+    assert (hr_cal["gap"], hr_cal["headroom"], hr_cal["recovered"]) == (0.375, 0.5, 0.75), hr_cal
+    assert hr_cal["rule"] == CALIBRATION_RULE and hr_cal["passed"] is True
+    assert hr_cal["gap"] < 0.5, \
+        "this case is only a regression test while it is one the superseded gate REFUSED"
+
+    # (b) …and the gate still refuses a panel that genuinely cannot read the marker. Same absolute
+    # gap as (a) to within rounding, but over a FULL headroom, so it recovers only 0.375 of what
+    # was there to recover. Absolute gap alone cannot tell (a) and (b) apart; the ratio can.
+    cannot_read = run_panel(dict(hr_good), ask_fn=hr_reader(3, 0))
+    assert _is_panel_refusal(cannot_read) and cannot_read["cause"] == "competence", cannot_read
+    assert cannot_read["details"]["failure"] == "recovered_below_threshold"
+    assert cannot_read["real_cells_attempted"] == 0, "a competence refusal buys no real cell"
+    assert abs(cannot_read["details"]["gap"] - admitted["calibration"]["gap"]) == 0.0, \
+        "(a) and (b) must carry the SAME absolute gap, or this pair proves nothing about the rule"
+
+    # (c) An unplanted arm already at 1.0 leaves no headroom. That is a control-SET design failure
+    # — the items cannot discriminate — and must NOT be filed as "these readers cannot detect".
+    no_room = run_panel(dict(hr_good), ask_fn=hr_reader(8, 8))
+    assert _is_panel_refusal(no_room) and no_room["cause"] == "control_set", no_room
+    assert no_room["details"]["failure"] == "no_headroom"
+    assert no_room["details"]["recovered"] is None, "an undefined ratio must be absent, not 0"
+
+    # (d) A declared absolute floor still binds, so anyone wanting the old strictness keeps it.
+    floored = run_panel(dict(hr_good, calibration_min_gap=0.5), ask_fn=hr_reader(7, 4))
+    assert _is_panel_refusal(floored) and floored["details"]["failure"] == "gap_below_floor", floored
+
+    # (d2) A DECLARED absolute gate is judged under the rule it declared, full stop. @dexagon-ai
+    # found the compatibility claim false on #122: an old runspec declaring calibration_min_gap
+    # 0.25 with planted 0.60 / other 0.30 passed its declared rule (gap 0.30 >= 0.25) and this
+    # branch refused it, because an UNDECLARED min_recovered=0.5 was supplied silently and
+    # 0.30/0.70 = 0.4286. Case (d) hid it: at a declared 0.5, gap >= 0.5 already implies
+    # recovered >= 0.5, so the one threshold that cannot expose the bug was the one under test.
+    # A pre-registered gate must not gain a second condition after the fact.
+    legacy = calibration_verdict(0.60, 0.30, 0.25, rule=CALIBRATION_RULE_LEGACY)
+    assert legacy["passed"] and legacy["rule"] == CALIBRATION_RULE_LEGACY, legacy
+    assert legacy["min_recovered"] is None, \
+        "a rule that does not apply a threshold must not report one"
+    assert calibration_verdict(0.60, 0.30, 0.25)["passed"] is False, \
+        "the headroom rule genuinely refuses this panel — the fix is honouring the DECLARATION"
+    # …and it is the declaration that selects it, end to end through run_panel.
+    declared_only_gap = run_panel(dict(hr_good, calibration_min_gap=0.25), ask_fn=hr_reader(4, 2))
+    assert declared_only_gap is not None and not _is_panel_refusal(declared_only_gap), \
+        "declaring calibration_min_gap alone must re-run under the absolute gate it declared"
+    assert declared_only_gap["calibration"]["rule"] == CALIBRATION_RULE_LEGACY
+    assert declared_only_gap["manifest"]["calibration"]["rule"] == CALIBRATION_RULE_LEGACY, \
+        "the manifest must disclose WHICH gate judged the run, not the SDK's current preference"
+    # Declaring the new threshold too opts into the two-part rule, and it then binds.
+    # The SAME panel and the SAME absolute threshold: planted 0.50 over other 0.25 is gap 0.25 on
+    # a 0.75 headroom, so it clears the declared 0.25 and recovers only 0.333. The one difference
+    # is whether the second threshold was DECLARED, which is exactly the property under test.
+    both = run_panel(dict(hr_good, calibration_min_gap=0.25, calibration_min_recovered=0.5),
+                     ask_fn=hr_reader(4, 2))
+    assert _is_panel_refusal(both) and both["details"]["failure"] == "recovered_below_threshold", both
+
+    # (e) The gate is part of the experiment's identity, so both thresholds and the rule name ride
+    # in the content-addressed manifest: two runs under different gates are different experiments.
+    assert admitted["manifest"]["calibration"]["rule"] == CALIBRATION_RULE
+    assert admitted["manifest"]["calibration"]["min_recovered"] == CALIBRATION_MIN_RECOVERED
+    try:
+        from ainglish.client import manifest_commitment as _gate_commitment
+    except ImportError:
+        print("selftest note: gate-threshold commitment round-trip SKIPPED — standalone file, no "
+              "ainglish.client; the manifest.calibration asserts above still pin the exposure.")
+    else:
+        assert _gate_commitment(admitted["manifest"]) != _gate_commitment(
+            dict(admitted["manifest"], calibration=dict(admitted["manifest"]["calibration"],
+                                                        min_recovered=0.25))), \
+            "changing a gate threshold must change the manifest hash"
+
+    # (f) The five readers two agents actually paid for, as unit cases. The rule admits the four
+    # whose planted arm was read cleanly and still refuses the one that could not read the marker.
+    for name, det_, oth_, expected in (
+            ("rosetta/deepseek-v4-flash", 0.9167, 0.5, True),
+            ("qwen3.8-flash", 1.0, 0.4, True),
+            ("glm-5.3-flash", 1.0, 0.6, True),
+            ("deepseek-v4-flash", 0.9167, 0.5, True),
+            ("gemini-3.7-flash", 0.4167, 0.0, False)):
+        assert calibration_verdict(det_, oth_)["passed"] is expected, \
+            f"{name}: {calibration_verdict(det_, oth_)}"
+    assert calibration_verdict(0.99, 0.95)["failure"] == "gap_below_floor", \
+        "a ratio ALONE would pass a four-point gap over an unplanted arm at 0.95; the floor stops it"
+    # (g) A run that meets a threshold EXACTLY must be admitted. Real numbers from Rosetta's
+    # 12-item probe: planted 8/12, unplanted 4/12 (chance on three options), so recovered is
+    # exactly 1/2 — and 8/12 - 4/12 over 1 - 4/12 evaluates to 0.49999999999999994, short of the
+    # threshold by 5.6e-17. A bare `<` refused it AFTER the calibration cells were paid for,
+    # which is the worst moment to be told an unexplainable no.
+    from fractions import Fraction as _F
+    assert (_F(8, 12) - _F(4, 12)) / (1 - _F(4, 12)) == _F(1, 2), "the exact value is one half"
+    assert (8 / 12 - 4 / 12) / (1 - 4 / 12) < CALIBRATION_MIN_RECOVERED, \
+        "…and the float evaluation really is below it, or this case tests nothing"
+    knife_edge = calibration_verdict(8 / 12, 4 / 12)
+    assert knife_edge["passed"], f"a panel exactly at the threshold must be admitted: {knife_edge}"
+    assert calibration_verdict(0.5 - 1e-3, 0.0)["passed"] is False, \
+        "the boundary tolerance must not admit a panel that misses by a real margin"
+    assert calibration_verdict(0.5 + 1e-3, 0.0)["passed"], \
+        "…and must still admit one that clears it by the same margin"
+    assert calibration_verdict(None, 0.5)["failure"] == "incomplete"
+    assert calibration_verdict(0.5, 1.0)["failure"] == "no_headroom"
+
     # Reordering must not move a number: arms are dealt per (seed, panelist, item), so execution
     # order is not part of the estimator. A refactor that silently re-deals arms would look like
     # a passing selftest and a changed result.
@@ -4522,7 +4837,7 @@ def selftest():
 
     attempt_spec = {"slug": "selftest", "attempt": {
         "estimand": "difference in comprehension accuracy",
-        "admissibility_gates": ["planted calibration gap >= 0.5"],
+        "admissibility_gates": ["live-cell yield passes"],
         "planned_sample": {"items": len(items), "readers": len(good["panel"]), "arms": 2},
     }}
 
@@ -4544,6 +4859,20 @@ def selftest():
             "the exact preregistered manifest, not a lookalike, must ride in the measurement"
         assert _HARNESS_ATTEMPT_GATES[1] in events[0][2]["admissibility_gates"], \
             "the clean-transport assumption must be an explicit gate"
+        # The minted attempt must name the gate that ACTUALLY judged the run. A hand-written
+        # "planted calibration gap >= 0.5" survived here while the default became a two-part
+        # rule, so an attempt could claim a stricter gate than the one applied and then file a
+        # measurement the claimed gate would have refused (@dexagon-ai, #122).
+        minted_gates = events[0][2]["admissibility_gates"]
+        assert calibration_gate_statement(good) in minted_gates, \
+            f"the effective calibration gate must be frozen into the attempt: {minted_gates}"
+        assert CALIBRATION_RULE in calibration_gate_statement(good), \
+            "the frozen statement must name the rule, not just its numbers"
+        assert not any("gap >= 0.5" in gate for gate in minted_gates), \
+            "no attempt may claim the superseded constant-0.5 gate while a different gate runs"
+        assert calibration_gate_statement(dict(good, calibration_min_gap=0.25)) == \
+            f"calibration gate {CALIBRATION_RULE_LEGACY}: planted-effect gap >= 0.25", \
+            "a declared absolute gate must preregister as the absolute gate it will be judged by"
 
         receipt_events = []
         with tempfile.TemporaryDirectory() as receipt_dir:
@@ -5175,7 +5504,7 @@ _HARNESS_ATTEMPT_GATES = (
 )
 
 
-def _attempt_settings(raw):
+def _attempt_settings(raw, effective_gates=()):
     """Validate the optional runspec attempt block before minting or buying a reader cell."""
     if not isinstance(raw, dict):
         raise SystemExit("REFUSING: runspec.attempt must be an object, or be omitted entirely.")
@@ -5200,7 +5529,7 @@ def _attempt_settings(raw):
     # admissibility gate whether or not a runspec author remembered to spell it out, so freeze it
     # explicitly rather than abort later under an undeclared condition.
     frozen_gates = list(gates)
-    for gate in _HARNESS_ATTEMPT_GATES:
+    for gate in (*_HARNESS_ATTEMPT_GATES, *effective_gates):
         if gate not in frozen_gates:
             frozen_gates.append(gate)
     return {"estimand": estimand.strip(), "admissibility_gates": frozen_gates,
@@ -5479,7 +5808,7 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     import contextlib
     from ainglish.client import AinglishError, manifest_commitment
 
-    settings = _attempt_settings(spec["attempt"])
+    settings = _attempt_settings(spec["attempt"], (calibration_gate_statement(manifest),))
     _validate_real_reader_configuration(manifest, ask_fn)
     if ask_fn is ask:
         prepare_reader_instruments(manifest)

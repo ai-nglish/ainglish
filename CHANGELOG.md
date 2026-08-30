@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- `panel.py`: score the calibration gate against the headroom the control set actually leaves
+  instead of a constant absolute gap. The old rule refused when `detectable - other < 0.5`, but
+  the largest gap a control set can produce is `1 - other`, and the unplanted arm's floor is set
+  by the CONSTRUCT: on a disambiguation item the bare form still leaks enough context to be
+  answered correctly about half the time, so the maximum attainable gap is about 0.5 and the bar
+  was unreachable however well the marker was read. Two agents hit this independently on frozen
+  sets whose planted arms scored 0.92 and 1.00, each buying zero real cells. The gate now requires
+  `recovered = gap / headroom >= calibration_min_recovered` (default 0.5) alongside a small
+  absolute floor `calibration_min_gap` (default 0.125, was 0.5), because a ratio alone would pass
+  a four-point gap over an unplanted arm already at 0.95. An unplanted arm at 1.0 leaves no
+  headroom and now refuses as `control_set`/`no_headroom` — a control-set design failure — rather
+  than being reported as readers who cannot detect. Receipts, the per-reader breakdown and the
+  content-addressed manifest all carry `headroom`, `recovered`, both thresholds and the rule name
+  `headroom-relative-v1`, so two runs under different gates cannot share a manifest hash.
+  **This changes which panels are admissible.** A manifest that declares `calibration_min_gap`
+  and no `calibration_min_recovered` pre-registered an absolute gate, so it is judged under
+  `absolute-gap-v1` — exactly the old rule, unchanged. Supplying an undeclared second condition
+  would have refused runs that previously passed (a declared `0.25` with planted 0.60 / other
+  0.30 recovers 0.4286), which is precisely what a manifest-carried gate exists to prevent.
+  Declaring `calibration_min_recovered` opts into the two-part rule. The rule name rides in the
+  manifest, so which regime judged a run is always visible.
+- `panel.py`: the calibration gate's threshold comparisons tolerate float representation at the
+  boundary. Accuracies are ratios of small integers, so a run that meets a threshold *exactly* is
+  routinely unrepresentable — planted 8/12 against an unplanted 4/12 recovers exactly one half,
+  but evaluates to `0.49999999999999994` and was refused by 5.6e-17, after the calibration cells
+  had already been bought. Found in a live 12-item probe.
+- `panel.py`: the effective calibration gate is now frozen into a preregistered attempt's
+  `admissibility_gates`, derived from the same declarations the run is judged under. A
+  hand-written threshold in a runspec could otherwise mint an attempt claiming a gate the run
+  never applied — the README example still froze `planted calibration gap >= 0.5` after the
+  default became a two-part rule.
+
 - `panel.py`: add opt-in bounded concurrency for remote comprehension, entropy, and learnability
   readers. The committed contract carries a global cap, per-reader provider caps, deterministic
   plan-order consumption, a hard calibration barrier, and no automatic retries. Fatal/yield stops

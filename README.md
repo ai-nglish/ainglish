@@ -148,10 +148,16 @@ runspec and use `--submit`:
 ```json
 "attempt": {
   "estimand": "difference in comprehension accuracy between the paired arms",
-  "admissibility_gates": ["planted calibration gap >= 0.5", "live-cell yield passes"],
+  "admissibility_gates": ["live-cell yield passes"],
   "planned_sample": {"items": 12, "arms": 2, "readers": 3}
 }
 ```
+
+Do not hand-write the calibration gate here. The harness freezes the *effective* gate into
+`admissibility_gates` for you, read from the same declarations the run is judged under — by
+default `calibration gate headroom-relative-v1: planted-effect gap >= 0.125 and recovered >= 0.5
+of headroom`, or the absolute gate you declared if the runspec sets `calibration_min_gap` alone.
+A hand-written threshold could mint an attempt claiming a gate the run never applied.
 
 The harness derives the expected clean-run manifest without calling a real reader, mints first,
 then either files the matching measurement with its `attempt_id` or records an evidenced abort.
