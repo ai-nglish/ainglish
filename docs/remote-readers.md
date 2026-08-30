@@ -148,8 +148,13 @@ export NOUS_API_KEY="$(cat /path/to/mode-600/key-file)"
 
 The preset supplies `https://inference-api.nousresearch.com/v1`, the OpenAI-compatible adapter,
 `NOUS_API_KEY` and the `/models` catalog binding. Equivalent to `provider: openai-compatible` with
-those four fields written out. The key stays in the environment: the runspec and the receipt record
-the variable NAME, never its value.
+those four fields written out.
+
+The key stays in the environment and is read at request time. A runspec that writes `api_key_env`
+explicitly names the variable; **the reader receipt records neither the name nor the value** —
+`reader_receipt()` omits `api_key_env` deliberately, and the selftest asserts that omission. So a
+published receipt says which endpoint and model were used and cannot say which credential opened
+them.
 
 ### The model catalog is public
 
@@ -173,14 +178,26 @@ Several Portal models reason by default, and `deepseek/deepseek-v4-flash` report
 `reasoning_effort: "none"` measurably degrades the instrument. On 10 frozen `none-of / not-all-of`
 items, 2 arms each, same model, same items, `temperature: 0`:
 
-| setting | english | ainglish | delta |
+| setting | english | ainglish | delta over LIVE cells |
 |---|---|---|---|
-| `reasoning_effort` absent (provider default) | 1/10 | 7/9 | **+60.0pp** |
+| `reasoning_effort` absent (provider default) | 2/9 | 10/10 | **+77.8pp** |
 | `reasoning_effort: "none"` | 0/10 | 3/10 | **+30.0pp** |
 
-Disabling reasoning halved the measured effect and cut marker detection from 7/9 to 3/10, with zero
-empty cells in either condition. Set a `max_tokens` that leaves room to think — 1024 was ample — and
-do not disable reasoning to save tokens. (Guidance elsewhere in this project to send
+10 items drawn with seed 11 from a frozen set, both arms, 40 planned cells. One english cell was
+lost to an `HTTPError` in the reasoning-on condition, so that arm's live n is 9; the delta is taken
+over live cells only. Per-cell records, outcomes and costs are pinned at
+`reticuli-labs/panel-artifacts/nous-reasoning-effort-2026-08-30` (`cells.json`).
+
+**Divide by the live n, not the planned n.** An earlier pass of this experiment published +60.0pp by
+scoring both arms against the planned 10 while a transport fault had killed one cell — a censored
+denominator, which is the failure `run_panel`'s yield guard exists to prevent and which is easy to
+reintroduce in a hand-rolled script that bypasses the harness. It fails quietly and in the
+flattering-looking direction: the published number was too *small*, so nothing looked wrong.
+
+Treat the direction as established and the point estimate as a pilot: two passes gave +67.8pp and
++77.8pp for reasoning-on, while the deterministic `"none"` condition gave +30.0pp both times. Set a
+`max_tokens` that leaves room to think — 1024 was ample — and do not disable reasoning to save
+tokens. (Guidance elsewhere in this project to send
 `reasoning_effort: "none"` applies to *local* readers under tight token bounds, where the model
 exhausts its budget before reaching the option list. That is a different failure and does not
 transfer to a remote reader with headroom.)

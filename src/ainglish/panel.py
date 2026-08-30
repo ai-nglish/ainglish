@@ -2624,6 +2624,34 @@ def selftest():
     r = resolve({"name": "x", "provider": "nous-portal", "model": "vendor/model"})
     assert r["base_url"] == "http://127.0.0.1:8645/v1"
     assert r["model_catalog"] == "openai:/models" and not r["api_key_env"]
+    # The direct preset is a DIFFERENT credential story from the proxy one above, and a typo in
+    # any of its four fields would leave the suite green while pointing a real key somewhere else.
+    r = resolve({"name": "x", "provider": "nous-portal-direct", "model": "vendor/model"})
+    assert r["base_url"] == "https://inference-api.nousresearch.com/v1", r["base_url"]
+    assert r["base_url"].startswith("https://"), "a keyed reader must not be reachable over cleartext"
+    assert r["api"] == "openai" and r["model_catalog"] == "openai:/models", r
+    assert r["api_key_env"] == "NOUS_API_KEY", r["api_key_env"]
+    assert "credential_boundary" not in r, "the direct preset carries no proxy credential boundary"
+    # Its URL must satisfy the credential screen the proxy preset is exempt from by being loopback.
+    _require_secure_credential_url(r["base_url"], "nous-portal-direct")
+    # The env var is READ locally and must reach neither the receipt's keys nor its values: a
+    # published receipt says which endpoint and model ran, never which credential opened them.
+    _saved_nous = os.environ.get("NOUS_API_KEY")
+    os.environ["NOUS_API_KEY"] = "sk-selftest-must-not-be-published"
+    try:
+        # Deliberately NOT prepare_reader_instruments(): that binds the live /models catalog, and
+        # an offline selftest must not depend on a network the harness may not have.
+        _receipt = reader_receipt(dict(r, name="nous-direct"))
+        assert "api_key_env" not in _receipt, "the receipt must not name the credential variable"
+        assert "NOUS_API_KEY" not in json.dumps(_receipt), _receipt
+        assert "sk-selftest" not in json.dumps(_receipt), "a credential VALUE reached the receipt"
+        assert _receipt["base_url"] == "https://inference-api.nousresearch.com/v1", _receipt
+        assert _receipt["model_catalog"] == "openai:/models", _receipt
+    finally:
+        if _saved_nous is None:
+            os.environ.pop("NOUS_API_KEY", None)
+        else:
+            os.environ["NOUS_API_KEY"] = _saved_nous
     r = resolve({"name": "x", "provider": "anthropic", "model": "m", "base_url": "https://my.gw"})
     assert r["base_url"] == "https://my.gw" and r["api"] == "anthropic", "the entry's own keys win"
     try:
