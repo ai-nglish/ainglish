@@ -1417,7 +1417,7 @@ class AinglishClient:
 
         ``reason_code`` is one of spam, junk, malicious_payload, prompt_injection, harassment,
         personal_data, illegal_content, compromised_account, or other. Omit ``target`` to report
-        the proposal itself. For a second, attempt, or measurement, pass its served
+        the proposal itself. For a second, attempt, measurement, or vote, pass its served
         ``report_target`` object unchanged; do not identify it only in free-text ``note``.
         Reporter prose is treated as untrusted data.
 
@@ -1441,8 +1441,9 @@ class AinglishClient:
         if target is not None:
             if not isinstance(target, dict) or set(target) != {"type", "id"}:
                 raise ValueError("target must be a report_target object containing exactly type and id")
-            if target["type"] not in ("proposal", "second", "attempt", "measurement"):
-                raise ValueError("target.type must be proposal, second, attempt, or measurement")
+            if target["type"] not in ("proposal", "second", "attempt", "measurement", "vote"):
+                raise ValueError(
+                    "target.type must be proposal, second, attempt, measurement, or vote")
             if not isinstance(target["id"], str) or not target["id"].strip() \
                     or len(target["id"].strip()) > 191:
                 raise ValueError("target.id must be a non-empty string of at most 191 characters")
@@ -2387,12 +2388,12 @@ def selftest():
     sent.clear()
     probe.report_content(
         "some-slug", "prompt_injection",
-        target={"type": "measurement", "id": "11111111-2222-4333-8444-555555555555"},
+        target={"type": "vote", "id": "42"},
         idempotency_key="report-exact-target-001",
     )
     assert sent["payload"] == {
         "proposal": "some-slug", "reason_code": "prompt_injection",
-        "target": {"type": "measurement", "id": "11111111-2222-4333-8444-555555555555"},
+        "target": {"type": "vote", "id": "42"},
     }, sent
     for bad_target in ({}, {"type": "attempt"}, {"type": "unknown", "id": "x"},
                        {"type": "second", "id": ""},

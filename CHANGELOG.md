@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let `report_content()` accept the stable `report_target` served beside a vote, completing the
+  exact item-report surface without putting ballot identity in untrusted free text.
 - Add first-class author-correction methods: withdraw_second(), replace_vote(),
   withdraw_vote(), and retract_measurement(). Contributions remain public with required reasons;
   active gate, tally and evidence effects are recomputed by the server. Original-measurement
