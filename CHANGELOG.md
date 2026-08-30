@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- `panel.py`: add a `nous-portal-direct` reader preset for Nous Portal via an ordinary API key
+  (`https://inference-api.nousresearch.com/v1`, `NOUS_API_KEY`, `/models` catalog binding). The
+  existing `nous-portal` preset is pinned to a Hermes credential-attaching loopback proxy and
+  cannot work on a host without that runtime, which is every Claude Code session, cron job and CI
+  runner; those had to hand-write the base URL.
+- `panel.py`: treat Cloudflare's origin-side statuses `520`-`524` as transport faults. A live Nous
+  Portal panel raised `HTTP 524` out of `run_panel` and lost roughly thirty already-paid cells
+  emitting nothing, because a reasoning reader on a long prompt outlasted the edge's own timeout.
+  A far-side failure must be one typed dead cell with a stated cause, never a dead run.
+- `docs/remote-readers.md`: document the direct API-key path, the public (credential-free) model
+  catalog and its `Python-urllib` User-Agent `403`, measured evidence that `reasoning_effort:
+  "none"` degrades the instrument, and that wall-clock rather than cost is the binding constraint.
+
 - `panel.py`: score the calibration gate against the headroom the control set actually leaves
   instead of a constant absolute gap. The old rule refused when `detectable - other < 0.5`, but
   the largest gap a control set can produce is `1 - other`, and the unplanted arm's floor is set
@@ -43,25 +56,21 @@
 
 ## 0.2.45 — 2026-08-30
 
+> **Correction, 2026-08-30.** Three entries were listed here that this release does not contain:
+> the `nous-portal-direct` preset, the `520`-`524` transport-fault handling, and the
+> `docs/remote-readers.md` rewrite. They belong to PR #119, which merged at 17:43, more than four
+> hours after `v0.2.45` was tagged at 13:28 — its branch wrote them under `## Unreleased`, and the
+> release commit had already renamed that heading, so the merge landed them under a published
+> version. `git show v0.2.45:src/ainglish/panel.py | grep -c nous-portal-direct` returns 0. They
+> have been moved to the release that actually ships them; `pip install ainglish==0.2.45` does not
+> provide them.
+
 - Add `AinglishClient.measurement_template(metric, models=None)`, sourced from the live
   `/protocols` submission contract rather than an SDK-side schema copy. Add a reviewed,
   digest-pinned remote-panel starter fixture whose placeholder target and DRY-RUN stamp make its
   public clusivity items plumbing/calibration data, never settlement evidence.
 - Let `report_content()` accept the stable `report_target` served beside a vote, completing the
   exact item-report surface without putting ballot identity in untrusted free text.
-- `panel.py`: add a `nous-portal-direct` reader preset for Nous Portal via an ordinary API key
-  (`https://inference-api.nousresearch.com/v1`, `NOUS_API_KEY`, `/models` catalog binding). The
-  existing `nous-portal` preset is pinned to a Hermes credential-attaching loopback proxy and
-  cannot work on a host without that runtime, which is every Claude Code session, cron job and CI
-  runner; those had to hand-write the base URL.
-- `panel.py`: treat Cloudflare's origin-side statuses `520`-`524` as transport faults. A live Nous
-  Portal panel raised `HTTP 524` out of `run_panel` and lost roughly thirty already-paid cells
-  emitting nothing, because a reasoning reader on a long prompt outlasted the edge's own timeout.
-  A far-side failure must be one typed dead cell with a stated cause, never a dead run.
-- `docs/remote-readers.md`: document the direct API-key path, the public (credential-free) model
-  catalog and its `Python-urllib` User-Agent `403`, measured evidence that `reasoning_effort:
-  "none"` degrades the instrument, and that wall-clock rather than cost is the binding constraint.
-
 - Add first-class author-correction methods: withdraw_second(), replace_vote(),
   withdraw_vote(), and retract_measurement(). Contributions remain public with required reasons;
   active gate, tally and evidence effects are recomputed by the server. Original-measurement
