@@ -268,6 +268,20 @@ def _reader_cell(endpoint, text, question, options, ask_fn):
         return {"answer": None, "transport_fault": None, "exception": exc}
 
 
+def _reader_plan_cell(plan, ask_fn):
+    """Run one frozen plan row with its stable identity bound to worker-local telemetry."""
+    set_cell_key(plan["index"])
+    try:
+        return _reader_cell(
+            plan["endpoint"], plan["text"], plan["item"]["question"],
+            plan["item"]["options"], ask_fn,
+        )
+    finally:
+        # ThreadPoolExecutor reuses workers. A stale key would silently attach the next cell's
+        # duration and provider bill to the previous plan row, so clearing is part of the join.
+        clear_cell_key()
+
+
 def _execute_cell_plan(plans, ask_fn, contract, consume):
     """Execute a frozen plan with bounded look-ahead and deterministic result consumption.
 
@@ -286,10 +300,7 @@ def _execute_cell_plan(plans, ask_fn, contract, consume):
     global_cap = contract["max_in_flight"]
     if global_cap == 1:
         for plan in plans:
-            outcome = _reader_cell(
-                plan["endpoint"], plan["text"], plan["item"]["question"],
-                plan["item"]["options"], ask_fn,
-            )
+            outcome = _reader_plan_cell(plan, ask_fn)
             summary["started"] += 1
             summary["max_in_flight_observed"] = 1
             summary["per_reader_max_observed"][plan["reader"]] = 1
@@ -320,10 +331,7 @@ def _execute_cell_plan(plans, ask_fn, contract, consume):
                 return
             index = pending.pop(chosen_at)
             plan = plans[index]
-            future = executor.submit(
-                _reader_cell, plan["endpoint"], plan["text"], plan["item"]["question"],
-                plan["item"]["options"], ask_fn,
-            )
+            future = executor.submit(_reader_plan_cell, plan, ask_fn)
             in_flight[future] = index
             active[plan["reader"]] += 1
             summary["max_in_flight_observed"] = max(
@@ -3629,6 +3637,68 @@ def selftest():
         "calibration_barrier": True,
         "automatic_retries": False,
     }, "the committed receipt must carry the exact execution bounds and no-retry rule"
+
+    # Cross-feature contract with usage telemetry (#115): the coordinator consumes in plan order,
+    # while chat() necessarily records provider usage in completion order. Every worker call must
+    # therefore bind the frozen plan index through thread-local storage and clear it before that
+    # worker can be reused. This exercises the real coordinator -> chat() path; direct helper tests
+    # cannot prove the integration exists.
+    _saved_fetch_for_join = globals()["_fetch"]
+    try:
+        def _telemetry_fetch(req, timeout=None):
+            body = json.loads(req.data.decode())
+            prompt = body["messages"][0]["content"]
+            _time.sleep(0.04 if "planned-first-slow" in prompt else 0.002)
+            return {
+                "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+            }
+
+        globals()["_fetch"] = _telemetry_fetch
+        reset_usage()
+        _telemetry_endpoint = {
+            "name": "telemetry-reader", "provider": "openai-compatible", "api": "openai",
+            "base_url": "https://reader.invalid/v1", "model": "fixture-reader",
+        }
+        _telemetry_plans = [
+            {
+                "index": index,
+                "reader": "telemetry-reader",
+                "endpoint": _telemetry_endpoint,
+                "text": "planned-first-slow" if index == 0 else "planned-%d-fast" % index,
+                "item": {"question": "fixture?", "options": ["yes", "no"]},
+            }
+            for index in range(4)
+        ]
+        _consumed_plan_indices = []
+
+        def _consume_telemetry(plan, outcome, scoreable):
+            assert outcome["exception"] is None and outcome["transport_fault"] is None
+            _consumed_plan_indices.append(plan["index"])
+            return None
+
+        _join_stop, _join_execution = _execute_cell_plan(
+            _telemetry_plans,
+            lambda endpoint, text, question, options: chat(endpoint, text)[0],
+            {
+                "max_in_flight": 2,
+                "per_reader_max_in_flight": {"telemetry-reader": 2},
+            },
+            _consume_telemetry,
+        )
+        _usage_rows = usage_report()["cell_records"]
+        assert _join_stop is None and _join_execution["started"] == 4
+        assert _consumed_plan_indices == [0, 1, 2, 3], \
+            "the estimator must still consume the deterministic plan order"
+        assert [row["key"] for row in _usage_rows[:2]] == [1, 0], \
+            "the fast planned-second cell must demonstrate completion-order telemetry"
+        assert [row["key"] for row in sorted(_usage_rows, key=lambda row: row["key"])] == [0, 1, 2, 3], \
+            "every real concurrent usage row must join back to exactly one frozen plan index"
+        assert all(row["key"] is not None for row in _usage_rows), \
+            "the coordinator must never leave concurrent provider usage unkeyed"
+    finally:
+        globals()["_fetch"] = _saved_fetch_for_join
+        reset_usage()
 
     fault_item = next(item for item in items if not item.get("calibration"))
     fault_arm = arm_for(good["seed"], "reader-a", fault_item["id"])
