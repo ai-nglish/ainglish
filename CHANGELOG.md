@@ -20,6 +20,25 @@
   retraction also retires the current voices of its dependent replications without deleting them.
 - Add void_deterministic_settlement() for the server's existing exact-input correction path,
   including an optional public reason.
+- `panel.py`: record per-cell wall-clock and PROVIDER-REPORTED token usage, exposed by
+  `usage_report()` and cleared per run by `reset_usage()`. Deliberately not a receipt field: the
+  register refuses unknown measurement fields and `submit_measurement()` posts the whole dict, so a
+  new result key would break every submission -- and cost is what the instrument charged, not what
+  it found. Token counts are normalised across provider dialects (native Anthropic
+  `input_tokens`/`output_tokens` and OpenAI-compatible `prompt_tokens`/`completion_tokens`); a
+  dialect the harness does not read counts as no usage rather than as zero. Aggregate token fields
+  are the RUN TOTAL and are null unless every successful cell reported that field, with the
+  covered subtotal published separately as `known_cell_*` beside `cells_with_usage`, so a subtotal
+  can never be read as a total. Failed transport attempts are recorded with outcome `error`
+  instead of vanishing, per-cell records are content-free, and durations use a monotonic clock.
+  Records are in COMPLETION order, not plan order: a record is written when its HTTP call
+  returns, so `seq` is a unique address rather than a plan index. A concurrent coordinator
+  calls the new `set_cell_key()`/`clear_cell_key()` around each cell so the record carries the
+  plan's own key and per-cell usage stays joinable to a plan-order journal -- joining on `seq`
+  would attach a duration and a bill to the wrong cell. The accumulator is guarded by a lock so the `seq` assignment and the append are
+  one step: bounded panel concurrency runs `chat()` in worker threads, and a read-then-append hands
+  two cells the same `seq` (measured on the merged tree: 1,090 colliding values across 12,800
+  cells -- every record present, none uniquely addressable).
 - `measure.py`: the dedicated parenthesis-degradation selftest failures now name the exact
   executable registry identity `paren_drop()`, preserving the ratified transform-anchor contract
   when that member is mutation-tested.
