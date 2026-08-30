@@ -256,31 +256,63 @@ def item_verdict(item):
     }
 
 
-_PREDICATE_FUNCTIONS = ("record_arithmetic", "surface_facts", "readings_consistent_with",
-                       "item_verdict")
+# THE BEHAVIOURAL CLOSURE the receipt commits to. Getting this list wrong is the whole failure
+# mode: the first version named four functions and omitted `set_signature` itself, both helpers,
+# every regex, the direction lexicon and the reading constants. @dexagon-ai demonstrated the
+# consequence on #123 -- replacing `_ENDPOINTS` with a never-matching pattern flipped a verdict
+# from admissible to inadmissible while the digest stayed byte-identical. A digest that misses the
+# thing it certifies is worse than none, because it advertises a guarantee it does not hold.
+_PREDICATE_FUNCTIONS = (
+    "_fraction", "_numbers", "record_arithmetic", "surface_facts",
+    "readings_consistent_with", "item_verdict", "set_signature",
+)
+# Pinned so that (a) a predicate change forces a deliberate acknowledgement rather than a silent
+# re-key, and (b) CI running the selftest on 3.9 and 3.12 proves the digest is interpreter-
+# independent instead of asserting it. Update it only when the predicate genuinely changed.
+PREDICATE_SHA256 = "0437e1643ff4213eb58e51fd861ef83b878812e0175a00cb96fa0eb6e317a5cd"
+_PREDICATE_PATTERNS = ("_POINT_FORM", "_BARE_PERCENT", "_ENDPOINTS")
+_PREDICATE_CONSTANTS = ("READING_POINT", "READING_RELATIVE", "READING_UNDETERMINED",
+                        "READINGS", "_DIRECTIONS")
 
 
 def predicate_digest():
     """A digest of the admissibility PREDICATE ITSELF, so a receipt is bound to its rule.
 
-    @dantic's requirement on the thread: a version string is not enough if the implementation can
-    change while the string stays `v1`. A frozen record re-keyed under a revised predicate would
-    then be indistinguishable from one keyed under the original. Hashing the parsed source of the
-    functions that decide admissibility makes any behavioural revision change every receipt it
-    produces, automatically and without anyone remembering to bump a number.
+    @dantic's requirement: a version string binds nothing if the implementation can change while
+    the string stays `v1`. A frozen record re-keyed under a revised predicate would then be
+    indistinguishable from one keyed under the original.
 
-    The AST is hashed rather than the text, so reformatting and comments do not churn the digest
-    while a changed comparison or threshold does.
+    Two properties this has to have, and the first version had neither:
+
+    COMPLETE. Everything the verdict depends on is hashed -- every function in the closure
+    including `set_signature`, both helpers, each regex's live pattern AND flags, the direction
+    lexicon, and the reading constants. Hashing the LIVE regex objects rather than only their
+    source also catches substitution at runtime, which is how the gap was demonstrated.
+
+    INTERPRETER-INDEPENDENT. Function SOURCE TEXT is hashed, not an AST dump. `ast.dump()` is not
+    a documented cross-version canonical form, and this package supports 3.9 through 3.12; a
+    digest that differed by interpreter would make two honest agents produce different receipts
+    for the same rule. Source text is file bytes and cannot vary that way. The selftest pins the
+    expected digest, so CI running both interpreters proves the parity mechanically rather than
+    asserting it.
+
+    The cost is that a comment edit inside a hashed function changes the digest. That is the right
+    direction to be wrong in: a conservative digest raises a false alarm, an incomplete one grants
+    a false assurance. The earlier version chose convenience and missed a regex.
     """
-    import ast as _ast
     import inspect as _inspect
     module = sys.modules[__name__]
-    dumps = []
+    parts = ["ainglish.comparator-signature.v1"]
     for name in _PREDICATE_FUNCTIONS:
-        source = _inspect.getsource(getattr(module, name))
-        tree = _ast.parse(textwrap.dedent(source))
-        dumps.append(_ast.dump(tree, annotate_fields=True, include_attributes=False))
-    return hashlib.sha256("\n".join(dumps).encode("utf-8")).hexdigest()
+        parts.append("def:" + name)
+        parts.append(textwrap.dedent(_inspect.getsource(getattr(module, name))))
+    for name in _PREDICATE_PATTERNS:
+        pattern = getattr(module, name)
+        parts.append("re:%s:%s:%d" % (name, pattern.pattern, int(pattern.flags)))
+    for name in _PREDICATE_CONSTANTS:
+        parts.append("const:%s:%s" % (
+            name, json.dumps(getattr(module, name), sort_keys=True, default=str)))
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 def set_signature(items):
@@ -464,9 +496,18 @@ def selftest():
     digest = predicate_digest()
     assert len(digest) == 64 and set_signature(good)["predicate_sha256"] == digest
     assert digest == predicate_digest(), "the digest must be stable across calls"
-    # …and it must actually be DERIVED from the predicate source. A hardcoded constant would be
-    # stable and 64 characters too, and would satisfy every assertion above while binding nothing.
-    global _PREDICATE_FUNCTIONS
+    # PINNED. Two jobs. It forces an explicit acknowledgement whenever the predicate changes --
+    # which is what a version binding is for -- and because CI runs this selftest on both 3.9 and
+    # 3.12, an interpreter-dependent digest fails on one of them. That is a MECHANICAL proof of
+    # the cross-version parity @dexagon-ai asked for, rather than an assertion that it holds.
+    assert digest == PREDICATE_SHA256, (
+        "the predicate changed (or differs by interpreter). If the change was intended, update "
+        "PREDICATE_SHA256 deliberately -- that acknowledgement is the point.\n  expected %s\n  "
+        "actual   %s" % (PREDICATE_SHA256, digest))
+
+    # DERIVED, not constant: a hardcoded 64-character string would be stable and would satisfy
+    # every assertion above while binding nothing.
+    global _PREDICATE_FUNCTIONS, _ENDPOINTS, _DIRECTIONS
     original = _PREDICATE_FUNCTIONS
     try:
         _PREDICATE_FUNCTIONS = ("record_arithmetic",)
@@ -475,6 +516,30 @@ def selftest():
     finally:
         _PREDICATE_FUNCTIONS = original
     assert predicate_digest() == digest, "and must return to the original once restored"
+
+    # COMPLETE: a dependency OUTSIDE the originally-hashed functions must move the digest.
+    # This is @dexagon-ai's exact reproduction on #123 — swapping the module's endpoint pattern
+    # flipped a verdict from admissible to inadmissible while the digest stayed byte-identical,
+    # because `_ENDPOINTS` was not part of the closure the receipt claimed to certify.
+    original_endpoints = _ENDPOINTS
+    try:
+        _ENDPOINTS = re.compile(r"(?!x)x")   # never matches: endpoints become invisible
+        assert set_signature(good)["set_admissible"] is False, \
+            "the substituted pattern must genuinely change the verdict, or this proves nothing"
+        assert predicate_digest() != digest, \
+            "a live regex substitution changes admissibility and MUST change the digest"
+    finally:
+        _ENDPOINTS = original_endpoints
+    assert predicate_digest() == digest and set_signature(good)["set_admissible"]
+
+    original_directions = _DIRECTIONS
+    try:
+        _DIRECTIONS = (("rose", ("rose",)), ("fell", ("fell",)), ("held", ("held",)))
+        assert predicate_digest() != digest, \
+            "the direction lexicon decides a refusal, so it belongs in the closure"
+    finally:
+        _DIRECTIONS = original_directions
+    assert predicate_digest() == digest
 
     # (8) The set-level signature reports the contrast rather than asserting it.
     mixed = set_signature(good + drifted)

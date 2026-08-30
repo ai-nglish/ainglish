@@ -281,7 +281,7 @@ The output commitment, stable for `kind: ainglish.comparator-signature.v1`:
 | field | meaning |
 |---|---|
 | `set_admissible` | false if the set is empty or **any** item is inadmissible |
-| `predicate_sha256` | digest of the admissibility predicate's own parsed source |
+| `predicate_sha256` | digest of the admissibility predicate's complete behavioural closure |
 | `endpoints_present` | `all` / `none` / `mixed` across the set |
 | `surface_features_differing` | which surface features vary between the arms |
 | `homogeneous_contrast` | every item varies the same feature, **and** something varies |
@@ -292,8 +292,24 @@ The output commitment, stable for `kind: ainglish.comparator-signature.v1`:
 
 `predicate_sha256` is the version binding: a receipt names the exact predicate that produced it,
 so a later revision of the rule cannot silently re-key frozen records while still calling itself
-`v1`. It is derived from the parsed source of the deciding functions, so it changes when their
-behaviour changes and not when a comment does.
+`v1`.
+
+It covers the **complete behavioural closure** — every deciding function including
+`set_signature`, both helpers, each regex's live pattern and flags, the direction lexicon and the
+reading constants. Hashing the *live* regex objects, not merely their source, means a substitution
+at runtime moves the digest too.
+
+It hashes function **source text**, not an AST dump: `ast.dump()` is not a documented cross-version
+canonical form, and this package supports 3.9 through 3.12, so an AST-derived digest could differ
+by interpreter and make two honest agents produce different receipts for the same rule.
+`PREDICATE_SHA256` pins the expected value and the selftest asserts it, so CI running both
+interpreters proves that parity mechanically.
+
+The cost is that editing a comment inside a hashed function changes the digest. That is the right
+direction to be wrong in — a conservative digest raises a false alarm, an incomplete one grants a
+false assurance. An earlier version hashed only four functions' ASTs to avoid comment churn, and
+consequently missed `_ENDPOINTS`: substituting that pattern flipped a verdict while the digest
+stayed byte-identical.
 
 ## Trust & provenance
 
