@@ -58,6 +58,8 @@ import ipaddress
 import json
 import math
 import re
+import threading
+import time
 import os
 import random
 import socket
@@ -637,6 +639,176 @@ def reader_receipt(endpoint):
     return out
 
 
+# Per-cell instrument telemetry. Deliberately NOT part of a measurement receipt: the register
+# refuses unknown measurement fields, and submit_measurement() posts the whole dict, so a new
+# result key would break every submission. Cost and latency are also not evidence -- they say what
+# the instrument charged, not what it found. Kept beside the run instead, where an experimenter can
+# read it without a hand-rolled wrapper around chat(), which is what everyone has had to write so
+# far (Rosetta rebuilt exactly this to answer "what did the panel cost").
+_CELL_TELEMETRY: list = []
+_CELL_RECORD_CAP = 5000     # the RETURNED records are bounded; the aggregates stay exact
+# `seq` is assigned from len(_CELL_TELEMETRY), which is a READ-THEN-APPEND. list.append is atomic
+# under the GIL so no cell is ever lost, but the read and the append are not one step: under the
+# bounded panel concurrency in #117, chat() runs in worker threads and two cells can be handed the
+# same seq. Measured on the merged tree with sys.setswitchinterval(1e-6): 1,090 colliding seq
+# values across 12,800 cells -- every cell present, none uniquely addressable.
+_CELL_TELEMETRY_LOCK = threading.Lock()
+# A caller-supplied identity for the cell currently being bought ON THIS THREAD. `seq` is a
+# COMPLETION counter -- chat() records after the response returns -- so under bounded concurrency a
+# slow planned-first cell lands after a fast planned-second one and `seq` is not a plan index.
+# Joining usage back to a plan-order journal on `seq` would therefore attach a duration and a bill
+# to the wrong cell. A coordinator sets this around each cell so the record carries the plan's own
+# key; thread-local because each cell runs start-to-finish inside one worker thread.
+_CELL_CONTEXT = threading.local()
+
+
+def set_cell_key(key) -> None:
+    """Attach an immutable caller key to cells recorded on this thread until cleared.
+
+    Intended for a concurrent coordinator: pass the frozen plan index (or any stable cell id) so
+    `usage_report()` records can be joined to the plan-order journal without relying on `seq`.
+    """
+    _CELL_CONTEXT.key = key
+
+
+def clear_cell_key() -> None:
+    """Drop this thread's caller key. Serial callers never need either function."""
+    _CELL_CONTEXT.key = None
+
+# Providers name the same two quantities differently, and reading only one dialect turns a real
+# count into a confident zero -- the exact failure this telemetry exists to prevent. Anthropic's
+# native Messages API reports input_tokens/output_tokens; OpenAI-compatible reports
+# prompt_tokens/completion_tokens. A dialect we do not read yields None (unknown), never 0.
+_USAGE_ALIASES = (("prompt_tokens", ("prompt_tokens", "input_tokens")),
+                  ("completion_tokens", ("completion_tokens", "output_tokens")))
+
+
+def _normalise_usage(data):
+    """The provider `usage` block as {prompt_tokens, completion_tokens}, or None if it reported none.
+
+    A field the provider did not report stays None. None means unknown and is never coerced to 0,
+    because a zero meaning "unknown" is the shape that gets quoted back as a cost. A usage block
+    written in a dialect this function does not read is treated as no usage at all, so it lands in
+    cells_without_usage rather than being silently totalled as zero.
+    """
+    usage = data.get("usage") if isinstance(data, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    out = {}
+    for canonical, aliases in _USAGE_ALIASES:
+        value = None
+        for alias in aliases:
+            raw = usage.get(alias)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                continue
+            value = int(raw)
+            break
+        out[canonical] = value
+    if out["prompt_tokens"] is None and out["completion_tokens"] is None:
+        return None
+    return out
+
+
+def reset_usage() -> None:
+    """Clear per-cell telemetry. Called by run_panel so each run reports only its own cells."""
+    with _CELL_TELEMETRY_LOCK:
+        _CELL_TELEMETRY.clear()
+
+
+def usage_report():
+    """Per-reader wall-clock and PROVIDER-REPORTED token usage for the cells bought so far.
+
+    Tokens come from the provider's own `usage` block, never from a local estimate: an estimate
+    would be a second opinion about someone else's bill.
+
+    `prompt_tokens` / `completion_tokens` are RUN TOTALS, and are therefore None unless every
+    counted cell reported that field. A subtotal presented as a total is a wrong number, not a
+    partial one. The subtotal over the cells that did report is still published as
+    `known_cell_prompt_tokens` / `known_cell_completion_tokens` beside `cells_with_usage`, so
+    nothing is hidden and nothing can be read as complete when it is not.
+
+    Failed transport attempts ARE represented: they appear as records with outcome "error", are
+    counted in `failed_cells` and in `wall_s`, and are excluded from the usage denominators
+    (an attempt that never returned a response has no usage to report).
+
+    `cell_records` are content-free and in **completion order**, bounded to _CELL_RECORD_CAP with
+    the remainder counted in `cell_records_omitted`; aggregates always cover every cell. They carry
+    no prompt or answer text -- only reader, outcome, duration, provider usage and an optional
+    caller key.
+
+    ORDERING, precisely, because getting this wrong attaches a bill to the wrong cell: a record is
+    written when its HTTP call RETURNS, so `seq` counts completions. Serially that equals plan
+    order; under bounded concurrency it does not, and a slow planned-first cell lands after a fast
+    planned-second one. `seq` is therefore a unique address, never a plan index.
+
+    A concurrent coordinator should call `set_cell_key(plan_index)` around each cell. The record
+    then carries `key`, and plan order is recovered by sorting on it -- which is what makes the
+    per-cell usage joinable to a plan-order journal. `key` stays null unless a coordinator sets it.
+    """
+    per = {}
+    with _CELL_TELEMETRY_LOCK:
+        rows = list(_CELL_TELEMETRY)   # one consistent snapshot; appends during a report are fine
+    for row in rows:
+        acc = per.setdefault(row["reader"], {
+            "cells": 0, "failed_cells": 0, "cells_with_usage": 0, "cells_without_usage": 0,
+            "wall_s": 0.0, "known_cell_prompt_tokens": 0, "known_cell_completion_tokens": 0,
+            "_prompt_known": 0, "_completion_known": 0, "_ok": 0})
+        acc["cells"] += 1
+        acc["wall_s"] = round(acc["wall_s"] + row["wall_s"], 3)
+        if row["outcome"] != "ok":
+            acc["failed_cells"] += 1
+            continue
+        acc["_ok"] += 1
+        usage = row["usage"]
+        if usage is None:
+            acc["cells_without_usage"] += 1
+            continue
+        acc["cells_with_usage"] += 1
+        if usage["prompt_tokens"] is not None:
+            acc["known_cell_prompt_tokens"] += usage["prompt_tokens"]
+            acc["_prompt_known"] += 1
+        if usage["completion_tokens"] is not None:
+            acc["known_cell_completion_tokens"] += usage["completion_tokens"]
+            acc["_completion_known"] += 1
+    for acc in per.values():
+        ok = acc.pop("_ok")
+        prompt_known = acc.pop("_prompt_known")
+        completion_known = acc.pop("_completion_known")
+        # A total is only a total when every successful cell reported the field.
+        acc["prompt_tokens"] = acc["known_cell_prompt_tokens"] if ok and prompt_known == ok else None
+        acc["completion_tokens"] = (acc["known_cell_completion_tokens"]
+                                    if ok and completion_known == ok else None)
+        acc["usage_complete"] = bool(ok) and prompt_known == ok and completion_known == ok
+        acc["mean_wall_s"] = round(acc["wall_s"] / acc["cells"], 3) if acc["cells"] else None
+    return {"kind": "ainglish.panel.usage-report.v2",
+            "cells": len(rows),
+            "failed_cells": sum(a["failed_cells"] for a in per.values()),
+            "wall_s": round(sum(a["wall_s"] for a in per.values()), 3),
+            "by_reader": per,
+            "cell_records": rows[:_CELL_RECORD_CAP],
+            "cell_records_omitted": max(0, len(rows) - _CELL_RECORD_CAP)}
+
+
+def _record_cell(endpoint, started, data, outcome="ok") -> None:
+    """Append one content-free cell record. `started` is a time.monotonic() reading.
+
+    monotonic, not time.time(): a wall clock that steps backwards over an NTP correction would
+    report a negative duration, and a duration is the one field here nobody would re-derive.
+    """
+    row = {"reader": endpoint.get("name", "?"),
+           "outcome": outcome,
+           "wall_s": round(time.monotonic() - started, 3),
+           "usage": _normalise_usage(data),
+           "key": getattr(_CELL_CONTEXT, "key", None)}
+    with _CELL_TELEMETRY_LOCK:
+        # seq is assigned and the row appended as ONE step, so concurrent readers cannot be
+        # handed the same position. Without this the records stay complete but stop being
+        # uniquely addressable, which is worse than missing: a join would silently pick one.
+        # It counts COMPLETIONS, not plan positions -- use `key` for plan identity.
+        row["seq"] = len(_CELL_TELEMETRY)
+        _CELL_TELEMETRY.append(row)
+
+
 def chat(endpoint, prompt):
     """One deterministic completion, as (text, truncated).
 
@@ -664,7 +836,14 @@ def chat(endpoint, prompt):
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
         req = urllib.request.Request(ep["base_url"].rstrip("/") + "/v1/messages",
                                      json.dumps(body).encode(), headers)
-        data = _fetch(req, timeout=bounds["timeout_s"])
+        _started = time.monotonic()
+        try:
+            data = _fetch(req, timeout=bounds["timeout_s"])
+        except BaseException:
+            # A failed attempt that vanishes is indistinguishable from one that never ran.
+            _record_cell(ep, _started, None, outcome="error")
+            raise
+        _record_cell(ep, _started, data)
         return ("".join(b.get("text", "") for b in data.get("content", [])),
                 data.get("stop_reason") == "max_tokens")
     body = {"model": ep["model"], **sampling, "max_tokens": bounds["max_tokens"],
@@ -674,7 +853,13 @@ def chat(endpoint, prompt):
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(ep["base_url"].rstrip("/") + "/chat/completions",
                                  json.dumps(body).encode(), headers)
-    data = _fetch(req, timeout=bounds["timeout_s"])
+    _started = time.monotonic()
+    try:
+        data = _fetch(req, timeout=bounds["timeout_s"])
+    except BaseException:
+        _record_cell(ep, _started, None, outcome="error")
+        raise
+    _record_cell(ep, _started, data)
     choice = data["choices"][0]
     return choice["message"]["content"], choice.get("finish_reason") == "length"
 
@@ -1964,6 +2149,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # For the stateless single-turn completions this harness makes, that is the cheaper of the two
     # risks — and unlike the old ordering it is a risk you can see in the manifest, alongside the
     # provider-aware sampling setting each reader actually used.
+    reset_usage()   # this run reports its own cells only
     calib_rows = run_items(calib, both_arms=True, stage="calibration")
     if calib_rows is None or _is_panel_refusal(calib_rows):
         return calib_rows
@@ -4128,6 +4314,223 @@ def selftest():
     finally:
         if saved_openai_key is not None:
             os.environ["OPENAI_API_KEY"] = saved_openai_key
+
+    # --- usage telemetry ---------------------------------------------------------------------
+    # These drive chat() with faked provider responses rather than calling _record_cell directly:
+    # the defect class here is dialect handling inside the transport, and a direct _record_cell
+    # test cannot see it -- it would pass while the shipped path reported a confident zero.
+    _saved_fetch = globals()["_fetch"]
+    _queued = []
+
+    def _fake_fetch(req, timeout=None):
+        item = _queued.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+    globals()["_fetch"] = _fake_fetch
+    try:
+        _anthropic_ep = {"name": "claude", "model": "m", "api": "anthropic",
+                         "base_url": "https://example.invalid"}
+        _openai_ep = {"name": "gpt", "model": "m", "base_url": "https://example.invalid"}
+
+        reset_usage()
+        assert usage_report()["cells"] == 0, "reset_usage must clear the accumulator"
+
+        # Native Anthropic spells its counts input_tokens/output_tokens. Reading only the OpenAI
+        # spelling returned prompt_tokens 0, completion_tokens 0 AND cells_without_usage 0 -- a
+        # false provider-reported zero, absence wearing the costume of a measurement.
+        _queued.append({"content": [{"text": "A"}], "stop_reason": "end_turn",
+                        "usage": {"input_tokens": 17, "output_tokens": 3}})
+        assert chat(_anthropic_ep, "q") == ("A", False)
+        _r = usage_report()["by_reader"]["claude"]
+        assert _r["prompt_tokens"] == 17 and _r["completion_tokens"] == 3, _r
+        assert _r["cells_without_usage"] == 0 and _r["usage_complete"] is True, _r
+
+        # MUTANT: drop the Anthropic aliases and the same wire response must stop reporting 17/3.
+        # If this assertion ever fails, the normalisation is not what makes the test pass.
+        _saved_aliases = globals()["_USAGE_ALIASES"]
+        globals()["_USAGE_ALIASES"] = (("prompt_tokens", ("prompt_tokens",)),
+                                       ("completion_tokens", ("completion_tokens",)))
+        try:
+            reset_usage()
+            _queued.append({"content": [{"text": "A"}], "stop_reason": "end_turn",
+                            "usage": {"input_tokens": 17, "output_tokens": 3}})
+            chat(_anthropic_ep, "q")
+            _m = usage_report()["by_reader"]["claude"]
+            assert _m["prompt_tokens"] is None and _m["cells_without_usage"] == 1, \
+                "OpenAI-only aliases must NOT silently total an Anthropic usage block: %r" % (_m,)
+        finally:
+            globals()["_USAGE_ALIASES"] = _saved_aliases
+
+        # OpenAI-compatible dialect, same contract.
+        reset_usage()
+        _queued.append({"choices": [{"message": {"content": "B"}, "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 10, "completion_tokens": 4}})
+        assert chat(_openai_ep, "q") == ("B", False)
+        _r = usage_report()["by_reader"]["gpt"]
+        assert _r["prompt_tokens"] == 10 and _r["completion_tokens"] == 4, _r
+
+        # MIXED COVERAGE: one cell reports 10/4, one reports no usage at all. The run TOTAL must be
+        # null -- a subtotal presented as a total is a wrong number, not a partial one -- while the
+        # subtotal stays available and says how many cells it covers.
+        _queued.append({"choices": [{"message": {"content": "C"}, "finish_reason": "stop"}]})
+        assert chat(_openai_ep, "q") == ("C", False)
+        _r = usage_report()["by_reader"]["gpt"]
+        assert _r["cells"] == 2 and _r["cells_with_usage"] == 1 and _r["cells_without_usage"] == 1, _r
+        assert _r["prompt_tokens"] is None and _r["completion_tokens"] is None, \
+            "incomplete coverage must not publish a subtotal as a total: %r" % (_r,)
+        assert _r["known_cell_prompt_tokens"] == 10 and _r["known_cell_completion_tokens"] == 4, _r
+        assert _r["usage_complete"] is False, _r
+
+        # A usage block in a dialect we do not read is unknown, not zero.
+        reset_usage()
+        _queued.append({"choices": [{"message": {"content": "D"}, "finish_reason": "stop"}],
+                        "usage": {"tokens_billed": 99}})
+        chat(_openai_ep, "q")
+        _r = usage_report()["by_reader"]["gpt"]
+        assert _r["cells_without_usage"] == 1 and _r["prompt_tokens"] is None, _r
+
+        # A failed transport attempt must leave a record. Before this, an exception skipped
+        # _record_cell entirely and the attempt was indistinguishable from one that never ran.
+        reset_usage()
+        _queued.append(urllib.error.URLError("boom"))
+        try:
+            chat(_openai_ep, "q")
+            raise AssertionError("chat must propagate the transport failure")
+        except urllib.error.URLError:
+            pass
+        _rep = usage_report()
+        assert _rep["cells"] == 1 and _rep["failed_cells"] == 1, _rep
+        _r = _rep["by_reader"]["gpt"]
+        assert _r["failed_cells"] == 1 and _r["cells_with_usage"] == 0, _r
+        assert _r["prompt_tokens"] is None and _r["usage_complete"] is False, _r
+        assert _rep["cell_records"][0]["outcome"] == "error", _rep["cell_records"]
+
+        # Per-cell records are ordered, content-free, and carry no prompt or answer text.
+        reset_usage()
+        for _i in range(3):
+            _queued.append({"choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+            chat(_openai_ep, "secret-prompt-%d" % _i)
+        _records = usage_report()["cell_records"]
+        assert [r["seq"] for r in _records] == [0, 1, 2], _records
+        assert all(set(r) == {"seq", "reader", "outcome", "wall_s", "usage", "key"} for r in _records), _records
+        assert "secret-prompt" not in json.dumps(_records), "cell records must carry no prompt text"
+        assert all(r["wall_s"] >= 0 for r in _records), "monotonic clock must not go backwards"
+
+        # ORDERING. `seq` counts COMPLETIONS, and the previous assertion here -- a dense unique
+        # range -- held just as well under a reversal, so it could not see the defect it was
+        # supposed to guard. Drive a slow planned-first cell against a fast planned-second one and
+        # pin what actually happens: the fast cell records first, and plan order is recoverable
+        # only through the caller key.
+        reset_usage()
+        _order_lock = threading.Lock()
+
+        def _slow_then_fast(req, timeout=None):
+            body = json.loads(req.data.decode())
+            slow = "planned-first-slow" in body["messages"][0]["content"]
+            time.sleep(0.20 if slow else 0.01)
+            return {"choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+
+        globals()["_fetch"] = _slow_then_fast
+
+        def _planned(index, marker):
+            set_cell_key(index)
+            try:
+                chat(_openai_ep, marker)
+            finally:
+                clear_cell_key()
+
+        _t1 = threading.Thread(target=_planned, args=(0, "planned-first-slow"))
+        _t2 = threading.Thread(target=_planned, args=(1, "planned-second-fast"))
+        _t1.start()
+        time.sleep(0.02)          # let the slow cell get in flight first, as a coordinator would
+        _t2.start()
+        _t1.join(); _t2.join()
+        _rows = usage_report()["cell_records"]
+        assert [r["seq"] for r in _rows] == [0, 1], _rows
+        assert [r["key"] for r in _rows] == [1, 0], \
+            ("records are in COMPLETION order: the fast planned-second cell must record first. "
+             "If this ever reads [0, 1] the ordering contract changed and the docs must too: %r" % (_rows,))
+        assert [r["key"] for r in sorted(_rows, key=lambda r: r["key"])] == [0, 1], \
+            "plan order must be recoverable by sorting on the caller key"
+        assert _rows[0]["wall_s"] < _rows[1]["wall_s"], "the fast cell must also be the shorter one"
+        reset_usage()
+
+        # THREAD SAFETY. #117's bounded panel concurrency runs chat() in worker threads, and
+        # `seq` is assigned from len(_CELL_TELEMETRY): a read-then-append. list.append is atomic
+        # under the GIL so no cell is ever lost, but the read and the append are not one step, so
+        # two concurrent cells can be handed the same seq. Measured once on the merged 115+117
+        # tree with sys.setswitchinterval(1e-6): 1,090 colliding seq across 12,800 cells -- every
+        # record present, none uniquely addressable, which is worse than a gap because a join by
+        # seq silently picks one of them.
+        #
+        # The window is narrow and NOT reliably reproducible: at 2,400 cells it collided in 1 of 3
+        # trials and at 6,400-25,600 in 0 of 3. So the guard here is STRUCTURAL, not probabilistic.
+        # A racy assertion that fires a third of the time is not a test -- it is a flake that would
+        # go red on unrelated changes and be silenced. The behavioural half below proves the path
+        # works under threads; the AST half proves the lock is what makes it safe, and unlike the
+        # race it fails deterministically when the lock is removed.
+        globals()["_fetch"] = lambda req, timeout=None: {
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        reset_usage()
+        _n_threads, _per_thread = 8, 100
+        _workers = [threading.Thread(
+            target=lambda: [chat(_openai_ep, "q") for _ in range(_per_thread)]
+        ) for _ in range(_n_threads)]
+        for _w in _workers:
+            _w.start()
+        for _w in _workers:
+            _w.join()
+        _rep = usage_report()
+        _expected_cells = _n_threads * _per_thread
+        assert _rep["cells"] == _expected_cells, _rep["cells"]
+        _seqs = [r["seq"] for r in _rep["cell_records"]]
+        assert sorted(_seqs) == list(range(_expected_cells)), "seq must be a dense 0..n-1 range"
+        assert _rep["by_reader"]["gpt"]["prompt_tokens"] == _expected_cells, _rep["by_reader"]["gpt"]
+
+        # Structural: the seq assignment AND the append must both sit inside a `with
+        # _CELL_TELEMETRY_LOCK`. Asserted on typed AST structure rather than on source text --
+        # a substring check passes on the identifier appearing in a comment, which is exactly the
+        # false-green @dexagon caught in my post_deploy_contract guard on 2026-08-30.
+        import ast as _ast_mod
+        import inspect as _inspect
+        import textwrap as _textwrap
+        _record_src = _inspect.getsource(_record_cell)
+        _record_ast = _ast_mod.parse(_textwrap.dedent(_record_src)).body[0]
+        _guarded = False
+        for _node in _ast_mod.walk(_record_ast):
+            if not isinstance(_node, _ast_mod.With):
+                continue
+            _holds_lock = any(
+                isinstance(_it.context_expr, _ast_mod.Name)
+                and _it.context_expr.id == "_CELL_TELEMETRY_LOCK"
+                and isinstance(_it.context_expr.ctx, _ast_mod.Load)
+                for _it in _node.items
+            )
+            if not _holds_lock:
+                continue
+            _body = list(_ast_mod.walk(_node))
+            _assigns_seq = any(
+                isinstance(_n, _ast_mod.Subscript) and isinstance(_n.ctx, _ast_mod.Store)
+                and isinstance(_n.value, _ast_mod.Name) and _n.value.id == "row"
+                for _n in _body
+            )
+            _appends = any(
+                isinstance(_n, _ast_mod.Attribute) and _n.attr == "append"
+                and isinstance(_n.value, _ast_mod.Name) and _n.value.id == "_CELL_TELEMETRY"
+                for _n in _body
+            )
+            _guarded = _guarded or (_assigns_seq and _appends)
+        assert _guarded, ("_record_cell must assign seq and append to _CELL_TELEMETRY inside one "
+                          "`with _CELL_TELEMETRY_LOCK` block -- otherwise concurrent readers can "
+                          "be handed the same seq")
+        reset_usage()
+    finally:
+        globals()["_fetch"] = _saved_fetch
 
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
