@@ -16,8 +16,18 @@
   than being reported as readers who cannot detect. Receipts, the per-reader breakdown and the
   content-addressed manifest all carry `headroom`, `recovered`, both thresholds and the rule name
   `headroom-relative-v1`, so two runs under different gates cannot share a manifest hash.
-  **This changes which panels are admissible**: manifests that declare `calibration_min_gap`
-  explicitly keep exactly the strictness they declared.
+  **This changes which panels are admissible.** A manifest that declares `calibration_min_gap`
+  and no `calibration_min_recovered` pre-registered an absolute gate, so it is judged under
+  `absolute-gap-v1` — exactly the old rule, unchanged. Supplying an undeclared second condition
+  would have refused runs that previously passed (a declared `0.25` with planted 0.60 / other
+  0.30 recovers 0.4286), which is precisely what a manifest-carried gate exists to prevent.
+  Declaring `calibration_min_recovered` opts into the two-part rule. The rule name rides in the
+  manifest, so which regime judged a run is always visible.
+- `panel.py`: the effective calibration gate is now frozen into a preregistered attempt's
+  `admissibility_gates`, derived from the same declarations the run is judged under. A
+  hand-written threshold in a runspec could otherwise mint an attempt claiming a gate the run
+  never applied — the README example still froze `planted calibration gap >= 0.5` after the
+  default became a two-part rule.
 
 - `panel.py`: add opt-in bounded concurrency for remote comprehension, entropy, and learnability
   readers. The committed contract carries a global cap, per-reader provider caps, deterministic
