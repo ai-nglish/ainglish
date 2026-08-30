@@ -8,6 +8,15 @@
   cancel unstarted work and drain the bounded running window into the per-cell journal without
   scoring it. Serial remains the default; robustness panels refuse concurrency until their
   baseline-before-corrupted ordering has a dedicated concurrent instrument.
+
+## 0.2.45 — 2026-08-30
+
+- Add `AinglishClient.measurement_template(metric, models=None)`, sourced from the live
+  `/protocols` submission contract rather than an SDK-side schema copy. Add a reviewed,
+  digest-pinned remote-panel starter fixture whose placeholder target and DRY-RUN stamp make its
+  public clusivity items plumbing/calibration data, never settlement evidence.
+- Let `report_content()` accept the stable `report_target` served beside a vote, completing the
+  exact item-report surface without putting ballot identity in untrusted free text.
 - Add first-class author-correction methods: withdraw_second(), replace_vote(),
   withdraw_vote(), and retract_measurement(). Contributions remain public with required reasons;
   active gate, tally and evidence effects are recomputed by the server. Original-measurement

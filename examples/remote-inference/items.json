@@ -1,0 +1,79 @@
+{
+  "kind": "ainglish.remote-panel-structural-fixture.v1",
+  "purpose": "Public dry-run and calibration-design example; never original or replication evidence.",
+  "sha256": "f33ab1738c18f81d8d3c0a16073b8bc9d38083f20e5ae8457ad05016cfb13f73",
+  "items": [
+    {
+      "id": "cal-owner-1",
+      "calibration": true,
+      "english": "Either Mira or Sol owns the rollback.",
+      "ainglish": "Mira, not Sol, owns the rollback.",
+      "question": "Who owns the rollback?",
+      "options": ["Mira", "Sol", "cannot tell"],
+      "answer": "Mira"
+    },
+    {
+      "id": "cal-owner-2",
+      "calibration": true,
+      "english": "Either Anik or Jo authorized the release.",
+      "ainglish": "Jo, not Anik, authorized the release.",
+      "question": "Who authorized the release?",
+      "options": ["Anik", "cannot tell", "Jo"],
+      "answer": "Jo"
+    },
+    {
+      "id": "cal-owner-3",
+      "calibration": true,
+      "english": "Either North or South holds the signing key.",
+      "ainglish": "South, not North, holds the signing key.",
+      "question": "Who holds the signing key?",
+      "options": ["cannot tell", "North", "South"],
+      "answer": "South"
+    },
+    {
+      "id": "cal-owner-4",
+      "calibration": true,
+      "english": "Either the red queue or the blue queue owns this job.",
+      "ainglish": "The red queue, not the blue queue, owns this job.",
+      "question": "Which queue owns this job?",
+      "options": ["blue", "red", "cannot tell"],
+      "answer": "red"
+    },
+    {
+      "id": "demo-inclusive-1",
+      "settlement_stratum": "inclusive",
+      "english": "You and I will review the draft at 14:00 UTC.",
+      "ainglish": "We-including-you will review the draft at 14:00 UTC.",
+      "question": "Should the receiving agent reserve time for the review?",
+      "options": ["yes", "no", "cannot tell"],
+      "answer": "yes"
+    },
+    {
+      "id": "demo-inclusive-2",
+      "settlement_stratum": "inclusive",
+      "english": "You and everyone in my deployment group must rotate the keys tonight.",
+      "ainglish": "We-including-you must rotate the keys tonight.",
+      "question": "Does the key-rotation instruction apply to the receiving agent?",
+      "options": ["cannot tell", "yes", "no"],
+      "answer": "yes"
+    },
+    {
+      "id": "demo-exclusive-1",
+      "settlement_stratum": "exclusive",
+      "english": "My team and I, but not you, will attend the incident review.",
+      "ainglish": "We-excluding-you will attend the incident review.",
+      "question": "Is the receiving agent one of the attendees?",
+      "options": ["no", "yes", "cannot tell"],
+      "answer": "no"
+    },
+    {
+      "id": "demo-exclusive-2",
+      "settlement_stratum": "exclusive",
+      "english": "My operations group will restart the service; you are not part of that group.",
+      "ainglish": "We-excluding-you will restart the service.",
+      "question": "Should the receiving agent perform the restart as a member of the stated group?",
+      "options": ["yes", "cannot tell", "no"],
+      "answer": "no"
+    }
+  ]
+}

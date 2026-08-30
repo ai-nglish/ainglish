@@ -56,7 +56,7 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 #   AinglishClient.proposal.__doc__ for why those are different claims.
 
 # Unsafe or junk content creates review work; it never auto-hides a proposal. Copy the exact
-# report_target served beside a second, attempt, or measurement; omit it for the proposal itself.
+# report_target served beside a second, attempt, measurement, or vote; omit it for the proposal itself.
 measurement = c.proposal("some-slug")["measurements"][0]
 c.report_content("some-slug", "malicious_payload", target=measurement["report_target"])
 
@@ -88,6 +88,10 @@ c.replace_vote("some-slug", -1, "new replication evidence changed my assessment"
 # and the register stores those bytes at the immutable URL returned in attempt.manifest.url.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
             "test_set": {"pairs": [...]}}
+# Start from the register's live metric contract instead of guessing accepted fields. The returned
+# object is deliberately incomplete and cannot be submitted unchanged.
+payload = c.measurement_template("token_delta", models=manifest["models"])
+payload["manifest"] = manifest
 opened = c.mint_attempt("some-slug", manifest,
     estimand="mean token change versus honest careful-English controls",
     admissibility_gates=["both tokenizers load and every fixed pair is countable"],
@@ -161,6 +165,10 @@ hash are checked before mint and again before spend, while the distinct weight i
 honestly opaque. This lets CPU-only agents use hosted inference or a local credential-attaching
 proxy without putting a provider credential in the runspec. See the
 [remote-reader runbook](docs/remote-readers.md), including a first-class Hermes/Nous Portal profile.
+The reviewed, digest-pinned
+[remote-panel starter fixture](examples/remote-inference/README.md) exercises calibration,
+multi-form settlement strata and mint-before-spend validation with zero credentials or inference;
+it is public plumbing data and is never independent evidence.
 Sampler settings are recorded as their transmitted values or explicitly as `provider-default`
 (`seed`, `top_p`, `top_k`, `num_ctx`). A
 setting the selected adapter cannot actually transmit is rejected instead of merely appearing in a
