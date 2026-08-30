@@ -160,6 +160,117 @@ If the Ainglish harness and Hermes run on different hosts, forward the proxy por
 authenticated tunnel so that it remains loopback from the harness's perspective. Do not solve the
 reachability problem by binding the unauthenticated proxy to a public interface.
 
+## Nous Portal with a direct API key
+
+Use this when the harness runs somewhere that has **no Hermes runtime** — a Claude Code session, a
+cron job, CI — and the operator can mint a Portal API key. It needs no proxy, no OAuth flow and no
+local daemon. The `nous-portal` preset above cannot serve this case: it is pinned to
+`http://127.0.0.1:8645/v1` and relies on Hermes attaching the credential, so on a host without the
+proxy it can only fail.
+
+```bash
+export NOUS_API_KEY="$(cat /path/to/mode-600/key-file)"
+```
+
+```json
+{
+  "name": "nous-reader-a",
+  "provider": "nous-portal-direct",
+  "model": "deepseek/deepseek-v4-flash",
+  "precision": "provider-served",
+  "max_tokens": 1024,
+  "timeout_s": 180
+}
+```
+
+The preset supplies `https://inference-api.nousresearch.com/v1`, the OpenAI-compatible adapter,
+`NOUS_API_KEY` and the `/models` catalog binding. Equivalent to `provider: openai-compatible` with
+those four fields written out.
+
+The key stays in the environment and is read at request time. A runspec that writes `api_key_env`
+explicitly names the variable; **the reader receipt records neither the name nor the value** —
+`reader_receipt()` omits `api_key_env` deliberately, and the selftest asserts that omission. So a
+published receipt says which endpoint and model were used and cannot say which credential opened
+them.
+
+### The model catalog is public
+
+`GET /v1/models` needs no credential, so the exact served ids and their per-token prices can be read
+before a key exists — useful for costing a panel in advance:
+
+```bash
+curl -s https://inference-api.nousresearch.com/v1/models \
+  | python3 -c 'import json,sys; [print(m["id"]) for m in json.load(sys.stdin)["data"]]'
+```
+
+**Trap:** the service rejects Python's default `Python-urllib/<version>` User-Agent with `403`. The
+harness is unaffected because it sends its own `ainglish-python/<version>`, but a hand-rolled helper
+script using bare `urllib.request.urlopen(url)` will fail with a 403 that looks like an auth problem
+and is not one. Send an explicit User-Agent, or use the harness.
+
+### Leave reasoning enabled
+
+Several Portal models reason by default, and `deepseek/deepseek-v4-flash` reports
+`completion_tokens_details.reasoning_tokens` on every call. Suppressing that with
+`reasoning_effort: "none"` measurably degrades the instrument. On 10 frozen `none-of / not-all-of`
+items, 2 arms each, same model, same items, `temperature: 0`:
+
+| setting | english | ainglish | delta over LIVE cells |
+|---|---|---|---|
+| `reasoning_effort` absent (provider default) | 2/9 | 10/10 | **+77.8pp** |
+| `reasoning_effort: "none"` | 0/10 | 3/10 | **+30.0pp** |
+
+10 items drawn with seed 11 from a frozen set, both arms, 40 planned cells. One english cell was
+lost to an `HTTPError` in the reasoning-on condition, so that arm's live n is 9; the delta is taken
+over live cells only. Per-cell records, outcomes and costs are pinned at an immutable commit:
+
+<https://github.com/reticuli-labs/panel-artifacts/tree/9a21162/nous-reasoning-effort-2026-08-30>
+
+`cells.json` there is sha256 `4a178f71a59cd20588b6842ef4e1669d92ce2f6b6d4c7ab315956a4ba6472a28`.
+The link is to a commit, not a branch path, because a mutable `repo/directory` label names whatever
+that directory happens to contain when you read it — which is not what a citation is for.
+
+**Divide by the live n, not the planned n.** An earlier pass of this experiment published +60.0pp by
+scoring both arms against the planned 10 while a transport fault had killed one cell — a censored
+denominator, which is the failure `run_panel`'s yield guard exists to prevent and which is easy to
+reintroduce in a hand-rolled script that bypasses the harness. It fails quietly and in the
+flattering-looking direction: the published number was too *small*, so nothing looked wrong.
+
+This is a **pilot on one model**, and the wording matters: it supports "suppressing reasoning on
+`deepseek-v4-flash` made this instrument worse on this item set", which is enough to set a default.
+It does not establish a general property of reasoning suppression and does not generalise to other
+models. Two passes gave +67.8pp and +77.8pp for reasoning-on; the deterministic `"none"` condition
+gave +30.0pp both times. Set a `max_tokens` that leaves room to think — 1024 was ample — and do not
+disable reasoning to save tokens.
+
+Re-derive the figures without spending anything: `python3 run.py --rederive` at the commit linked
+above reads the retained cells offline, with no credential and no network, and writes nothing. Take
+the verifier from that same commit — at earlier commits `run.py` reads `NOUS_API_KEY` at import and
+raises `KeyError` before it can derive anything, so a link to the bytes alone is not a link to a
+check anyone can run. (Guidance elsewhere in this project to send
+`reasoning_effort: "none"` applies to *local* readers under tight token bounds, where the model
+exhausts its budget before reaching the option list. That is a different failure and does not
+transfer to a remote reader with headroom.)
+
+### Budget serial wall-clock, not money
+
+A frozen 192-item set averages ~101 prompt tokens per cell. A 192-item, 3-reader panel with
+calibration is ~720 cells, and measured cost on `deepseek-v4-flash` is roughly **$0.03** — cheaper
+than the electricity of the local-GPU equivalent.
+
+Wall-clock is the real constraint. A reasoning reader takes several seconds per cell, so ~720 serial
+cells is hours, and a 38-cell validation run exceeded a 500-second budget. Set `timeout_s`
+generously (180 worked; the 120 default is tight for reasoning models), run long panels detached,
+and prefer bounded concurrency where available.
+
+### What the receipt may claim
+
+`model_catalog: "openai:/models"` binds the requested id and hashes the matched catalog entry into
+the reader receipt, verified before the attempt is minted and again before real spend. It does
+**not** identify weights: `model_digest` stays null and `weight_identity` is `provider-opaque`,
+because a hosted alias is a routing decision Nous may change. Describe the reader as "the requested
+model id as served by Nous Portal at the recorded run time".
+
 ## Run the reviewed zero-cost fixture first
 
 The repository includes a digest-pinned structural fixture with explicit conflicting-owner
