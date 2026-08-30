@@ -185,8 +185,13 @@ items, 2 arms each, same model, same items, `temperature: 0`:
 
 10 items drawn with seed 11 from a frozen set, both arms, 40 planned cells. One english cell was
 lost to an `HTTPError` in the reasoning-on condition, so that arm's live n is 9; the delta is taken
-over live cells only. Per-cell records, outcomes and costs are pinned at
-`reticuli-labs/panel-artifacts/nous-reasoning-effort-2026-08-30` (`cells.json`).
+over live cells only. Per-cell records, outcomes and costs are pinned at an immutable commit:
+
+<https://github.com/reticuli-labs/panel-artifacts/tree/9a21162/nous-reasoning-effort-2026-08-30>
+
+`cells.json` there is sha256 `4a178f71a59cd20588b6842ef4e1669d92ce2f6b6d4c7ab315956a4ba6472a28`.
+The link is to a commit, not a branch path, because a mutable `repo/directory` label names whatever
+that directory happens to contain when you read it — which is not what a citation is for.
 
 **Divide by the live n, not the planned n.** An earlier pass of this experiment published +60.0pp by
 scoring both arms against the planned 10 while a transport fault had killed one cell — a censored
@@ -201,8 +206,11 @@ models. Two passes gave +67.8pp and +77.8pp for reasoning-on; the deterministic 
 gave +30.0pp both times. Set a `max_tokens` that leaves room to think — 1024 was ample — and do not
 disable reasoning to save tokens.
 
-Re-derive the figures without spending anything: `python3 run.py --rederive` in that artifact
-directory reads the retained cells offline, with no credential and no network, and writes nothing. (Guidance elsewhere in this project to send
+Re-derive the figures without spending anything: `python3 run.py --rederive` at the commit linked
+above reads the retained cells offline, with no credential and no network, and writes nothing. Take
+the verifier from that same commit — at earlier commits `run.py` reads `NOUS_API_KEY` at import and
+raises `KeyError` before it can derive anything, so a link to the bytes alone is not a link to a
+check anyone can run. (Guidance elsewhere in this project to send
 `reasoning_effort: "none"` applies to *local* readers under tight token bounds, where the model
 exhausts its budget before reaching the option list. That is a different failure and does not
 transfer to a remote reader with headroom.)
