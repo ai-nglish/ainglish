@@ -1548,6 +1548,20 @@ CALIBRATION_RULE = "headroom-relative-v1"
 CALIBRATION_RULE_LEGACY = "absolute-gap-v1"
 
 
+# Accuracies are ratios of small integers, so a threshold a run meets EXACTLY is routinely
+# unrepresentable: 8/12 against 4/12 gives recovered = 0.49999999999999994, short of one half by
+# 5.6e-17, and a bare `<` refuses a panel whose exact value is exactly 1/2. That refusal arrives
+# after the calibration cells are already paid for and reads as inexplicable. The tolerance is
+# absolute because every quantity here lives in [0, 1], and is ~8 orders of magnitude above the
+# representation error while staying far below any difference a control set can express.
+_GATE_EPSILON = 1e-9
+
+
+def _at_least(value, threshold):
+    """`value >= threshold`, tolerant of float representation at the boundary."""
+    return value >= threshold - _GATE_EPSILON
+
+
 def declared_calibration_gate(manifest):
     """The gate a manifest DECLARES, as (min_gap, min_recovered, rule).
 
@@ -1615,7 +1629,7 @@ def calibration_verdict(detectable, undetectable, min_gap=CALIBRATION_MIN_GAP,
         # which is the one thing a manifest-carried gate exists to prevent (@dexagon-ai, #122:
         # declared 0.25 with planted 0.60 / other 0.30 passed the declared rule and this branch
         # refused it at recovered 0.4286). So a declared absolute gate stays exactly itself.
-        if gap < min_gap:
+        if not _at_least(gap, min_gap):
             verdict["failure"] = "gap_below_floor"
         else:
             verdict["passed"] = True
@@ -1626,9 +1640,9 @@ def calibration_verdict(detectable, undetectable, min_gap=CALIBRATION_MIN_GAP,
         # stops it being read as "this panel cannot detect".
         verdict["failure"] = "no_headroom"
         return verdict
-    if gap < min_gap:
+    if not _at_least(gap, min_gap):
         verdict["failure"] = "gap_below_floor"
-    elif verdict["recovered"] < min_recovered:
+    elif not _at_least(verdict["recovered"], min_recovered):
         verdict["failure"] = "recovered_below_threshold"
     else:
         verdict["passed"] = True
@@ -4584,6 +4598,21 @@ def selftest():
             f"{name}: {calibration_verdict(det_, oth_)}"
     assert calibration_verdict(0.99, 0.95)["failure"] == "gap_below_floor", \
         "a ratio ALONE would pass a four-point gap over an unplanted arm at 0.95; the floor stops it"
+    # (g) A run that meets a threshold EXACTLY must be admitted. Real numbers from Rosetta's
+    # 12-item probe: planted 8/12, unplanted 4/12 (chance on three options), so recovered is
+    # exactly 1/2 — and 8/12 - 4/12 over 1 - 4/12 evaluates to 0.49999999999999994, short of the
+    # threshold by 5.6e-17. A bare `<` refused it AFTER the calibration cells were paid for,
+    # which is the worst moment to be told an unexplainable no.
+    from fractions import Fraction as _F
+    assert (_F(8, 12) - _F(4, 12)) / (1 - _F(4, 12)) == _F(1, 2), "the exact value is one half"
+    assert (8 / 12 - 4 / 12) / (1 - 4 / 12) < CALIBRATION_MIN_RECOVERED, \
+        "…and the float evaluation really is below it, or this case tests nothing"
+    knife_edge = calibration_verdict(8 / 12, 4 / 12)
+    assert knife_edge["passed"], f"a panel exactly at the threshold must be admitted: {knife_edge}"
+    assert calibration_verdict(0.5 - 1e-3, 0.0)["passed"] is False, \
+        "the boundary tolerance must not admit a panel that misses by a real margin"
+    assert calibration_verdict(0.5 + 1e-3, 0.0)["passed"], \
+        "…and must still admit one that clears it by the same margin"
     assert calibration_verdict(None, 0.5)["failure"] == "incomplete"
     assert calibration_verdict(0.5, 1.0)["failure"] == "no_headroom"
 

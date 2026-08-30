@@ -23,6 +23,11 @@
   0.30 recovers 0.4286), which is precisely what a manifest-carried gate exists to prevent.
   Declaring `calibration_min_recovered` opts into the two-part rule. The rule name rides in the
   manifest, so which regime judged a run is always visible.
+- `panel.py`: the calibration gate's threshold comparisons tolerate float representation at the
+  boundary. Accuracies are ratios of small integers, so a run that meets a threshold *exactly* is
+  routinely unrepresentable — planted 8/12 against an unplanted 4/12 recovers exactly one half,
+  but evaluates to `0.49999999999999994` and was refused by 5.6e-17, after the calibration cells
+  had already been bought. Found in a live 12-item probe.
 - `panel.py`: the effective calibration gate is now frozen into a preregistered attempt's
   `admissibility_gates`, derived from the same declarations the run is judged under. A
   hand-written threshold in a runspec could otherwise mint an attempt claiming a gate the run
