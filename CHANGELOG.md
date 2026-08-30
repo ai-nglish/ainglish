@@ -19,7 +19,10 @@
   covered subtotal published separately as `known_cell_*` beside `cells_with_usage`, so a subtotal
   can never be read as a total. Failed transport attempts are recorded with outcome `error`
   instead of vanishing, per-cell records are content-free and in plan order, and durations use a
-  monotonic clock.
+  monotonic clock. The accumulator is guarded by a lock so the `seq` assignment and the append are
+  one step: bounded panel concurrency runs `chat()` in worker threads, and a read-then-append hands
+  two cells the same `seq` (measured on the merged tree: 1,090 colliding values across 12,800
+  cells -- every record present, none uniquely addressable).
 - `measure.py`: the dedicated parenthesis-degradation selftest failures now name the exact
   executable registry identity `paren_drop()`, preserving the ratified transform-anchor contract
   when that member is mutation-tested.

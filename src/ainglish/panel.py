@@ -58,6 +58,7 @@ import ipaddress
 import json
 import math
 import re
+import threading
 import time
 import os
 import random
@@ -646,6 +647,12 @@ def reader_receipt(endpoint):
 # far (Rosetta rebuilt exactly this to answer "what did the panel cost").
 _CELL_TELEMETRY: list = []
 _CELL_RECORD_CAP = 5000     # the RETURNED records are bounded; the aggregates stay exact
+# `seq` is assigned from len(_CELL_TELEMETRY), which is a READ-THEN-APPEND. list.append is atomic
+# under the GIL so no cell is ever lost, but the read and the append are not one step: under the
+# bounded panel concurrency in #117, chat() runs in worker threads and two cells can be handed the
+# same seq. Measured on the merged tree with sys.setswitchinterval(1e-6): 1,090 colliding seq
+# values across 12,800 cells -- every cell present, none uniquely addressable.
+_CELL_TELEMETRY_LOCK = threading.Lock()
 
 # Providers name the same two quantities differently, and reading only one dialect turns a real
 # count into a confident zero -- the exact failure this telemetry exists to prevent. Anthropic's
@@ -683,7 +690,8 @@ def _normalise_usage(data):
 
 def reset_usage() -> None:
     """Clear per-cell telemetry. Called by run_panel so each run reports only its own cells."""
-    _CELL_TELEMETRY.clear()
+    with _CELL_TELEMETRY_LOCK:
+        _CELL_TELEMETRY.clear()
 
 
 def usage_report():
@@ -710,7 +718,9 @@ def usage_report():
     plan-order journal, not to the transport.
     """
     per = {}
-    for row in _CELL_TELEMETRY:
+    with _CELL_TELEMETRY_LOCK:
+        rows = list(_CELL_TELEMETRY)   # one consistent snapshot; appends during a report are fine
+    for row in rows:
         acc = per.setdefault(row["reader"], {
             "cells": 0, "failed_cells": 0, "cells_with_usage": 0, "cells_without_usage": 0,
             "wall_s": 0.0, "known_cell_prompt_tokens": 0, "known_cell_completion_tokens": 0,
@@ -743,12 +753,12 @@ def usage_report():
         acc["usage_complete"] = bool(ok) and prompt_known == ok and completion_known == ok
         acc["mean_wall_s"] = round(acc["wall_s"] / acc["cells"], 3) if acc["cells"] else None
     return {"kind": "ainglish.panel.usage-report.v2",
-            "cells": len(_CELL_TELEMETRY),
+            "cells": len(rows),
             "failed_cells": sum(a["failed_cells"] for a in per.values()),
             "wall_s": round(sum(a["wall_s"] for a in per.values()), 3),
             "by_reader": per,
-            "cell_records": _CELL_TELEMETRY[:_CELL_RECORD_CAP],
-            "cell_records_omitted": max(0, len(_CELL_TELEMETRY) - _CELL_RECORD_CAP)}
+            "cell_records": rows[:_CELL_RECORD_CAP],
+            "cell_records_omitted": max(0, len(rows) - _CELL_RECORD_CAP)}
 
 
 def _record_cell(endpoint, started, data, outcome="ok") -> None:
@@ -757,11 +767,16 @@ def _record_cell(endpoint, started, data, outcome="ok") -> None:
     monotonic, not time.time(): a wall clock that steps backwards over an NTP correction would
     report a negative duration, and a duration is the one field here nobody would re-derive.
     """
-    _CELL_TELEMETRY.append({"seq": len(_CELL_TELEMETRY),
-                            "reader": endpoint.get("name", "?"),
-                            "outcome": outcome,
-                            "wall_s": round(time.monotonic() - started, 3),
-                            "usage": _normalise_usage(data)})
+    row = {"reader": endpoint.get("name", "?"),
+           "outcome": outcome,
+           "wall_s": round(time.monotonic() - started, 3),
+           "usage": _normalise_usage(data)}
+    with _CELL_TELEMETRY_LOCK:
+        # seq is assigned and the row appended as ONE step, so concurrent readers cannot be
+        # handed the same position. Without this the records stay complete but stop being
+        # uniquely addressable, which is worse than missing: a join would silently pick one.
+        row["seq"] = len(_CELL_TELEMETRY)
+        _CELL_TELEMETRY.append(row)
 
 
 def chat(endpoint, prompt):
@@ -4373,6 +4388,77 @@ def selftest():
         assert all(set(r) == {"seq", "reader", "outcome", "wall_s", "usage"} for r in _records), _records
         assert "secret-prompt" not in json.dumps(_records), "cell records must carry no prompt text"
         assert all(r["wall_s"] >= 0 for r in _records), "monotonic clock must not go backwards"
+        reset_usage()
+
+        # THREAD SAFETY. #117's bounded panel concurrency runs chat() in worker threads, and
+        # `seq` is assigned from len(_CELL_TELEMETRY): a read-then-append. list.append is atomic
+        # under the GIL so no cell is ever lost, but the read and the append are not one step, so
+        # two concurrent cells can be handed the same seq. Measured once on the merged 115+117
+        # tree with sys.setswitchinterval(1e-6): 1,090 colliding seq across 12,800 cells -- every
+        # record present, none uniquely addressable, which is worse than a gap because a join by
+        # seq silently picks one of them.
+        #
+        # The window is narrow and NOT reliably reproducible: at 2,400 cells it collided in 1 of 3
+        # trials and at 6,400-25,600 in 0 of 3. So the guard here is STRUCTURAL, not probabilistic.
+        # A racy assertion that fires a third of the time is not a test -- it is a flake that would
+        # go red on unrelated changes and be silenced. The behavioural half below proves the path
+        # works under threads; the AST half proves the lock is what makes it safe, and unlike the
+        # race it fails deterministically when the lock is removed.
+        globals()["_fetch"] = lambda req, timeout=None: {
+            "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+        reset_usage()
+        _n_threads, _per_thread = 8, 100
+        _workers = [threading.Thread(
+            target=lambda: [chat(_openai_ep, "q") for _ in range(_per_thread)]
+        ) for _ in range(_n_threads)]
+        for _w in _workers:
+            _w.start()
+        for _w in _workers:
+            _w.join()
+        _rep = usage_report()
+        _expected_cells = _n_threads * _per_thread
+        assert _rep["cells"] == _expected_cells, _rep["cells"]
+        _seqs = [r["seq"] for r in _rep["cell_records"]]
+        assert sorted(_seqs) == list(range(_expected_cells)), "seq must be a dense 0..n-1 range"
+        assert _rep["by_reader"]["gpt"]["prompt_tokens"] == _expected_cells, _rep["by_reader"]["gpt"]
+
+        # Structural: the seq assignment AND the append must both sit inside a `with
+        # _CELL_TELEMETRY_LOCK`. Asserted on typed AST structure rather than on source text --
+        # a substring check passes on the identifier appearing in a comment, which is exactly the
+        # false-green @dexagon caught in my post_deploy_contract guard on 2026-08-30.
+        import ast as _ast_mod
+        import inspect as _inspect
+        import textwrap as _textwrap
+        _record_src = _inspect.getsource(_record_cell)
+        _record_ast = _ast_mod.parse(_textwrap.dedent(_record_src)).body[0]
+        _guarded = False
+        for _node in _ast_mod.walk(_record_ast):
+            if not isinstance(_node, _ast_mod.With):
+                continue
+            _holds_lock = any(
+                isinstance(_it.context_expr, _ast_mod.Name)
+                and _it.context_expr.id == "_CELL_TELEMETRY_LOCK"
+                and isinstance(_it.context_expr.ctx, _ast_mod.Load)
+                for _it in _node.items
+            )
+            if not _holds_lock:
+                continue
+            _body = list(_ast_mod.walk(_node))
+            _assigns_seq = any(
+                isinstance(_n, _ast_mod.Subscript) and isinstance(_n.ctx, _ast_mod.Store)
+                and isinstance(_n.value, _ast_mod.Name) and _n.value.id == "row"
+                for _n in _body
+            )
+            _appends = any(
+                isinstance(_n, _ast_mod.Attribute) and _n.attr == "append"
+                and isinstance(_n.value, _ast_mod.Name) and _n.value.id == "_CELL_TELEMETRY"
+                for _n in _body
+            )
+            _guarded = _guarded or (_assigns_seq and _appends)
+        assert _guarded, ("_record_cell must assign seq and append to _CELL_TELEMETRY inside one "
+                          "`with _CELL_TELEMETRY_LOCK` block -- otherwise concurrent readers can "
+                          "be handed the same seq")
         reset_usage()
     finally:
         globals()["_fetch"] = _saved_fetch
