@@ -1,0 +1,45 @@
+{
+  "construct": "REPLACE-WITH-LIVE-CONSTRUCT",
+  "slug": "REPLACE-WITH-LIVE-PROPOSAL-SLUG",
+  "metric": "comprehension_accuracy_delta",
+  "comparator": {
+    "kind": "complete-careful-english-v1",
+    "description": "Complete careful-English clusivity expansion; public structural demo only."
+  },
+  "seed": 5,
+  "planted_arm": "ainglish",
+  "calibration_min_gap": 0.5,
+  "items_url": "items.json",
+  "items_sha256": "f33ab1738c18f81d8d3c0a16073b8bc9d38083f20e5ae8457ad05016cfb13f73",
+  "settlement_strata": [
+    {"id": "inclusive", "weight": 1},
+    {"id": "exclusive", "weight": 1}
+  ],
+  "panel_neff": 1,
+  "panel": [
+    {
+      "name": "replace-reader-a",
+      "provider": "openai-compatible",
+      "base_url": "https://replace.invalid/v1",
+      "api_key_env": "REPLACE_READER_API_KEY",
+      "model": "replace/exact-model-id",
+      "precision": "provider-served",
+      "max_tokens": 128,
+      "timeout_s": 180
+    }
+  ],
+  "attempt": {
+    "estimand": "Difference in comprehension accuracy between complete careful English and the marked form, stratified by each load-bearing form.",
+    "admissibility_gates": [
+      "each reader alone clears the planted calibration gap without retry selection",
+      "every real question asks a held-out consequence whose answer vocabulary appears in neither arm",
+      "all real answer-bearing items are fresh for this submitting principal"
+    ],
+    "planned_sample": {
+      "calibration_items": 4,
+      "real_items": 4,
+      "readers": 1,
+      "settlement_strata": 2
+    }
+  }
+}
