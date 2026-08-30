@@ -26,9 +26,11 @@ manifest, and the register's environments disagree on how PHP renders a float.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sys
+import textwrap
 from fractions import Fraction
 
 READING_POINT = "additive percentage-point change"
@@ -40,8 +42,16 @@ READINGS = (READING_POINT, READING_RELATIVE, READING_UNDETERMINED)
 _POINT_FORM = re.compile(r"\b(\d+(?:\.\d+)?)\s*(?:percentage[- ]points?|pp)\b", re.I)
 # "rose 8%" -> bare percent. Ambiguous over a percentage base, determinate over a count base.
 _BARE_PERCENT = re.compile(r"\b(\d+(?:\.\d+)?)\s*%(?!\s*(?:points?|pts?))", re.I)
-# "from 52% to 60%" -> the endpoints that make a bare percent decidable.
+# "from 52% to 60%" -> the endpoints that make a bare percent decidable. Their spans are MASKED
+# before magnitudes are read: an endpoint is an anchor, never a change magnitude, and conflating
+# the two let "rose 3%, from 20% to 40%" be rescued by its own endpoint 20 matching the record's
+# 20-point move (@dexagon-ai, #123).
 _ENDPOINTS = re.compile(r"\bfrom\s+(\d+(?:\.\d+)?)\s*%\s+to\s+(\d+(?:\.\d+)?)\s*%", re.I)
+_DIRECTIONS = (
+    ("rose", ("rose", "rise", "rises", "increased", "increases", "grew", "grows", "climbed", "up by")),
+    ("fell", ("fell", "fall", "falls", "decreased", "decreases", "dropped", "drops", "declined", "down by")),
+    ("held", ("held", "holds", "unchanged", "stayed", "flat")),
+)
 
 
 def _fraction(value, field):
@@ -85,12 +95,23 @@ def _numbers(text, pattern):
 
 
 def surface_facts(text):
-    """What the STRING states, read back without reference to the record or the answer key."""
-    endpoints = _ENDPOINTS.findall(text)
+    """What the STRING states, read back without reference to the record or the answer key.
+
+    Endpoint spans are removed before magnitudes are read. An endpoint anchors the change; it is
+    not a candidate for the change's size, and treating it as one lets a wrong magnitude be
+    rescued by an unrelated coincidence with the record.
+    """
+    endpoints = [(Fraction(a), Fraction(b)) for a, b in _ENDPOINTS.findall(text)]
+    magnitude_text = _ENDPOINTS.sub(" ", text)
+    lowered = text.lower()
+    directions = sorted({
+        name for name, words in _DIRECTIONS if any(word in lowered for word in words)
+    })
     return {
-        "endpoints": [(Fraction(a), Fraction(b)) for a, b in endpoints],
-        "point_magnitudes": _numbers(text, _POINT_FORM),
-        "bare_percents": _numbers(text, _BARE_PERCENT),
+        "endpoints": endpoints,
+        "point_magnitudes": _numbers(magnitude_text, _POINT_FORM),
+        "bare_percents": _numbers(magnitude_text, _BARE_PERCENT),
+        "directions": directions,
     }
 
 
@@ -157,7 +178,16 @@ def item_verdict(item):
     elif ends["english"] and ends["english"] != ends["ainglish"]:
         reasons.append("the arms state different endpoints")
 
-    # NUMERIC CONSISTENCY: whatever each arm asserts must match the record.
+    # MAGNITUDE OMISSION: a magnitude in one arm and none in the other is not a minimal pair.
+    stated = {arm: view["facts"]["point_magnitudes"] + view["facts"]["bare_percents"]
+              for arm, view in arms.items()}
+    if bool(stated["english"]) != bool(stated["ainglish"]):
+        reasons.append("only one arm states a change magnitude, so the arms are not a minimal pair")
+
+    # NUMERIC CONSISTENCY: whatever each arm asserts must match the record. Endpoints, the point
+    # magnitude, AND the bare magnitude -- the last of which went unchecked, so an arm could state
+    # any percentage at all as long as some OTHER number in the sentence happened to match.
+    supported = {abs(arithmetic["point_change"]), abs(arithmetic["relative_change"])}
     for arm, view in arms.items():
         for endpoint_pair in view["facts"]["endpoints"]:
             if endpoint_pair != (arithmetic["old_rate"], arithmetic["new_rate"]):
@@ -165,26 +195,57 @@ def item_verdict(item):
         for magnitude in view["facts"]["point_magnitudes"]:
             if magnitude != abs(arithmetic["point_change"]):
                 reasons.append("%s arm states a point magnitude the record does not support" % arm)
+        for magnitude in view["facts"]["bare_percents"]:
+            if magnitude not in supported:
+                reasons.append("%s arm states %s%%, which is neither the record's point change "
+                               "nor its relative change" % (arm, magnitude))
 
-    # ANSWER DETERMINACY: exactly one reading per arm, and the key must be that reading.
+    # DIRECTION: derived from the record and read back from BOTH strings. A pair that says "fell"
+    # while the record rises contradicts it in both arms, and no reader could detect that.
+    for arm, view in arms.items():
+        directions = view["facts"]["directions"]
+        if len(directions) > 1:
+            reasons.append("%s arm states more than one direction (%s)"
+                           % (arm, ", ".join(directions)))
+        elif directions and directions[0] != arithmetic["direction"]:
+            reasons.append("%s arm says %r while the record %s"
+                           % (arm, directions[0], arithmetic["direction"]))
+        elif not directions:
+            reasons.append("%s arm states no direction, so its change is not readable" % arm)
+
+    # ANSWER DETERMINACY: exactly one reading per arm, and the key is DERIVED, never trusted.
+    # A supplied key is checked against the derivation rather than believed; an item with no key
+    # is not thereby admissible, because determinacy is still required of both arms.
     key = item.get("answer")
+    derived_key = None
     for arm, view in arms.items():
         readings = view["readings"]
         if len(readings) != 1:
             reasons.append("%s arm leaves %d readings consistent with its text, so the text does "
                            "not determine the answer it is scored against" % (arm, len(readings)))
-        elif key is not None and key not in readings:
+            continue
+        only = sorted(readings)[0]
+        if arm == "ainglish":
+            derived_key = only
+        if key is not None and only != key:
             reasons.append("%s arm's text supports %r, but the item is keyed %r"
-                           % (arm, sorted(readings)[0], key))
+                           % (arm, only, key))
 
     differing = sorted({
         feature for feature in ("endpoints", "point_magnitudes", "bare_percents")
         if arms["english"]["facts"][feature] != arms["ainglish"]["facts"][feature]
     })
+    # BYTE-IDENTICAL ARMS carry no contrast at all: there is nothing for the comparator to hold
+    # fixed and nothing for it to vary, so such a pair cannot evidence a surface difference.
+    if item.get("english") == item.get("ainglish"):
+        reasons.append("the two arms are byte-identical, so the item carries no contrast")
+
     return {
         "id": item.get("id"),
         "admissible": not reasons,
         "reasons": reasons,
+        "derived_answer": derived_key,
+        "supplied_answer": key,
         "signature": {
             "endpoints_present": bool(ends["english"]) and bool(ends["ainglish"]),
             "endpoints_equal": ends["english"] == ends["ainglish"],
@@ -195,23 +256,57 @@ def item_verdict(item):
     }
 
 
+_PREDICATE_FUNCTIONS = ("record_arithmetic", "surface_facts", "readings_consistent_with",
+                       "item_verdict")
+
+
+def predicate_digest():
+    """A digest of the admissibility PREDICATE ITSELF, so a receipt is bound to its rule.
+
+    @dantic's requirement on the thread: a version string is not enough if the implementation can
+    change while the string stays `v1`. A frozen record re-keyed under a revised predicate would
+    then be indistinguishable from one keyed under the original. Hashing the parsed source of the
+    functions that decide admissibility makes any behavioural revision change every receipt it
+    produces, automatically and without anyone remembering to bump a number.
+
+    The AST is hashed rather than the text, so reformatting and comments do not churn the digest
+    while a changed comparison or threshold does.
+    """
+    import ast as _ast
+    import inspect as _inspect
+    module = sys.modules[__name__]
+    dumps = []
+    for name in _PREDICATE_FUNCTIONS:
+        source = _inspect.getsource(getattr(module, name))
+        tree = _ast.parse(textwrap.dedent(source))
+        dumps.append(_ast.dump(tree, annotate_fields=True, include_attributes=False))
+    return hashlib.sha256("\n".join(dumps).encode("utf-8")).hexdigest()
+
+
 def set_signature(items):
     """The derived comparator signature for a whole set, plus every inadmissible item."""
     verdicts = [item_verdict(item) for item in items]
     inadmissible = [v for v in verdicts if not v["admissible"]]
     endpoint_sets = {v["signature"]["endpoints_present"] for v in verdicts}
     differing = {tuple(v["signature"]["surface_features_differing"]) for v in verdicts}
+    features = sorted({f for group in differing for f in group})
     return {
         "kind": "ainglish.comparator-signature.v1",
+        "predicate_sha256": predicate_digest(),
         "derived_from": "served item strings",
         "items": len(verdicts),
         "admissible": len(verdicts) - len(inadmissible),
         "endpoints_present": ("all" if endpoint_sets == {True}
                               else "none" if endpoint_sets == {False} else "mixed"),
-        "surface_features_differing": sorted({f for group in differing for f in group}),
-        "homogeneous_contrast": len(differing) == 1,
+        "surface_features_differing": features,
+        # A contrast is homogeneous when every item varies the SAME feature and at least one
+        # feature varies at all. One shape shared by every item, where that shape is "nothing
+        # differs", is not a homogeneous contrast; it is no contrast.
+        "homogeneous_contrast": len(differing) == 1 and bool(features),
         "verdicts": verdicts,
-        "set_admissible": not inadmissible,
+        # An empty set determines nothing, so it cannot be admissible. Vacuous truth here would
+        # have let a set that failed to load report itself as clean.
+        "set_admissible": bool(verdicts) and not inadmissible,
     }
 
 
@@ -309,7 +404,79 @@ def selftest():
     else:
         raise AssertionError("a zero base leaves relative change undefined and must refuse")
 
-    # (7) The set-level signature reports the contrast rather than asserting it.
+    # (7) @dexagon-ai's #123 counterexamples. Each of these was ADMITTED by the first version.
+    # An endpoint value was being collected as a change magnitude, so a wrong "3%" was rescued by
+    # the unrelated coincidence of the endpoint 20 matching the record's 20-point move.
+    collision = [{
+        "id": "endpoint-collision",
+        "record": {"old_rate": "20", "new_rate": "40"},
+        "english": "The rate rose 3%, from 20% to 40%.",
+        "ainglish": "The rate rose 20 percentage points, from 20% to 40%.",
+        "answer": READING_POINT,
+    }]
+    verdict = set_signature(collision)["verdicts"][0]
+    assert not verdict["admissible"], "an endpoint must never be read as a change magnitude"
+    assert any("neither the record's point change" in r for r in verdict["reasons"]), \
+        verdict["reasons"]
+    assert surface_facts("The rate rose 3%, from 20% to 40%.")["bare_percents"] == [Fraction(3)], \
+        "endpoint spans must be masked before magnitudes are read"
+
+    # Direction was derived from the record and never read back from either string, so a pair
+    # could contradict the record in BOTH arms and pass.
+    reversed_pair = [{
+        "id": "direction-reversed",
+        "record": {"old_rate": "52", "new_rate": "60"},
+        "english": "The rate fell 8%, from 52% to 60%.",
+        "ainglish": "The rate fell 8 percentage points, from 52% to 60%.",
+        "answer": READING_POINT,
+    }]
+    reasons = " | ".join(set_signature(reversed_pair)["verdicts"][0]["reasons"])
+    assert "says 'fell' while the record rose" in reasons, reasons
+
+    # Set-level fail-open edges: an empty set determined nothing and reported itself clean;
+    # byte-identical arms claimed a homogeneous CONTRAST while nothing differed.
+    assert set_signature([])["set_admissible"] is False, "an empty set determines nothing"
+    identical = [{
+        "id": "identical-arms",
+        "record": {"old_rate": "52", "new_rate": "60"},
+        "english": "The rate rose 8 percentage points, from 52% to 60%.",
+        "ainglish": "The rate rose 8 percentage points, from 52% to 60%.",
+        "answer": READING_POINT,
+    }]
+    flat = set_signature(identical)
+    assert not flat["set_admissible"] and not flat["homogeneous_contrast"], \
+        "identical arms carry no contrast and must not be labelled a homogeneous one"
+
+    # An item with NO supplied key is not admissible by omission: determinacy is still required,
+    # and the key is derived and emitted so the set can be scored from the derivation.
+    keyless = dict(good[0])
+    keyless.pop("answer")
+    derived = set_signature([keyless])["verdicts"][0]
+    assert derived["admissible"] and derived["derived_answer"] == READING_POINT, derived
+    assert derived["supplied_answer"] is None
+    undetermined = dict(drifted[0])
+    undetermined.pop("answer")
+    assert not set_signature([undetermined])["verdicts"][0]["admissible"], \
+        "dropping the key must not rescue an item whose text determines nothing"
+
+    # The receipt is bound to the predicate that produced it, not to a version string anyone can
+    # keep while changing the rule underneath it (@dantic).
+    digest = predicate_digest()
+    assert len(digest) == 64 and set_signature(good)["predicate_sha256"] == digest
+    assert digest == predicate_digest(), "the digest must be stable across calls"
+    # …and it must actually be DERIVED from the predicate source. A hardcoded constant would be
+    # stable and 64 characters too, and would satisfy every assertion above while binding nothing.
+    global _PREDICATE_FUNCTIONS
+    original = _PREDICATE_FUNCTIONS
+    try:
+        _PREDICATE_FUNCTIONS = ("record_arithmetic",)
+        assert predicate_digest() != digest, \
+            "the digest must change with the predicate it covers, or it binds nothing"
+    finally:
+        _PREDICATE_FUNCTIONS = original
+    assert predicate_digest() == digest, "and must return to the original once restored"
+
+    # (8) The set-level signature reports the contrast rather than asserting it.
     mixed = set_signature(good + drifted)
     assert mixed["endpoints_present"] == "mixed" and not mixed["set_admissible"]
     assert mixed["admissible"] == 1 and mixed["items"] == 2
@@ -327,6 +494,11 @@ def main(argv):
         return 0 if set_signature(items)["set_admissible"] else 1
     print(__doc__)
     return 0
+
+
+def cli():
+    """Console entry point: `ainglish-latent items.json`. Exit 1 when the set is inadmissible."""
+    raise SystemExit(main(sys.argv))
 
 
 if __name__ == "__main__":
