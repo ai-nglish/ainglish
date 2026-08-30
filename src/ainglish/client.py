@@ -1033,8 +1033,74 @@ class AinglishClient:
 
     def protocols(self):
         """Metric definitions. Envelope: {kind, replication_threshold, metrics: {name: {...}}}
-        plus decorrelation axes, tokenizer classes, and the reference corpus summary."""
+        plus decorrelation axes, tokenizer classes, the reference corpus summary, and
+        measurement_submission (accepted fields + fail-closed per-metric starter objects)."""
         return self.get("/api/v1/protocols")
+
+    def measurement_template(self, metric, models=None):
+        """Return the server's deliberately incomplete starter object for one live metric.
+
+        This is discovery, not evidence generation. ``value`` and metric-specific observed
+        fields remain null, while ``manifest.models`` remains empty unless ``models`` is supplied;
+        the server therefore refuses an unchanged template. Fill it only from a frozen run.
+
+        Public example fixtures are reusable plumbing/calibration checks, never fresh settlement
+        inputs. A replication must substitute wholly fresh answer-bearing items and mint its own
+        committed manifest before reader spend.
+        """
+        if not isinstance(metric, str) or not metric.strip():
+            raise ValueError("metric must be a non-empty string")
+        metric = metric.strip()
+        if models is not None:
+            if not isinstance(models, (list, tuple)) or not 1 <= len(models) <= 16:
+                raise ValueError("models must be a non-empty list/tuple of at most 16 identifiers")
+            cleaned = []
+            for model in models:
+                if not isinstance(model, str) or not model.strip() or len(model.strip()) > 80:
+                    raise ValueError("every model must be a non-empty string of at most 80 characters")
+                cleaned.append(model.strip())
+        else:
+            cleaned = None
+
+        envelope = self.protocols()
+        contract = envelope.get("measurement_submission") if isinstance(envelope, dict) else None
+        metric_contracts = contract.get("metrics") if isinstance(contract, dict) else None
+        if not isinstance(metric_contracts, dict):
+            raise AinglishError(502, {
+                "error": "measurement_contract_unavailable",
+                "message": "the register did not serve measurement_submission from /protocols",
+                "hint": "deploy a server that exposes ainglish.measurement-submission-contract.v1; do not guess a payload",
+            })
+        if contract.get("kind") != "ainglish.measurement-submission-contract.v1":
+            raise AinglishError(502, {
+                "error": "invalid_measurement_contract",
+                "message": "the register served an unknown measurement-submission contract kind",
+                "hint": "upgrade the SDK for the new contract or report server/SDK drift; do not guess a payload",
+            })
+        if metric not in metric_contracts:
+            raise ValueError("unknown metric %r; live metrics: %s" % (
+                metric, ", ".join(sorted(str(name) for name in metric_contracts))))
+        entry = metric_contracts[metric]
+        template = entry.get("template") if isinstance(entry, dict) else None
+        if not isinstance(template, dict):
+            raise AinglishError(502, {
+                "error": "invalid_measurement_contract",
+                "message": "the live metric contract has no starter template",
+                "hint": "report server/SDK contract drift; do not construct the evidence payload by guesswork",
+            })
+        # JSON round-trip gives the caller a detached, JSON-safe object without allowing mutation
+        # of a cached/fake protocols envelope supplied by an integration.
+        out = json.loads(json.dumps(template))
+        if cleaned is not None:
+            manifest = out.get("manifest")
+            if not isinstance(manifest, dict):
+                raise AinglishError(502, {
+                    "error": "invalid_measurement_contract",
+                    "message": "the live measurement template has no manifest object",
+                    "hint": "report server/SDK contract drift; do not construct the evidence payload by guesswork",
+                })
+            manifest["models"] = cleaned
+        return out
 
     def changelog(self):
         """Hash-chained history. Envelope: {kind, entry_hash_recipe, register_digest_recipe,
@@ -1903,6 +1969,59 @@ def selftest():
         raise AssertionError("no credentials must refuse")
     except AinglishError as err:
         assert "reads never need credentials" in str(err)
+
+    # Metric-specific payload discovery comes from the live protocol contract rather than a
+    # second hand-maintained SDK schema. Starters are detached and fail closed until observed
+    # fields are filled; models may be supplied without manufacturing panel diagnostics.
+    _template_envelope = {
+        "measurement_submission": {
+            "kind": "ainglish.measurement-submission-contract.v1",
+            "metrics": {
+                "comprehension_accuracy_delta": {
+                    "template": {
+                        "metric": "comprehension_accuracy_delta", "value": None,
+                        "manifest": {"metric": "comprehension_accuracy_delta", "models": []},
+                        "arms": {"english": None, "ainglish": None},
+                    },
+                },
+            },
+        },
+    }
+
+    class _TemplateClient(AinglishClient):
+        def protocols(self):
+            return _template_envelope
+
+    _templates = _TemplateClient(use_env=False)
+    _starter = _templates.measurement_template(
+        "comprehension_accuracy_delta", ["reader-a@provider-served"])
+    assert _starter["value"] is None and _starter["arms"]["english"] is None
+    assert _starter["manifest"]["models"] == ["reader-a@provider-served"]
+    _starter["manifest"]["models"].append("mutated")
+    assert _template_envelope["measurement_submission"]["metrics"][
+        "comprehension_accuracy_delta"]["template"]["manifest"]["models"] == [], \
+        "measurement_template must return a detached object"
+    for bad_models in ([], [""], [1], ["x"] * 17):
+        try:
+            _templates.measurement_template("comprehension_accuracy_delta", bad_models)
+            raise AssertionError("invalid template models were accepted: %r" % (bad_models,))
+        except ValueError:
+            pass
+    try:
+        _templates.measurement_template("not-a-metric")
+        raise AssertionError("unknown metric must refuse before payload construction")
+    except ValueError as exc:
+        assert "live metrics" in str(exc)
+
+    class _OldServer(AinglishClient):
+        def protocols(self):
+            return {"kind": "ainglish.protocols", "metrics": {}}
+
+    try:
+        _OldServer(use_env=False).measurement_template("token_delta")
+        raise AssertionError("a server without the executable contract must not trigger SDK guessing")
+    except AinglishError as err:
+        assert err.error == "measurement_contract_unavailable", str(err)
     try:
         c.vote("x", 2)
         raise AssertionError("vote(2) must refuse client-side")

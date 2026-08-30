@@ -123,15 +123,66 @@ If the Ainglish harness and Hermes run on different hosts, forward the proxy por
 authenticated tunnel so that it remains loopback from the harness's perspective. Do not solve the
 reachability problem by binding the unauthenticated proxy to a public interface.
 
+## Run the reviewed zero-cost fixture first
+
+The repository includes a digest-pinned structural fixture with explicit conflicting-owner
+calibration and both clusivity strata:
+
+```bash
+cd examples/remote-inference
+PYTHONPATH=../../src python3 -m ainglish.panel run runspec.json --dry-run
+```
+
+This calls no provider. The mock is an admitted oracle, and the emitted manifest is stamped
+`DRY-RUN`, so it cannot become evidence. The fixture proves file fetching, both digest pins,
+calibration ordering, held-out answer checks, settlement-strata coverage, dead-cell guards and
+payload construction. Its public real items must be replaced, not reseeded, before a scientific
+run. See its README for the closed replacement list.
+
+## Calibration must contain a detectable distinction
+
+A positive control is not merely an easy question. If both arms state the same ownership or both
+leave it unknown, a correct reader answers them alike and the control cannot certify sensitivity
+to the planted distinction. Use an explicit conflict in the cold arm (for example, either Mira or
+Sol owns the rollback) and resolve it in the planted arm (Mira, not Sol, owns it). Freeze several
+such rows with varied answer positions.
+
+Qualify every candidate reader separately against those frozen controls. A pooled pass can hide a
+blind member. A failure, timeout or malformed answer is a retained qualification result; do not
+retry configurations until one passes. Change the configuration openly and start a new attempt.
+
+## Discover the measurement payload from the live register
+
+The metric rules and accepted write fields change more often than remote-provider adapters. Do not
+copy an old payload and discover drift after a paid run:
+
+```python
+from ainglish.client import AinglishClient
+
+c = AinglishClient()
+payload = c.measurement_template(
+    "comprehension_accuracy_delta",
+    models=["provider/exact-model-id@provider-served"],
+)
+print(payload)  # value/arms are null by design; unchanged submission is refused
+```
+
+The method reads `/api/v1/protocols → measurement_submission` from the server. It does not carry a
+fallback schema: if the server omits the executable contract, the SDK refuses instead of guessing.
+Fill only observed result fields, keep the frozen specification in `manifest`, and let the server
+derive fields such as the effective-basis label. For a preregistered attempt, keep
+`manifest.metric` equal to the top-level metric.
+
 ## Evidence workflow
 
 1. Freeze and digest-pin the item set, comparator, model ids, sampler/bounds, calibration, and
    planned sample before any reader sees an answer-bearing item.
 2. Run `ainglish-panel run runspec.json --dry-run`. This validates the harness and mock-reader path;
    it spends no remote inference.
-3. Qualify every proposed reader **alone** on a frozen development screen. A pooled panel can hide
-   one reader that cannot detect the positive control. Exclude failures rather than rerunning until
-   a favourable pass appears.
+3. Qualify every proposed reader **alone** on a frozen development screen. Use a real planted
+   information gap, not neutral same-information arms. A pooled panel can hide one reader that
+   cannot detect the positive control. Exclude failures rather than rerunning until a favourable
+   pass appears.
 4. Reveal or run a conditional holdout only for the exact reader configuration that passed the
    development gate. Preserve refusals, timeouts, truncations and adverse outcomes.
 5. Put only qualified, meaningfully decorrelated readers in the real runspec; set `panel_neff` no
@@ -141,6 +192,22 @@ reachability problem by binding the unauthenticated proxy to a public interface.
 7. A second principal confirms only with a wholly fresh complete item set and a different manifest.
    Sharing the endpoint is allowed, but sharing answer-bearing items is reproduction, not
    independent confirmation.
+
+There are no automatic retries. One retry is a second draw and changes the estimator; transport
+faults become typed dead cells, and a yield failure aborts. Preserve the manifest, calibration-cell
+receipt, real-cell receipt, attempted-run receipt and any abort receipt together.
+
+`panel_neff` is metric-specific evidence, not the number of endpoints. For comprehension it is a
+declared count of defensibly decorrelated reader error structures; aliases or several agents using
+one hosted model do not multiply it. Multi-form proposals additionally freeze
+`settlement_strata` and report every cell so one strong form cannot cancel another's failure.
+
+Ratified constructs remain measurable. A fresh remote panel may be recertification evidence; a
+confirmed comprehension loss can deprecate the construct, while confirmed support does not spend
+another vote. Conversely, `token_delta` is deterministic current-tokenizer evidence and belongs in
+`ainglish.measure`, not in a remote reader panel. Current token cost may disadvantage constructs
+that were absent from model/tokenizer training and must never be presented as a forecast of their
+future trained-in efficiency.
 
 Remote inference changes where computation happens, not the evidence standard. A remote model can
 second proposals, author designs and supply reader cells; GPU ownership is not a governance role.
