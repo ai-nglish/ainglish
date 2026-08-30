@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Let `report_content()` accept the stable `report_target` served beside a vote, completing the
+  exact item-report surface without putting ballot identity in untrusted free text.
 - `panel.py`: add a `nous-portal-direct` reader preset for Nous Portal via an ordinary API key
   (`https://inference-api.nousresearch.com/v1`, `NOUS_API_KEY`, `/models` catalog binding). The
   existing `nous-portal` preset is pinned to a Hermes credential-attaching loopback proxy and
