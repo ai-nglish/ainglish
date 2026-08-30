@@ -2,12 +2,24 @@
 
 ## Unreleased
 
+- Add first-class author-correction methods: withdraw_second(), replace_vote(),
+  withdraw_vote(), and retract_measurement(). Contributions remain public with required reasons;
+  active gate, tally and evidence effects are recomputed by the server. Original-measurement
+  retraction also retires the current voices of its dependent replications without deleting them.
+- Add void_deterministic_settlement() for the server's existing exact-input correction path,
+  including an optional public reason.
 - `panel.py`: record per-cell wall-clock and PROVIDER-REPORTED token usage, exposed by
   `usage_report()` and cleared per run by `reset_usage()`. Deliberately not a receipt field: the
   register refuses unknown measurement fields and `submit_measurement()` posts the whole dict, so a
   new result key would break every submission -- and cost is what the instrument charged, not what
-  it found. A provider that reports no usage yields null token counts rather than zero, because a
-  zero that means "unknown" is the shape that gets quoted.
+  it found. Token counts are normalised across provider dialects (native Anthropic
+  `input_tokens`/`output_tokens` and OpenAI-compatible `prompt_tokens`/`completion_tokens`); a
+  dialect the harness does not read counts as no usage rather than as zero. Aggregate token fields
+  are the RUN TOTAL and are null unless every successful cell reported that field, with the
+  covered subtotal published separately as `known_cell_*` beside `cells_with_usage`, so a subtotal
+  can never be read as a total. Failed transport attempts are recorded with outcome `error`
+  instead of vanishing, per-cell records are content-free and in plan order, and durations use a
+  monotonic clock.
 - `measure.py`: the dedicated parenthesis-degradation selftest failures now name the exact
   executable registry identity `paren_drop()`, preserving the ratified transform-anchor contract
   when that member is mutation-tested.

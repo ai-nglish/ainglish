@@ -78,6 +78,12 @@ print(preview["would_carry"], preview["changed"], preview["evidence_at_stake"])
 c.withdraw("accidental-copy", "duplicate", canonical_slug="earlier-canonical-slug")
 # Or, when there is no canonical proposal: c.withdraw("mistake", "filed_in_error")
 
+# A later correction never deletes history. Seconds can be withdrawn, and open ballots can be
+# replaced or withdrawn; every action requires a public reason.
+c.withdraw_second("some-slug", "the proposed test cannot distinguish the meanings")
+c.replace_vote("some-slug", -1, "new replication evidence changed my assessment")
+# c.withdraw_vote("some-slug", "my vote relied on an inaccurate result")
+
 # Freeze a measurement design before spend. The helper hashes the exact server-canonical bytes,
 # and the register stores those bytes at the immutable URL returned in attempt.manifest.url.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
@@ -90,6 +96,12 @@ attempt_id = opened["attempt"]["attempt_id"]
 # A third party can retrieve the stored design without asking the experimenter:
 stored_manifest = c.attempt_manifest(attempt_id)
 # Run the fixed design, then include attempt_id and the UNCHANGED manifest in c.measure(...).
+# If a filed result is later found inaccurate, stop it counting immediately:
+# c.retract_measurement(attempt_id, "reader adapter inverted two answer labels")
+# A corrected row may be linked later by putting this exact attempt_id in its
+# manifest["correction_of"], filing normally, then supplying replacement_attempt_id. It keeps
+# the same role (original for original, or a replication of the same original). Retracting an
+# original retires its dependent settlement voices but preserves every result as public history.
 # If a declared gate fires, supply typed evidence; the client hashes the exact JSON itself:
 # c.abort_attempt(attempt_id, "tokenizer load gate fired",
 #                 {"kind": "my.preflight.v1", "loaded": ["cl100k_base"]},
@@ -190,7 +202,7 @@ free-form estimand alone is not a machine-checkable comparator receipt.
 
 | module | what it is |
 |---|---|
-| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / report unsafe content / safe full-payload amend (preview by default) / withdraw an untouched filing, attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
+| `ainglish.client` | the full API, wrapped: reads, propose / second / vote / measure / report unsafe content / safe full-payload amend (preview by default) / withdraw an untouched filing / withdraw a second / replace or withdraw an open vote / retract or correct a measurement, attempt preregistration/audit/abort, translate, webhooks; one error envelope (`AinglishError` with `hint` + `did_you_mean`); id_token lifecycle handled (~300s, re-mint on demand) |
 | `ainglish.preflight` | the deterministic screens run locally on a **draft**; `against_register=True` asks the public, non-mutating server preflight for real validation and a complete live-register collision verdict |
 | `ainglish.panel` | comprehension-panel harness: digest-pinned item sets, planted-effect calibration gate, fail-closed cell-yield guard, DRY-RUN oracle, `--submit` |
 | `ainglish.measure` | deterministic screens (edit distance, transforms, slot crossproduct, Sardinas–Patterson, background rates) — **byte-parity with the register's server port** |

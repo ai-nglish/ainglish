@@ -645,6 +645,40 @@ def reader_receipt(endpoint):
 # read it without a hand-rolled wrapper around chat(), which is what everyone has had to write so
 # far (Rosetta rebuilt exactly this to answer "what did the panel cost").
 _CELL_TELEMETRY: list = []
+_CELL_RECORD_CAP = 5000     # the RETURNED records are bounded; the aggregates stay exact
+
+# Providers name the same two quantities differently, and reading only one dialect turns a real
+# count into a confident zero -- the exact failure this telemetry exists to prevent. Anthropic's
+# native Messages API reports input_tokens/output_tokens; OpenAI-compatible reports
+# prompt_tokens/completion_tokens. A dialect we do not read yields None (unknown), never 0.
+_USAGE_ALIASES = (("prompt_tokens", ("prompt_tokens", "input_tokens")),
+                  ("completion_tokens", ("completion_tokens", "output_tokens")))
+
+
+def _normalise_usage(data):
+    """The provider `usage` block as {prompt_tokens, completion_tokens}, or None if it reported none.
+
+    A field the provider did not report stays None. None means unknown and is never coerced to 0,
+    because a zero meaning "unknown" is the shape that gets quoted back as a cost. A usage block
+    written in a dialect this function does not read is treated as no usage at all, so it lands in
+    cells_without_usage rather than being silently totalled as zero.
+    """
+    usage = data.get("usage") if isinstance(data, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    out = {}
+    for canonical, aliases in _USAGE_ALIASES:
+        value = None
+        for alias in aliases:
+            raw = usage.get(alias)
+            if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+                continue
+            value = int(raw)
+            break
+        out[canonical] = value
+    if out["prompt_tokens"] is None and out["completion_tokens"] is None:
+        return None
+    return out
 
 
 def reset_usage() -> None:
@@ -656,34 +690,78 @@ def usage_report():
     """Per-reader wall-clock and PROVIDER-REPORTED token usage for the cells bought so far.
 
     Tokens come from the provider's own `usage` block, never from a local estimate: an estimate
-    would be a second opinion about someone else's bill. A provider that reports no usage shows
-    null token fields rather than a plausible-looking zero, because zero is a claim.
+    would be a second opinion about someone else's bill.
+
+    `prompt_tokens` / `completion_tokens` are RUN TOTALS, and are therefore None unless every
+    counted cell reported that field. A subtotal presented as a total is a wrong number, not a
+    partial one. The subtotal over the cells that did report is still published as
+    `known_cell_prompt_tokens` / `known_cell_completion_tokens` beside `cells_with_usage`, so
+    nothing is hidden and nothing can be read as complete when it is not.
+
+    Failed transport attempts ARE represented: they appear as records with outcome "error", are
+    counted in `failed_cells` and in `wall_s`, and are excluded from the usage denominators
+    (an attempt that never returned a response has no usage to report).
+
+    `cell_records` are content-free and in plan order, bounded to _CELL_RECORD_CAP with the
+    remainder counted in `cell_records_omitted`; aggregates always cover every cell. They carry no
+    prompt or answer text -- only reader, outcome, duration and provider usage. They deliberately
+    do NOT carry item or stage identity: chat() is not told either, and a module-level "current
+    item" would become a lie the moment cells run concurrently. That identity belongs to the
+    plan-order journal, not to the transport.
     """
     per = {}
     for row in _CELL_TELEMETRY:
-        acc = per.setdefault(row["reader"], {"cells": 0, "wall_s": 0.0, "prompt_tokens": 0,
-                                             "completion_tokens": 0, "cells_without_usage": 0})
+        acc = per.setdefault(row["reader"], {
+            "cells": 0, "failed_cells": 0, "cells_with_usage": 0, "cells_without_usage": 0,
+            "wall_s": 0.0, "known_cell_prompt_tokens": 0, "known_cell_completion_tokens": 0,
+            "_prompt_known": 0, "_completion_known": 0, "_ok": 0})
         acc["cells"] += 1
         acc["wall_s"] = round(acc["wall_s"] + row["wall_s"], 3)
-        if row["usage"] is None:
+        if row["outcome"] != "ok":
+            acc["failed_cells"] += 1
+            continue
+        acc["_ok"] += 1
+        usage = row["usage"]
+        if usage is None:
             acc["cells_without_usage"] += 1
-        else:
-            acc["prompt_tokens"] += int(row["usage"].get("prompt_tokens") or 0)
-            acc["completion_tokens"] += int(row["usage"].get("completion_tokens") or 0)
+            continue
+        acc["cells_with_usage"] += 1
+        if usage["prompt_tokens"] is not None:
+            acc["known_cell_prompt_tokens"] += usage["prompt_tokens"]
+            acc["_prompt_known"] += 1
+        if usage["completion_tokens"] is not None:
+            acc["known_cell_completion_tokens"] += usage["completion_tokens"]
+            acc["_completion_known"] += 1
     for acc in per.values():
-        if acc["cells_without_usage"] == acc["cells"]:
-            acc["prompt_tokens"] = acc["completion_tokens"] = None
+        ok = acc.pop("_ok")
+        prompt_known = acc.pop("_prompt_known")
+        completion_known = acc.pop("_completion_known")
+        # A total is only a total when every successful cell reported the field.
+        acc["prompt_tokens"] = acc["known_cell_prompt_tokens"] if ok and prompt_known == ok else None
+        acc["completion_tokens"] = (acc["known_cell_completion_tokens"]
+                                    if ok and completion_known == ok else None)
+        acc["usage_complete"] = bool(ok) and prompt_known == ok and completion_known == ok
         acc["mean_wall_s"] = round(acc["wall_s"] / acc["cells"], 3) if acc["cells"] else None
-    total_cells = sum(a["cells"] for a in per.values())
-    return {"kind": "ainglish.panel.usage-report.v1", "cells": total_cells,
-            "wall_s": round(sum(a["wall_s"] for a in per.values()), 3), "by_reader": per}
+    return {"kind": "ainglish.panel.usage-report.v2",
+            "cells": len(_CELL_TELEMETRY),
+            "failed_cells": sum(a["failed_cells"] for a in per.values()),
+            "wall_s": round(sum(a["wall_s"] for a in per.values()), 3),
+            "by_reader": per,
+            "cell_records": _CELL_TELEMETRY[:_CELL_RECORD_CAP],
+            "cell_records_omitted": max(0, len(_CELL_TELEMETRY) - _CELL_RECORD_CAP)}
 
 
-def _record_cell(endpoint, started, data) -> None:
-    usage = data.get("usage") if isinstance(data, dict) else None
-    _CELL_TELEMETRY.append({"reader": endpoint.get("name", "?"),
-                            "wall_s": round(time.time() - started, 3),
-                            "usage": usage if isinstance(usage, dict) else None})
+def _record_cell(endpoint, started, data, outcome="ok") -> None:
+    """Append one content-free cell record. `started` is a time.monotonic() reading.
+
+    monotonic, not time.time(): a wall clock that steps backwards over an NTP correction would
+    report a negative duration, and a duration is the one field here nobody would re-derive.
+    """
+    _CELL_TELEMETRY.append({"seq": len(_CELL_TELEMETRY),
+                            "reader": endpoint.get("name", "?"),
+                            "outcome": outcome,
+                            "wall_s": round(time.monotonic() - started, 3),
+                            "usage": _normalise_usage(data)})
 
 
 def chat(endpoint, prompt):
@@ -713,8 +791,13 @@ def chat(endpoint, prompt):
                    "x-api-key": key, "anthropic-version": "2023-06-01"}
         req = urllib.request.Request(ep["base_url"].rstrip("/") + "/v1/messages",
                                      json.dumps(body).encode(), headers)
-        _started = time.time()
-        data = _fetch(req, timeout=bounds["timeout_s"])
+        _started = time.monotonic()
+        try:
+            data = _fetch(req, timeout=bounds["timeout_s"])
+        except BaseException:
+            # A failed attempt that vanishes is indistinguishable from one that never ran.
+            _record_cell(ep, _started, None, outcome="error")
+            raise
         _record_cell(ep, _started, data)
         return ("".join(b.get("text", "") for b in data.get("content", [])),
                 data.get("stop_reason") == "max_tokens")
@@ -725,8 +808,12 @@ def chat(endpoint, prompt):
         headers["Authorization"] = f"Bearer {key}"
     req = urllib.request.Request(ep["base_url"].rstrip("/") + "/chat/completions",
                                  json.dumps(body).encode(), headers)
-    _started = time.time()
-    data = _fetch(req, timeout=bounds["timeout_s"])
+    _started = time.monotonic()
+    try:
+        data = _fetch(req, timeout=bounds["timeout_s"])
+    except BaseException:
+        _record_cell(ep, _started, None, outcome="error")
+        raise
     _record_cell(ep, _started, data)
     choice = data["choices"][0]
     return choice["message"]["content"], choice.get("finish_reason") == "length"
@@ -4184,21 +4271,111 @@ def selftest():
             os.environ["OPENAI_API_KEY"] = saved_openai_key
 
     # --- usage telemetry ---------------------------------------------------------------------
-    reset_usage()
-    assert usage_report()["cells"] == 0, "reset_usage must clear the accumulator"
-    _record_cell({"name": "r1"}, time.time() - 1.5, {"usage": {"prompt_tokens": 10, "completion_tokens": 4}})
-    _record_cell({"name": "r1"}, time.time() - 0.5, {"usage": {"prompt_tokens": 6, "completion_tokens": 2}})
-    _record_cell({"name": "r2"}, time.time() - 0.2, {})          # provider reported no usage block
-    _rep = usage_report()
-    assert _rep["cells"] == 3, _rep
-    _r1 = _rep["by_reader"]["r1"]
-    assert _r1["cells"] == 2 and _r1["prompt_tokens"] == 16 and _r1["completion_tokens"] == 6, _r1
-    assert _r1["wall_s"] >= 1.9 and _r1["mean_wall_s"] is not None, _r1
-    # A provider reporting no usage must show null, never a plausible-looking zero: zero is a claim
-    # about someone else's bill, and a zero that means "unknown" is the shape that gets quoted.
-    _r2 = _rep["by_reader"]["r2"]
-    assert _r2["prompt_tokens"] is None and _r2["cells_without_usage"] == 1, _r2
-    reset_usage()
+    # These drive chat() with faked provider responses rather than calling _record_cell directly:
+    # the defect class here is dialect handling inside the transport, and a direct _record_cell
+    # test cannot see it -- it would pass while the shipped path reported a confident zero.
+    _saved_fetch = globals()["_fetch"]
+    _queued = []
+
+    def _fake_fetch(req, timeout=None):
+        item = _queued.pop(0)
+        if isinstance(item, BaseException):
+            raise item
+        return item
+
+    globals()["_fetch"] = _fake_fetch
+    try:
+        _anthropic_ep = {"name": "claude", "model": "m", "api": "anthropic",
+                         "base_url": "https://example.invalid"}
+        _openai_ep = {"name": "gpt", "model": "m", "base_url": "https://example.invalid"}
+
+        reset_usage()
+        assert usage_report()["cells"] == 0, "reset_usage must clear the accumulator"
+
+        # Native Anthropic spells its counts input_tokens/output_tokens. Reading only the OpenAI
+        # spelling returned prompt_tokens 0, completion_tokens 0 AND cells_without_usage 0 -- a
+        # false provider-reported zero, absence wearing the costume of a measurement.
+        _queued.append({"content": [{"text": "A"}], "stop_reason": "end_turn",
+                        "usage": {"input_tokens": 17, "output_tokens": 3}})
+        assert chat(_anthropic_ep, "q") == ("A", False)
+        _r = usage_report()["by_reader"]["claude"]
+        assert _r["prompt_tokens"] == 17 and _r["completion_tokens"] == 3, _r
+        assert _r["cells_without_usage"] == 0 and _r["usage_complete"] is True, _r
+
+        # MUTANT: drop the Anthropic aliases and the same wire response must stop reporting 17/3.
+        # If this assertion ever fails, the normalisation is not what makes the test pass.
+        _saved_aliases = globals()["_USAGE_ALIASES"]
+        globals()["_USAGE_ALIASES"] = (("prompt_tokens", ("prompt_tokens",)),
+                                       ("completion_tokens", ("completion_tokens",)))
+        try:
+            reset_usage()
+            _queued.append({"content": [{"text": "A"}], "stop_reason": "end_turn",
+                            "usage": {"input_tokens": 17, "output_tokens": 3}})
+            chat(_anthropic_ep, "q")
+            _m = usage_report()["by_reader"]["claude"]
+            assert _m["prompt_tokens"] is None and _m["cells_without_usage"] == 1, \
+                "OpenAI-only aliases must NOT silently total an Anthropic usage block: %r" % (_m,)
+        finally:
+            globals()["_USAGE_ALIASES"] = _saved_aliases
+
+        # OpenAI-compatible dialect, same contract.
+        reset_usage()
+        _queued.append({"choices": [{"message": {"content": "B"}, "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 10, "completion_tokens": 4}})
+        assert chat(_openai_ep, "q") == ("B", False)
+        _r = usage_report()["by_reader"]["gpt"]
+        assert _r["prompt_tokens"] == 10 and _r["completion_tokens"] == 4, _r
+
+        # MIXED COVERAGE: one cell reports 10/4, one reports no usage at all. The run TOTAL must be
+        # null -- a subtotal presented as a total is a wrong number, not a partial one -- while the
+        # subtotal stays available and says how many cells it covers.
+        _queued.append({"choices": [{"message": {"content": "C"}, "finish_reason": "stop"}]})
+        assert chat(_openai_ep, "q") == ("C", False)
+        _r = usage_report()["by_reader"]["gpt"]
+        assert _r["cells"] == 2 and _r["cells_with_usage"] == 1 and _r["cells_without_usage"] == 1, _r
+        assert _r["prompt_tokens"] is None and _r["completion_tokens"] is None, \
+            "incomplete coverage must not publish a subtotal as a total: %r" % (_r,)
+        assert _r["known_cell_prompt_tokens"] == 10 and _r["known_cell_completion_tokens"] == 4, _r
+        assert _r["usage_complete"] is False, _r
+
+        # A usage block in a dialect we do not read is unknown, not zero.
+        reset_usage()
+        _queued.append({"choices": [{"message": {"content": "D"}, "finish_reason": "stop"}],
+                        "usage": {"tokens_billed": 99}})
+        chat(_openai_ep, "q")
+        _r = usage_report()["by_reader"]["gpt"]
+        assert _r["cells_without_usage"] == 1 and _r["prompt_tokens"] is None, _r
+
+        # A failed transport attempt must leave a record. Before this, an exception skipped
+        # _record_cell entirely and the attempt was indistinguishable from one that never ran.
+        reset_usage()
+        _queued.append(urllib.error.URLError("boom"))
+        try:
+            chat(_openai_ep, "q")
+            raise AssertionError("chat must propagate the transport failure")
+        except urllib.error.URLError:
+            pass
+        _rep = usage_report()
+        assert _rep["cells"] == 1 and _rep["failed_cells"] == 1, _rep
+        _r = _rep["by_reader"]["gpt"]
+        assert _r["failed_cells"] == 1 and _r["cells_with_usage"] == 0, _r
+        assert _r["prompt_tokens"] is None and _r["usage_complete"] is False, _r
+        assert _rep["cell_records"][0]["outcome"] == "error", _rep["cell_records"]
+
+        # Per-cell records are ordered, content-free, and carry no prompt or answer text.
+        reset_usage()
+        for _i in range(3):
+            _queued.append({"choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+                            "usage": {"prompt_tokens": 1, "completion_tokens": 1}})
+            chat(_openai_ep, "secret-prompt-%d" % _i)
+        _records = usage_report()["cell_records"]
+        assert [r["seq"] for r in _records] == [0, 1, 2], _records
+        assert all(set(r) == {"seq", "reader", "outcome", "wall_s", "usage"} for r in _records), _records
+        assert "secret-prompt" not in json.dumps(_records), "cell records must carry no prompt text"
+        assert all(r["wall_s"] >= 0 for r in _records), "monotonic clock must not go backwards"
+        reset_usage()
+    finally:
+        globals()["_fetch"] = _saved_fetch
 
     print("\nselftest OK: real effect measured by a calibrated panel; uncalibrated panel refused; "
           "arms ship with the payload; unpinned/tampered/swapped item sets refuse; robustness v4 "
