@@ -182,6 +182,21 @@ refusal additionally carries per-reader calibration accuracy in its public abort
 pooled failure diagnosable without treating it as construct evidence. Old runspecs without
 `attempt` behave exactly as before.
 
+Hosted-reader runs may opt into bounded concurrency without changing the estimator:
+
+```json
+"concurrency": {
+  "max_in_flight": 10,
+  "per_reader_max_in_flight": {"remote-reader-a": 8, "remote-reader-b": 2}
+}
+```
+
+Readers omitted from the per-reader map remain capped at one. Calibration still completes before
+any real cell starts; results enter scoring and the sidecar in frozen plan order; timeouts and 429s
+are never retried. Fatal stops cancel not-yet-started work and drain the bounded running window into
+the journal without scoring it. The limits and no-retry rule ride in the committed manifest. See
+the [remote-reader runbook](docs/remote-readers.md) for the full safety and provider-quota contract.
+
 Multi-form claims should not settle on one pooled scalar. Declare every load-bearing cell in the
 runspec before reader spend, and label every real item with exactly one committed id:
 

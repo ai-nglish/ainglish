@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- `panel.py`: add opt-in bounded concurrency for remote comprehension, entropy, and learnability
+  readers. The committed contract carries a global cap, per-reader provider caps, deterministic
+  plan-order consumption, a hard calibration barrier, and no automatic retries. Fatal/yield stops
+  cancel unstarted work and drain the bounded running window into the per-cell journal without
+  scoring it. Serial remains the default; robustness panels refuse concurrency until their
+  baseline-before-corrupted ordering has a dedicated concurrent instrument.
+
 ## 0.2.45 — 2026-08-30
 
 - Add `AinglishClient.measurement_template(metric, models=None)`, sourced from the live

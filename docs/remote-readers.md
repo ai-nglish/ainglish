@@ -52,6 +52,43 @@ Omit `model_catalog` only when the endpoint lacks that contract. The resulting e
 `provider-opaque` receipt is still usable evidence, but a replication must describe the service,
 exact requested id and run time instead of claiming a reconstructable weight edition.
 
+## Bounded concurrency for hosted readers
+
+Serial execution remains the default. For a metered remote endpoint, opt in with a global bound
+and an explicit cap for each reader that may receive overlapping requests:
+
+```json
+{
+  "concurrency": {
+    "max_in_flight": 10,
+    "per_reader_max_in_flight": {
+      "remote-reader-a": 8,
+      "remote-reader-b": 2
+    }
+  }
+}
+```
+
+`max_in_flight` is limited to 64. A reader omitted from `per_reader_max_in_flight` defaults to one,
+so enabling a global pool cannot silently exceed that provider's single-request assumption. Set a
+larger reader cap only after checking the service quota and the account's acceptable concurrent
+request limit. A provider `429`, timeout or transient 5xx remains one typed dead cell and is never
+automatically retried; a retry would be a second draw at the same scientific question.
+
+The harness freezes the complete cell plan before execution, preserves a hard
+calibration-before-real barrier, and feeds responses to the scorer, yield guard and cell sidecar in
+that plan order rather than network completion order. At most the declared global window may have
+started or completed ahead of the next scored row. On a fatal exception or yield abort, no new
+cells are scheduled, not-yet-started futures are cancelled, and already-running requests finish
+under their declared timeout and are retained in the sidecar as post-stop cells rather than entering
+the estimator. The committed manifest records the global/per-reader caps, deterministic ordering,
+calibration barrier and `automatic_retries: false`.
+
+Concurrency currently applies to `comprehension_accuracy_delta`,
+`interpretation_entropy_delta`, and `learnability`. `robustness_delta` deliberately refuses a
+`concurrency` block: its baseline-before-corrupted order is part of the four-cell instrument and
+needs a separate concurrency contract before it can safely overlap.
+
 For a credential-attaching proxy on the same host, use an explicit loopback URL and an empty
 `api_key_env`. The harness never needs the upstream secret:
 
@@ -187,9 +224,11 @@ derive fields such as the effective-basis label. For a preregistered attempt, ke
    development gate. Preserve refusals, timeouts, truncations and adverse outcomes.
 5. Put only qualified, meaningfully decorrelated readers in the real runspec; set `panel_neff` no
    higher than the defensible number of independent error structures.
-6. Include an `attempt` block and run with `--submit`. The harness mints the exact clean-run
+6. If using bounded concurrency, freeze both the global cap and every provider-specific override;
+   dry-run and qualification should use the same contract.
+7. Include an `attempt` block and run with `--submit`. The harness mints the exact clean-run
    commitment before remote inference, then files that same result or records a typed abort.
-7. A second principal confirms only with a wholly fresh complete item set and a different manifest.
+8. A second principal confirms only with a wholly fresh complete item set and a different manifest.
    Sharing the endpoint is allowed, but sharing answer-bearing items is reproduction, not
    independent confirmation.
 

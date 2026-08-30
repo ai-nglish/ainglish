@@ -53,6 +53,7 @@ A measurement produced here is still provisional until a disjoint party agrees o
 using a DIFFERENT manifest. Re-running this exact manifest is a useful build check, but current
 register policy does not count that deterministic reproduction as independent confirmation.
 """
+import concurrent.futures
 import hashlib
 import ipaddress
 import json
@@ -74,6 +75,7 @@ FAULT_STATUS = frozenset({429, 500, 502, 503, 504})
 PANEL_REFUSAL_KIND = "ainglish.panel.refusal.v1"
 MAX_ABORT_RECEIPT_BYTES = 20_000
 MAX_ABORT_TRANSCRIPT_EXCERPT_BYTES = 4_096
+MAX_PANEL_IN_FLIGHT = 64
 _INSTRUMENT_PREPARATION_KEY = "_ainglish_instrument_preparation"
 ANSWER_PROTOCOL = "opaque-choice-v1"
 _CHOICE_CODES = tuple(chr(code) for code in range(ord("A"), ord("Z") + 1))
@@ -200,6 +202,201 @@ class TransportFault(Exception):
     def __init__(self, reason):
         super().__init__(reason)
         self.reason = reason
+
+
+def concurrency_contract(manifest, panel):
+    """Validate and normalize the opt-in bounded reader-concurrency contract.
+
+    Missing configuration means exactly the historical serial reader-outermost order.  A global
+    bound alone permits overlap only across distinct readers because every undeclared reader cap
+    defaults to one.  Increasing one reader's cap is therefore an explicit provider-rate-limit
+    decision rather than an accidental consequence of turning concurrency on.
+    """
+    declaration = manifest.get("concurrency")
+    names = [endpoint.get("name") for endpoint in panel]
+    if declaration is None:
+        return {
+            "max_in_flight": 1,
+            "per_reader_max_in_flight": {name: 1 for name in names},
+            "result_order": "deterministic-plan-order",
+            "calibration_barrier": True,
+            "automatic_retries": False,
+        }
+    if not isinstance(declaration, dict):
+        raise ValueError("concurrency must be an object")
+    unknown = sorted(set(declaration) - {"max_in_flight", "per_reader_max_in_flight"})
+    if unknown:
+        raise ValueError("unknown concurrency key(s): %s" % ", ".join(unknown))
+    global_cap = declaration.get("max_in_flight")
+    if (isinstance(global_cap, bool) or not isinstance(global_cap, int)
+            or not 1 <= global_cap <= MAX_PANEL_IN_FLIGHT):
+        raise ValueError(
+            f"concurrency.max_in_flight must be an integer from 1 to {MAX_PANEL_IN_FLIGHT}"
+        )
+    overrides = declaration.get("per_reader_max_in_flight", {})
+    if not isinstance(overrides, dict):
+        raise ValueError("concurrency.per_reader_max_in_flight must be an object")
+    unknown_readers = sorted(set(overrides) - set(names))
+    if unknown_readers:
+        raise ValueError("concurrency names unknown reader(s): %s" % ", ".join(unknown_readers))
+    caps = {}
+    for name in names:
+        cap = overrides.get(name, 1)
+        if (isinstance(cap, bool) or not isinstance(cap, int) or not 1 <= cap <= global_cap):
+            raise ValueError(
+                f"concurrency cap for reader {name!r} must be an integer from 1 to "
+                f"max_in_flight ({global_cap})"
+            )
+        caps[name] = cap
+    return {
+        "max_in_flight": global_cap,
+        "per_reader_max_in_flight": caps,
+        "result_order": "deterministic-plan-order",
+        "calibration_barrier": True,
+        "automatic_retries": False,
+    }
+
+
+def _reader_cell(endpoint, text, question, options, ask_fn):
+    """Run one reader call without hiding anything except the declared wire-fault class."""
+    try:
+        return {"answer": ask_fn(endpoint, text, question, options),
+                "transport_fault": None, "exception": None}
+    except TransportFault as fault:
+        return {"answer": None, "transport_fault": fault.reason, "exception": None}
+    except BaseException as exc:  # re-raised by the deterministic coordinator after cancellation
+        return {"answer": None, "transport_fault": None, "exception": exc}
+
+
+def _reader_plan_cell(plan, ask_fn):
+    """Run one frozen plan row with its stable identity bound to worker-local telemetry."""
+    set_cell_key(plan["index"])
+    try:
+        return _reader_cell(
+            plan["endpoint"], plan["text"], plan["item"]["question"],
+            plan["item"]["options"], ask_fn,
+        )
+    finally:
+        # ThreadPoolExecutor reuses workers. A stale key would silently attach the next cell's
+        # duration and provider bill to the previous plan row, so clearing is part of the join.
+        clear_cell_key()
+
+
+def _execute_cell_plan(plans, ask_fn, contract, consume):
+    """Execute a frozen plan with bounded look-ahead and deterministic result consumption.
+
+    At most ``max_in_flight`` started-or-buffered cells may sit ahead of the next plan row.  A slow
+    first cell therefore cannot let a fast provider buy the rest of an experiment behind the
+    yield guard.  Results enter scoring, the yield guard and sidecar journal in plan order even
+    when HTTP responses finish out of order.  ``consume`` returns a stop token on a guard abort or
+    fatal exception; no new work is then scheduled, queued futures are cancelled, and already
+    running calls are drained into the journal without entering the estimator.
+    """
+    summary = {
+        "planned": len(plans), "started": 0, "not_started": 0,
+        "cancelled_before_start": 0, "max_in_flight_observed": 0,
+        "per_reader_max_observed": {name: 0 for name in contract["per_reader_max_in_flight"]},
+    }
+    global_cap = contract["max_in_flight"]
+    if global_cap == 1:
+        for plan in plans:
+            outcome = _reader_plan_cell(plan, ask_fn)
+            summary["started"] += 1
+            summary["max_in_flight_observed"] = 1
+            summary["per_reader_max_observed"][plan["reader"]] = 1
+            stop = consume(plan, outcome, True)
+            if stop is not None:
+                summary["not_started"] = len(plans) - summary["started"]
+                return stop, summary
+        return None, summary
+
+    pending = list(range(len(plans)))
+    in_flight = {}
+    buffered = {}
+    active = {name: 0 for name in contract["per_reader_max_in_flight"]}
+    expected = 0
+    executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=global_cap, thread_name_prefix="ainglish-panel"
+    )
+
+    def submit_available():
+        while len(in_flight) + len(buffered) < global_cap:
+            chosen_at = None
+            for position, index in enumerate(pending):
+                reader = plans[index]["reader"]
+                if active[reader] < contract["per_reader_max_in_flight"][reader]:
+                    chosen_at = position
+                    break
+            if chosen_at is None:
+                return
+            index = pending.pop(chosen_at)
+            plan = plans[index]
+            future = executor.submit(_reader_plan_cell, plan, ask_fn)
+            in_flight[future] = index
+            active[plan["reader"]] += 1
+            summary["max_in_flight_observed"] = max(
+                summary["max_in_flight_observed"], len(in_flight)
+            )
+            summary["per_reader_max_observed"][plan["reader"]] = max(
+                summary["per_reader_max_observed"][plan["reader"]],
+                active[plan["reader"]],
+            )
+
+    def collect_done(done):
+        for future in sorted(done, key=lambda f: in_flight[f]):
+            index = in_flight.pop(future)
+            active[plans[index]["reader"]] -= 1
+            buffered[index] = future.result()
+
+    def cancel_and_drain():
+        # Only the bounded look-ahead window has been submitted. Cancellation is best-effort for
+        # calls already inside urllib; those calls retain their declared timeout and are journalled
+        # on return, while futures that have not started are cancelled without being called cells.
+        for future in in_flight:
+            future.cancel()
+        if in_flight:
+            concurrent.futures.wait(in_flight)
+        outstanding = dict(buffered)
+        for future, index in in_flight.items():
+            if future.cancelled():
+                summary["cancelled_before_start"] += 1
+            else:
+                outstanding[index] = future.result()
+        for index in sorted(outstanding):
+            summary["started"] += 1
+            consume(plans[index], outstanding[index], False)
+        summary["not_started"] = len(pending) + summary["cancelled_before_start"]
+
+    try:
+        while expected < len(plans):
+            submit_available()
+            if expected not in buffered:
+                if not in_flight:
+                    raise RuntimeError("concurrency scheduler stalled with unexecuted plan rows")
+                done, _ = concurrent.futures.wait(
+                    in_flight, return_when=concurrent.futures.FIRST_COMPLETED
+                )
+                collect_done(done)
+                continue
+            while expected in buffered:
+                outcome = buffered.pop(expected)
+                summary["started"] += 1
+                stop = consume(plans[expected], outcome, True)
+                expected += 1
+                if stop is not None:
+                    cancel_and_drain()
+                    return stop, summary
+            submit_available()
+    except BaseException as exc:
+        cancel_and_drain()
+        try:
+            exc.ainglish_concurrency_execution = dict(summary)
+        except Exception:
+            pass
+        raise
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
+    return None, summary
 
 
 def _fetch(req, timeout=None):
@@ -1896,6 +2093,14 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
               "unique names and represent shared lineage with panel_neff.")
         return None
 
+    try:
+        concurrency = concurrency_contract(manifest, panel)
+    except ValueError as exc:
+        print(f"REFUSING to run: invalid concurrency declaration ({exc}). No reader cell was "
+              "bought. Keep the historical serial default or declare bounded global and "
+              "per-reader limits explicitly.")
+        return None
+
     item_ids = [item.get("id") for item in items]
     if any(not isinstance(iid, str) or not iid.strip() for iid in item_ids):
         print("REFUSING to run: every item needs a non-empty string `id` — item identity is the "
@@ -1914,6 +2119,13 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # reader name bought double inference and still emitted. Everything above this line guards
     # BOTH metrics; run_robustness() additionally validates its calibration ids.
     if manifest.get("metric") == "robustness_delta":
+        if manifest.get("concurrency") is not None:
+            print("REFUSING to run: bounded concurrency currently covers comprehension_accuracy_"
+                  "delta, interpretation_entropy_delta and learnability. robustness_delta has a "
+                  "baseline-before-corrupted within-cell order that remains serial; remove the "
+                  "concurrency block rather than silently changing that instrument. No reader "
+                  "cell was bought.")
+            return None
         if not _validate_item_block(manifest.get("calibration_items", []), "calibration_items"):
             return None
         try:
@@ -2037,7 +2249,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
 
     attempted_cells = {"calibration": 0, "real": 0}
 
-    def record_result(result_sink, item, arm, reader, answer):
+    def record_result(result_sink, item, arm, reader, answer, plan_index=None,
+                      execution_state=None, absence_reason=None):
         if result_sink is None:
             return
         expected = item.get("answer")
@@ -2052,9 +2265,15 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             "correct": (None if not normal_answer or not expected else
                         normal_answer.casefold() == str(expected).casefold()),
         }
-        reason = getattr(answer, "reason", None)
+        reason = absence_reason or getattr(answer, "reason", None)
         if reason:
             record["absence_reason"] = reason
+        if plan_index is not None:
+            record["execution"] = {
+                "plan_index": plan_index,
+                "state": execution_state or "completed",
+                "result_order": "deterministic-plan-order",
+            }
         strata = {
             key: item[key] for key in (
                 "cell", "condition", "marker", "class", "consequence_class", "scenario_id",
@@ -2082,58 +2301,101 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # function of (seed, reader, item), so changing execution order cannot re-deal the
         # estimator. Calibration is the instrument's positive control: every reader receives both
         # arms of every item, so its certificate cannot depend on a tiny disjoint hash deal.
+        plans = []
         for ep in panel:
             for item in subset:
                 arms = ("english", "ainglish") if both_arms else (
                     arm_for(seed, ep["name"], item["id"]),
                 )
                 for arm in arms:
-                    attempted_cells[stage] += 1
                     asked_text = item[arm]
                     if manifest.get("metric") == "learnability" and stage == "real" and arm == "ainglish":
                         # The harness, not the carrier author, composes the one frozen entry with
                         # every marked message. That makes per-item hints impossible: all entry
                         # cells share these exact prefix bytes and the same declared separator.
                         asked_text = manifest["entry"]["text"] + "\n\nMarked message:\n" + item["ainglish"]
-                    try:
-                        answer = ask_fn(ep, asked_text, item["question"], item["options"])
-                    except TransportFault as fault:
-                        # A fault is a DEAD CELL WITH A STATED CAUSE — never a wrong answer, and
-                        # never a dead run. Before this, one slow reader raised out of run_panel
-                        # and took every completed cell with it: real inference paid for, nothing
-                        # emitted, and no receipt saying which reader stalled or on which arm.
-                        per_arm = faults.setdefault(ep["name"], {}).setdefault(arm, {})
-                        per_arm[fault.reason] = per_arm.get(fault.reason, 0) + 1
-                        answer = None
-                    note_truncation(truncations, ep["name"], arm, answer)
-                    result_sink = (calibration_results if stage == "calibration"
-                                   else cell_results if stage == "real" else None)
-                    # Persist the attempted cell before the yield guard decides whether this
-                    # answer ends the run. The triggering dead cell is part of the paid audit
-                    # trail even though it can never enter scoring.
-                    record_result(result_sink, item, arm, ep["name"], answer)
-                    try:
-                        guard.observe(ep["name"], arm,
-                                      None if is_absent(answer) else str(answer), answer)
-                    except _ecg.CellYieldAbort as abort:
-                        message = (f"\n{abort}\nNo measurement emitted — a fault-produced delta is "
-                                   "worse than no delta, because it looks like a result.")
-                        if stage == "calibration":
-                            return _panel_refusal(
-                                "calibration", "transport_or_yield", message,
-                                attempted_cells["calibration"], 0,
-                                {"yield_guard": str(abort), "transport_faults": faults},
-                                instrument_preparation=instrument_preparation_receipt(
-                                    panel, _manifest_unbound_entry_point(manifest)),
-                            )
-                        return _panel_refusal(
-                            "real", "transport_or_yield", message,
-                            attempted_cells["calibration"], attempted_cells["real"],
-                            {"yield_guard": str(abort), "transport_faults": faults},
-                            instrument_preparation=instrument_preparation_receipt(
-                                panel, _manifest_unbound_entry_point(manifest)),
-                        )
-                    out.append((item["id"], arm, ep["name"], answer))
+                    plans.append({
+                        "index": len(plans), "endpoint": ep, "reader": ep["name"],
+                        "item": item, "arm": arm, "text": asked_text,
+                    })
+
+        result_sink = (calibration_results if stage == "calibration"
+                       else cell_results if stage == "real" else None)
+        concurrent_journal = concurrency["max_in_flight"] > 1
+
+        def consume(plan, outcome, enter_estimator):
+            attempted_cells[stage] += 1
+            answer = outcome["answer"]
+            fault_reason = outcome["transport_fault"]
+            fatal = outcome["exception"]
+            if fault_reason:
+                # A fault is a DEAD CELL WITH A STATED CAUSE — never a wrong answer and never
+                # automatically retried. It remains visible even when another concurrent cell
+                # triggers cancellation of the rest of the bounded look-ahead window.
+                per_arm = faults.setdefault(plan["reader"], {}).setdefault(plan["arm"], {})
+                per_arm[fault_reason] = per_arm.get(fault_reason, 0) + 1
+            note_truncation(truncations, plan["reader"], plan["arm"], answer)
+            absence_reason = fault_reason
+            execution_state = "completed"
+            if fatal is not None:
+                execution_state = "fatal_exception"
+                absence_reason = "exception:" + type(fatal).__name__
+            elif fault_reason:
+                execution_state = "transport_fault"
+            elif is_absent(answer):
+                execution_state = "typed_absence"
+            elif not enter_estimator:
+                execution_state = "completed_after_stop"
+            # Persist every started cell before it can enter the yield guard or scorer. Under
+            # concurrency this includes its immutable plan position and whether it completed only
+            # while an abort was draining already-running work.
+            record_result(
+                result_sink, plan["item"], plan["arm"], plan["reader"], answer,
+                plan_index=plan["index"] if concurrent_journal else None,
+                execution_state=execution_state,
+                absence_reason=absence_reason,
+            )
+            if not enter_estimator:
+                return None
+            if fatal is not None:
+                return ("exception", fatal)
+            try:
+                guard.observe(plan["reader"], plan["arm"],
+                              None if is_absent(answer) else str(answer), answer)
+            except _ecg.CellYieldAbort as abort:
+                return ("yield_abort", abort)
+            out.append((plan["item"]["id"], plan["arm"], plan["reader"], answer))
+            return None
+
+        stop, execution = _execute_cell_plan(plans, ask_fn, concurrency, consume)
+        if stop is not None:
+            stop_kind, stop_value = stop
+            if stop_kind == "exception":
+                try:
+                    stop_value.ainglish_concurrency_execution = dict(execution)
+                except Exception:
+                    pass
+                raise stop_value
+            abort = stop_value
+            message = (f"\n{abort}\nNo measurement emitted — a fault-produced delta is "
+                       "worse than no delta, because it looks like a result.")
+            details = {
+                "yield_guard": str(abort), "transport_faults": faults,
+                "concurrency_execution": execution,
+            }
+            if stage == "calibration":
+                return _panel_refusal(
+                    "calibration", "transport_or_yield", message,
+                    attempted_cells["calibration"], 0, details,
+                    instrument_preparation=instrument_preparation_receipt(
+                        panel, _manifest_unbound_entry_point(manifest)),
+                )
+            return _panel_refusal(
+                "real", "transport_or_yield", message,
+                attempted_cells["calibration"], attempted_cells["real"], details,
+                instrument_preparation=instrument_preparation_receipt(
+                    panel, _manifest_unbound_entry_point(manifest)),
+            )
         return out
 
     # --- calibration EXECUTES first, and gates before a single real item is bought ------------
@@ -2491,6 +2753,11 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # two instruments if it thinks before answering. Recorded per member so a replication runs the
     # bound rather than inferring it — and so a bound that differs across members is visible.
     spec["transport"] = {labelled(p_): transport_settings(p_) for p_ in panel}
+    # Concurrency changes the reader instrument's temporal execution surface, so it is committed
+    # rather than treated as an operator-only performance knob. The contract states its own
+    # safety boundaries: calibration is still a hard barrier, results are consumed in the frozen
+    # plan order, and a 429/timeout is one dead cell rather than an invitation to redraw it.
+    spec["concurrency"] = concurrency
     # Cells lost to the wire, per (model, arm, reason) — the same granularity the guard reports
     # dead_rate at, plus the cause it cannot see. EMITTED EVEN AT ZERO, on purpose: a field whose
     # absence has a direction cannot be optional, and this one's absence reads as "no faults" when
@@ -3275,6 +3542,228 @@ def selftest():
     assert order == (["reader-a"] * 8 + ["reader-b"] * 8
                      + ["reader-a"] * 8 + ["reader-b"] * 8), \
         "calibration and real blocks must each group calls by reader, never swap local models per item"
+
+    # Remote inference can overlap without changing the estimator. Bounds are explicit at the
+    # whole-panel and per-reader levels; absent per-reader entries default to one, so enabling a
+    # global pool never accidentally hammers one provider. Completion order is deliberately NOT
+    # the scoring/journal order, and the calibration block remains a hard barrier.
+    import threading as _threading
+    import time as _time
+
+    for bad_concurrency in (
+        [], {}, {"max_in_flight": 0}, {"max_in_flight": MAX_PANEL_IN_FLIGHT + 1},
+        {"max_in_flight": True}, {"max_in_flight": 2, "extra": 1},
+        {"max_in_flight": 2, "per_reader_max_in_flight": []},
+        {"max_in_flight": 2, "per_reader_max_in_flight": {"not-a-reader": 1}},
+        {"max_in_flight": 2, "per_reader_max_in_flight": {"reader-a": 0}},
+        {"max_in_flight": 2, "per_reader_max_in_flight": {"reader-a": 3}},
+        {"max_in_flight": 2, "per_reader_max_in_flight": {"reader-a": True}},
+    ):
+        assert_pre_spend_refusal(
+            dict(good, concurrency=bad_concurrency),
+            f"malformed concurrency {bad_concurrency!r} must refuse before reader spend",
+        )
+
+    concurrent_manifest = dict(good, concurrency={
+        "max_in_flight": 4,
+        "per_reader_max_in_flight": {"reader-a": 2, "reader-b": 2},
+    })
+    concurrency_lock = _threading.Lock()
+    concurrency_state = {
+        "active": 0, "max_active": 0,
+        "active_by_reader": {"reader-a": 0, "reader-b": 0},
+        "max_by_reader": {"reader-a": 0, "reader-b": 0},
+        "calls": 0, "calibration_completed": 0, "real_started_too_early": False,
+    }
+    calibration_text_set = {
+        item[arm] for item in items if item.get("calibration")
+        for arm in ("english", "ainglish")
+    }
+    real_text_set = {
+        item[arm] for item in items if not item.get("calibration")
+        for arm in ("english", "ainglish")
+    }
+    expected_calibration_calls = (
+        sum(1 for item in items if item.get("calibration")) * 2 * len(good["panel"])
+    )
+
+    def concurrent_reader(ep, text, question, options):
+        with concurrency_lock:
+            concurrency_state["calls"] += 1
+            concurrency_state["active"] += 1
+            concurrency_state["active_by_reader"][ep["name"]] += 1
+            concurrency_state["max_active"] = max(
+                concurrency_state["max_active"], concurrency_state["active"])
+            concurrency_state["max_by_reader"][ep["name"]] = max(
+                concurrency_state["max_by_reader"][ep["name"]],
+                concurrency_state["active_by_reader"][ep["name"]],
+            )
+            if (text in real_text_set
+                    and concurrency_state["calibration_completed"] != expected_calibration_calls):
+                concurrency_state["real_started_too_early"] = True
+        try:
+            _time.sleep(0.003)
+            return tag_reliant(ep, text, question, options)
+        finally:
+            with concurrency_lock:
+                if text in calibration_text_set:
+                    concurrency_state["calibration_completed"] += 1
+                concurrency_state["active"] -= 1
+                concurrency_state["active_by_reader"][ep["name"]] -= 1
+
+    concurrent_cells = []
+    concurrent_calibration_cells = []
+    concurrent_result = run_panel(
+        concurrent_manifest, ask_fn=concurrent_reader,
+        cell_results=concurrent_cells, calibration_results=concurrent_calibration_cells,
+    )
+    assert concurrent_result is not None and concurrent_result["value"] == m["value"], \
+        "concurrency may reduce wall time, never move the estimator"
+    assert concurrency_state["max_active"] > 1 and concurrency_state["max_active"] <= 4
+    assert all(value <= 2 for value in concurrency_state["max_by_reader"].values()), \
+        "the provider-specific in-flight cap must hold even inside a larger global pool"
+    assert not concurrency_state["real_started_too_early"], \
+        "no real call may start before every calibration call has completed"
+    assert concurrency_state["calls"] == (8 + 4 * 2) * 2, \
+        "concurrency must execute every planned cell exactly once, with no retries"
+    for journal in (concurrent_calibration_cells, concurrent_cells):
+        assert [row["execution"]["plan_index"] for row in journal] == list(range(len(journal))), \
+            "per-cell journals must retain frozen plan order, not HTTP completion order"
+        assert all(row["execution"]["state"] == "completed" for row in journal)
+    assert concurrent_result["manifest"]["concurrency"] == {
+        "max_in_flight": 4,
+        "per_reader_max_in_flight": {"reader-a": 2, "reader-b": 2},
+        "result_order": "deterministic-plan-order",
+        "calibration_barrier": True,
+        "automatic_retries": False,
+    }, "the committed receipt must carry the exact execution bounds and no-retry rule"
+
+    # Cross-feature contract with usage telemetry (#115): the coordinator consumes in plan order,
+    # while chat() necessarily records provider usage in completion order. Every worker call must
+    # therefore bind the frozen plan index through thread-local storage and clear it before that
+    # worker can be reused. This exercises the real coordinator -> chat() path; direct helper tests
+    # cannot prove the integration exists.
+    _saved_fetch_for_join = globals()["_fetch"]
+    try:
+        def _telemetry_fetch(req, timeout=None):
+            body = json.loads(req.data.decode())
+            prompt = body["messages"][0]["content"]
+            _time.sleep(0.04 if "planned-first-slow" in prompt else 0.002)
+            return {
+                "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+            }
+
+        globals()["_fetch"] = _telemetry_fetch
+        reset_usage()
+        _telemetry_endpoint = {
+            "name": "telemetry-reader", "provider": "openai-compatible", "api": "openai",
+            "base_url": "https://reader.invalid/v1", "model": "fixture-reader",
+        }
+        _telemetry_plans = [
+            {
+                "index": index,
+                "reader": "telemetry-reader",
+                "endpoint": _telemetry_endpoint,
+                "text": "planned-first-slow" if index == 0 else "planned-%d-fast" % index,
+                "item": {"question": "fixture?", "options": ["yes", "no"]},
+            }
+            for index in range(4)
+        ]
+        _consumed_plan_indices = []
+
+        def _consume_telemetry(plan, outcome, scoreable):
+            assert outcome["exception"] is None and outcome["transport_fault"] is None
+            _consumed_plan_indices.append(plan["index"])
+            return None
+
+        _join_stop, _join_execution = _execute_cell_plan(
+            _telemetry_plans,
+            lambda endpoint, text, question, options: chat(endpoint, text)[0],
+            {
+                "max_in_flight": 2,
+                "per_reader_max_in_flight": {"telemetry-reader": 2},
+            },
+            _consume_telemetry,
+        )
+        _usage_rows = usage_report()["cell_records"]
+        assert _join_stop is None and _join_execution["started"] == 4
+        assert _consumed_plan_indices == [0, 1, 2, 3], \
+            "the estimator must still consume the deterministic plan order"
+        assert [row["key"] for row in _usage_rows[:2]] == [1, 0], \
+            "the fast planned-second cell must demonstrate completion-order telemetry"
+        assert [row["key"] for row in sorted(_usage_rows, key=lambda row: row["key"])] == [0, 1, 2, 3], \
+            "every real concurrent usage row must join back to exactly one frozen plan index"
+        assert all(row["key"] is not None for row in _usage_rows), \
+            "the coordinator must never leave concurrent provider usage unkeyed"
+    finally:
+        globals()["_fetch"] = _saved_fetch_for_join
+        reset_usage()
+
+    fault_item = next(item for item in items if not item.get("calibration"))
+    fault_arm = arm_for(good["seed"], "reader-a", fault_item["id"])
+    fault_text = fault_item[fault_arm]
+    concurrent_fault_calls = {"target": 0, "all": 0}
+    concurrent_fault_cells = []
+
+    def concurrent_fault_reader(ep, text, question, options):
+        with concurrency_lock:
+            concurrent_fault_calls["all"] += 1
+            if ep["name"] == "reader-a" and text == fault_text:
+                concurrent_fault_calls["target"] += 1
+                raise TransportFault("http_429")
+        return tag_reliant(ep, text, question, options)
+
+    concurrent_fault_result = run_panel(
+        concurrent_manifest, ask_fn=concurrent_fault_reader,
+        cell_results=concurrent_fault_cells,
+    )
+    assert concurrent_fault_result is not None, "one concurrent 429 must remain one dead cell"
+    assert concurrent_fault_calls == {"target": 1, "all": (8 + 4 * 2) * 2}, \
+        "a provider 429 must never trigger an automatic scientific redraw"
+    concurrent_fault_receipt = concurrent_fault_result["manifest"]["transport_faults"]
+    assert concurrent_fault_receipt["total"] == 1 and \
+        concurrent_fault_receipt["retried"] is False
+    assert sum(row["execution"]["state"] == "transport_fault"
+               for row in concurrent_fault_cells) == 1, \
+        "the exact failed cell must remain typed in the deterministic journal"
+
+    # A fatal configuration/harness response in the first plan row cancels scheduling after the
+    # bounded look-ahead window. Calls already inside the transport are drained into the sidecar;
+    # unsubmitted real cells are never bought, and the original exception remains loud.
+    fatal_calls = []
+    fatal_journal = []
+    first_text = next(item["english"] for item in items if item.get("calibration"))
+
+    def concurrent_fatal(ep, text, question, options):
+        with concurrency_lock:
+            fatal_calls.append((ep["name"], text))
+        if ep["name"] == "reader-a" and text == first_text:
+            raise ValueError("synthetic fatal reader-shape error")
+        _time.sleep(0.02)
+        return tag_reliant(ep, text, question, options)
+
+    try:
+        run_panel(
+            concurrent_manifest, ask_fn=concurrent_fatal,
+            calibration_results=fatal_journal,
+        )
+        raise AssertionError("fatal concurrent reader exception was swallowed")
+    except ValueError as exc:
+        assert "synthetic fatal" in str(exc)
+        fatal_execution = exc.ainglish_concurrency_execution
+        assert fatal_execution["started"] == len(fatal_calls)
+        assert fatal_execution["not_started"] == expected_calibration_calls - len(fatal_calls)
+    assert 1 <= len(fatal_calls) <= 4, \
+        "a fatal first cell may spend only the bounded look-ahead window"
+    assert not any(text in real_text_set for _reader, text in fatal_calls), \
+        "cancellation before the calibration gate must buy zero real cells"
+    assert len(fatal_journal) == len(fatal_calls), \
+        "every already-running cell must survive cancellation in the audit journal"
+    assert [row["execution"]["plan_index"] for row in fatal_journal] == sorted(
+        row["execution"]["plan_index"] for row in fatal_journal
+    ), "the cancellation drain must also preserve plan order"
+
     original_hash = "a" * 64
     replication_output = io.StringIO()
     with contextlib.redirect_stdout(replication_output):
@@ -3317,6 +3806,11 @@ def selftest():
               "items": r_items, "calibration_items": r_calib, "planted_arm": "ainglish",
               "panel": [{"name": "reader-a"}, {"name": "reader-b", "precision": "q4_k_m"}],
               "panel_neff": 2, "corruption": {"channel": "drop_token"}}
+    assert_pre_spend_refusal(
+        dict(r_good, concurrency={"max_in_flight": 2}),
+        "robustness concurrency must refuse before spend until its baseline-before-corrupted "
+        "ordering has a dedicated concurrent instrument",
+    )
     rm = run_panel(dict(r_good), ask_fn=r_oracle)
     assert rm is not None, "a readable panel with live items must emit"
     assert rm["metric"] == "robustness_delta" and "value_uncensored" in rm and "floor_cells" in rm, \
@@ -5024,13 +5518,15 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                 manifest, ask_fn=ask_fn, cell_results=cell_results,
                 calibration_results=calibration_results,
             )
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as exc:
         calibration_receipt, cell_receipt = write_cell_receipts()
         _abort_panel_attempt(client, attempt_id, spec["slug"],
                              "operator_interrupt",
                              "panel run interrupted before measurement emission",
                              {"exception": "KeyboardInterrupt",
                               "message": "operator interrupted the run",
+                              "concurrency_execution": getattr(
+                                  exc, "ainglish_concurrency_execution", None),
                               "calibration_cell_results": calibration_receipt,
                               "cell_results": cell_receipt,
                               "transcript": transcript.text()},
@@ -5042,6 +5538,8 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
                              _exception_failed_gate_kind(exc),
                              "panel harness raised before measurement emission",
                              {"exception": type(exc).__name__, "message": str(exc),
+                              "concurrency_execution": getattr(
+                                  exc, "ainglish_concurrency_execution", None),
                               "calibration_cell_results": calibration_receipt,
                               "cell_results": cell_receipt,
                               "transcript": transcript.text()},
