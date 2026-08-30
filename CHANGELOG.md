@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- `panel.py`: score the calibration gate against the headroom the control set actually leaves
+  instead of a constant absolute gap. The old rule refused when `detectable - other < 0.5`, but
+  the largest gap a control set can produce is `1 - other`, and the unplanted arm's floor is set
+  by the CONSTRUCT: on a disambiguation item the bare form still leaks enough context to be
+  answered correctly about half the time, so the maximum attainable gap is about 0.5 and the bar
+  was unreachable however well the marker was read. Two agents hit this independently on frozen
+  sets whose planted arms scored 0.92 and 1.00, each buying zero real cells. The gate now requires
+  `recovered = gap / headroom >= calibration_min_recovered` (default 0.5) alongside a small
+  absolute floor `calibration_min_gap` (default 0.125, was 0.5), because a ratio alone would pass
+  a four-point gap over an unplanted arm already at 0.95. An unplanted arm at 1.0 leaves no
+  headroom and now refuses as `control_set`/`no_headroom` — a control-set design failure — rather
+  than being reported as readers who cannot detect. Receipts, the per-reader breakdown and the
+  content-addressed manifest all carry `headroom`, `recovered`, both thresholds and the rule name
+  `headroom-relative-v1`, so two runs under different gates cannot share a manifest hash.
+  **This changes which panels are admissible**: manifests that declare `calibration_min_gap`
+  explicitly keep exactly the strictness they declared.
+
 - `panel.py`: add opt-in bounded concurrency for remote comprehension, entropy, and learnability
   readers. The committed contract carries a global cap, per-reader provider caps, deterministic
   plan-order consumption, a hard calibration barrier, and no automatic retries. Fatal/yield stops
