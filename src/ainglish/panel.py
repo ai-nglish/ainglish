@@ -653,6 +653,27 @@ _CELL_RECORD_CAP = 5000     # the RETURNED records are bounded; the aggregates s
 # same seq. Measured on the merged tree with sys.setswitchinterval(1e-6): 1,090 colliding seq
 # values across 12,800 cells -- every cell present, none uniquely addressable.
 _CELL_TELEMETRY_LOCK = threading.Lock()
+# A caller-supplied identity for the cell currently being bought ON THIS THREAD. `seq` is a
+# COMPLETION counter -- chat() records after the response returns -- so under bounded concurrency a
+# slow planned-first cell lands after a fast planned-second one and `seq` is not a plan index.
+# Joining usage back to a plan-order journal on `seq` would therefore attach a duration and a bill
+# to the wrong cell. A coordinator sets this around each cell so the record carries the plan's own
+# key; thread-local because each cell runs start-to-finish inside one worker thread.
+_CELL_CONTEXT = threading.local()
+
+
+def set_cell_key(key) -> None:
+    """Attach an immutable caller key to cells recorded on this thread until cleared.
+
+    Intended for a concurrent coordinator: pass the frozen plan index (or any stable cell id) so
+    `usage_report()` records can be joined to the plan-order journal without relying on `seq`.
+    """
+    _CELL_CONTEXT.key = key
+
+
+def clear_cell_key() -> None:
+    """Drop this thread's caller key. Serial callers never need either function."""
+    _CELL_CONTEXT.key = None
 
 # Providers name the same two quantities differently, and reading only one dialect turns a real
 # count into a confident zero -- the exact failure this telemetry exists to prevent. Anthropic's
@@ -710,12 +731,19 @@ def usage_report():
     counted in `failed_cells` and in `wall_s`, and are excluded from the usage denominators
     (an attempt that never returned a response has no usage to report).
 
-    `cell_records` are content-free and in plan order, bounded to _CELL_RECORD_CAP with the
-    remainder counted in `cell_records_omitted`; aggregates always cover every cell. They carry no
-    prompt or answer text -- only reader, outcome, duration and provider usage. They deliberately
-    do NOT carry item or stage identity: chat() is not told either, and a module-level "current
-    item" would become a lie the moment cells run concurrently. That identity belongs to the
-    plan-order journal, not to the transport.
+    `cell_records` are content-free and in **completion order**, bounded to _CELL_RECORD_CAP with
+    the remainder counted in `cell_records_omitted`; aggregates always cover every cell. They carry
+    no prompt or answer text -- only reader, outcome, duration, provider usage and an optional
+    caller key.
+
+    ORDERING, precisely, because getting this wrong attaches a bill to the wrong cell: a record is
+    written when its HTTP call RETURNS, so `seq` counts completions. Serially that equals plan
+    order; under bounded concurrency it does not, and a slow planned-first cell lands after a fast
+    planned-second one. `seq` is therefore a unique address, never a plan index.
+
+    A concurrent coordinator should call `set_cell_key(plan_index)` around each cell. The record
+    then carries `key`, and plan order is recovered by sorting on it -- which is what makes the
+    per-cell usage joinable to a plan-order journal. `key` stays null unless a coordinator sets it.
     """
     per = {}
     with _CELL_TELEMETRY_LOCK:
@@ -770,11 +798,13 @@ def _record_cell(endpoint, started, data, outcome="ok") -> None:
     row = {"reader": endpoint.get("name", "?"),
            "outcome": outcome,
            "wall_s": round(time.monotonic() - started, 3),
-           "usage": _normalise_usage(data)}
+           "usage": _normalise_usage(data),
+           "key": getattr(_CELL_CONTEXT, "key", None)}
     with _CELL_TELEMETRY_LOCK:
         # seq is assigned and the row appended as ONE step, so concurrent readers cannot be
         # handed the same position. Without this the records stay complete but stop being
         # uniquely addressable, which is worse than missing: a join would silently pick one.
+        # It counts COMPLETIONS, not plan positions -- use `key` for plan identity.
         row["seq"] = len(_CELL_TELEMETRY)
         _CELL_TELEMETRY.append(row)
 
@@ -4385,9 +4415,48 @@ def selftest():
             chat(_openai_ep, "secret-prompt-%d" % _i)
         _records = usage_report()["cell_records"]
         assert [r["seq"] for r in _records] == [0, 1, 2], _records
-        assert all(set(r) == {"seq", "reader", "outcome", "wall_s", "usage"} for r in _records), _records
+        assert all(set(r) == {"seq", "reader", "outcome", "wall_s", "usage", "key"} for r in _records), _records
         assert "secret-prompt" not in json.dumps(_records), "cell records must carry no prompt text"
         assert all(r["wall_s"] >= 0 for r in _records), "monotonic clock must not go backwards"
+
+        # ORDERING. `seq` counts COMPLETIONS, and the previous assertion here -- a dense unique
+        # range -- held just as well under a reversal, so it could not see the defect it was
+        # supposed to guard. Drive a slow planned-first cell against a fast planned-second one and
+        # pin what actually happens: the fast cell records first, and plan order is recoverable
+        # only through the caller key.
+        reset_usage()
+        _order_lock = threading.Lock()
+
+        def _slow_then_fast(req, timeout=None):
+            body = json.loads(req.data.decode())
+            slow = "planned-first-slow" in body["messages"][0]["content"]
+            time.sleep(0.20 if slow else 0.01)
+            return {"choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+
+        globals()["_fetch"] = _slow_then_fast
+
+        def _planned(index, marker):
+            set_cell_key(index)
+            try:
+                chat(_openai_ep, marker)
+            finally:
+                clear_cell_key()
+
+        _t1 = threading.Thread(target=_planned, args=(0, "planned-first-slow"))
+        _t2 = threading.Thread(target=_planned, args=(1, "planned-second-fast"))
+        _t1.start()
+        time.sleep(0.02)          # let the slow cell get in flight first, as a coordinator would
+        _t2.start()
+        _t1.join(); _t2.join()
+        _rows = usage_report()["cell_records"]
+        assert [r["seq"] for r in _rows] == [0, 1], _rows
+        assert [r["key"] for r in _rows] == [1, 0], \
+            ("records are in COMPLETION order: the fast planned-second cell must record first. "
+             "If this ever reads [0, 1] the ordering contract changed and the docs must too: %r" % (_rows,))
+        assert [r["key"] for r in sorted(_rows, key=lambda r: r["key"])] == [0, 1], \
+            "plan order must be recoverable by sorting on the caller key"
+        assert _rows[0]["wall_s"] < _rows[1]["wall_s"], "the fast cell must also be the shorter one"
         reset_usage()
 
         # THREAD SAFETY. #117's bounded panel concurrency runs chat() in worker threads, and
