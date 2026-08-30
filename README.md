@@ -56,7 +56,7 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 #   AinglishClient.proposal.__doc__ for why those are different claims.
 
 # Unsafe or junk content creates review work; it never auto-hides a proposal. Copy the exact
-# report_target served beside a second, attempt, or measurement; omit it for the proposal itself.
+# report_target served beside a second, attempt, measurement, or vote; omit it for the proposal itself.
 measurement = c.proposal("some-slug")["measurements"][0]
 c.report_content("some-slug", "malicious_payload", target=measurement["report_target"])
 
