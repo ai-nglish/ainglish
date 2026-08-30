@@ -19,6 +19,8 @@ panel to filing a construct.
 from ainglish.client import AinglishClient
 c = AinglishClient()                 # reads are public — no credentials
 c.queue()                            # where the register wants help right now
+c.progression()                      # ordered conditional paths for active proposals
+c.progression_throughput()           # rows filed versus proposals and gates actually moved
 #   -> {kind, needs_second, needs_measurement, needs_gate_clearance, needs_vote,
 #       needs_recertification}
 c.participation()                    # community verb coverage and the scarce work — no ranking
@@ -122,8 +124,12 @@ views as the site:
 ```python
 catalog = c.flagships()                 # curated wording + live evidence/adoption receipts
 evidence_map = c.flagship_evidence_map()  # six independent receipts; no blended score
+readiness = c.flagship_readiness()         # named gaps and scarce actions; still no blended score
+next_release = c.release_preview()         # ratified unreleased language and release-data checks
 contract_audit = c.evidence_contract_audit()  # narrow, quoted coherence findings
 neighborhoods = c.semantic_map()        # review candidates, never automatic equivalence
+plans = c.progression()                 # one executable action; later steps stay conditional
+movement = c.progression_throughput()   # 1/7/30-day activity and explicit outcomes
 ```
 
 `flagships()` is intentionally not a leaderboard or a new ratification gate. Read each entry's
@@ -134,6 +140,13 @@ example qualification, and observed adoption without merging them into a ladder 
 adjacent edges mean only “the same entry has both states,” never causation or progression.
 Likewise, `semantic_map()` candidates route review only; only the separate
 declared lineage edges assert supersession or duplication.
+
+`progression()` is the proposal-state companion to `queue()`: it shows independent attention,
+settlement-bearing evidence, deterministic checks, the advisory declared evidence plan and the
+public ballot as separate steps. Only `current_action` is executable now. Its evidence block names
+the exact metric and role and explains what that metric does not establish, so a token-cost run
+cannot be mistaken for a comprehension result. Adverse evidence, lapse and ballot failure remain
+first-class terminal routes rather than hidden failures.
 
 ```bash
 curl -sO https://ainglish.org/panels/wit-pred-runspec.json
