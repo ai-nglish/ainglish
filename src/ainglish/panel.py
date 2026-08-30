@@ -68,7 +68,14 @@ import urllib.request
 
 NEUTRAL_EPS = 1e-9
 # Statuses that mean "the far side is busy or broken", as opposed to "you asked wrongly".
-FAULT_STATUS = frozenset({429, 500, 502, 503, 504})
+# 520-524 are Cloudflare's origin-side family (unknown error, origin down, connection timed out,
+# origin unreachable, origin timeout). Nous Portal sits behind Cloudflare, and a reasoning reader
+# on a long prompt can exceed the edge's own timeout: a live 192-item run raised HTTP 524 out of
+# run_panel and took ~30 already-paid cells with it, emitting nothing. That is exactly the failure
+# the fault classification exists to prevent -- one slow reader must be a typed dead cell with a
+# stated cause, never a dead run. 524 was the one observed; the rest of the family is the same
+# documented class and is included so the next one is not a second incident.
+FAULT_STATUS = frozenset({429, 500, 502, 503, 504, 520, 521, 522, 523, 524})
 PANEL_REFUSAL_KIND = "ainglish.panel.refusal.v1"
 MAX_ABORT_RECEIPT_BYTES = 20_000
 MAX_ABORT_TRANSCRIPT_EXCERPT_BYTES = 4_096
@@ -238,6 +245,16 @@ PRESETS = {
         "api_key_env": "",
         "model_catalog": "openai:/models",
         "credential_boundary": "credential-attaching-loopback-proxy",
+    },
+    # The proxy preset above only exists inside a Hermes runtime, which attaches the operator's
+    # Portal OAuth credential on loopback. A harness with no Hermes -- a Claude Code session, a
+    # cron job, CI -- cannot use it at all, and pointing it at the public host by hand is where
+    # the base_url gets mistyped. Portal also issues ordinary API keys, so name that path.
+    "nous-portal-direct": {
+        "api": "openai",
+        "base_url": "https://inference-api.nousresearch.com/v1",
+        "api_key_env": "NOUS_API_KEY",
+        "model_catalog": "openai:/models",
     },
 }
 
@@ -2962,6 +2979,14 @@ def selftest():
             (TimeoutError("timed out"), "timeout"),
             (urllib.error.HTTPError("u", 503, "busy", {}, None), "http_503"),
             (urllib.error.HTTPError("u", 429, "slow down", {}, None), "http_429"),
+            # Cloudflare's origin-side family. 524 is not hypothetical: a live Nous Portal panel
+            # raised it out of run_panel and lost ~30 already-paid cells, because a reasoning
+            # reader on a long prompt outlasted the edge's own timeout.
+            (urllib.error.HTTPError("u", 520, "unknown origin error", {}, None), "http_520"),
+            (urllib.error.HTTPError("u", 521, "origin down", {}, None), "http_521"),
+            (urllib.error.HTTPError("u", 522, "connection timed out", {}, None), "http_522"),
+            (urllib.error.HTTPError("u", 523, "origin unreachable", {}, None), "http_523"),
+            (urllib.error.HTTPError("u", 524, "a timeout occurred", {}, None), "http_524"),
             (urllib.error.URLError("connection refused"), "unreachable"),
         ):
             _open = _Raiser(exc)

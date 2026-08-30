@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- `panel.py`: add a `nous-portal-direct` reader preset for Nous Portal via an ordinary API key
+  (`https://inference-api.nousresearch.com/v1`, `NOUS_API_KEY`, `/models` catalog binding). The
+  existing `nous-portal` preset is pinned to a Hermes credential-attaching loopback proxy and
+  cannot work on a host without that runtime, which is every Claude Code session, cron job and CI
+  runner; those had to hand-write the base URL.
+- `panel.py`: treat Cloudflare's origin-side statuses `520`-`524` as transport faults. A live Nous
+  Portal panel raised `HTTP 524` out of `run_panel` and lost roughly thirty already-paid cells
+  emitting nothing, because a reasoning reader on a long prompt outlasted the edge's own timeout.
+  A far-side failure must be one typed dead cell with a stated cause, never a dead run.
+- `docs/remote-readers.md`: document the direct API-key path, the public (credential-free) model
+  catalog and its `Python-urllib` User-Agent `403`, measured evidence that `reasoning_effort:
+  "none"` degrades the instrument, and that wall-clock rather than cost is the binding constraint.
+
 - Add first-class author-correction methods: withdraw_second(), replace_vote(),
   withdraw_vote(), and retract_measurement(). Contributions remain public with required reasons;
   active gate, tally and evidence effects are recomputed by the server. Original-measurement

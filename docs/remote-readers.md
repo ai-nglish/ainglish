@@ -123,6 +123,87 @@ If the Ainglish harness and Hermes run on different hosts, forward the proxy por
 authenticated tunnel so that it remains loopback from the harness's perspective. Do not solve the
 reachability problem by binding the unauthenticated proxy to a public interface.
 
+## Nous Portal with a direct API key
+
+Use this when the harness runs somewhere that has **no Hermes runtime** — a Claude Code session, a
+cron job, CI — and the operator can mint a Portal API key. It needs no proxy, no OAuth flow and no
+local daemon. The `nous-portal` preset above cannot serve this case: it is pinned to
+`http://127.0.0.1:8645/v1` and relies on Hermes attaching the credential, so on a host without the
+proxy it can only fail.
+
+```bash
+export NOUS_API_KEY="$(cat /path/to/mode-600/key-file)"
+```
+
+```json
+{
+  "name": "nous-reader-a",
+  "provider": "nous-portal-direct",
+  "model": "deepseek/deepseek-v4-flash",
+  "precision": "provider-served",
+  "max_tokens": 1024,
+  "timeout_s": 180
+}
+```
+
+The preset supplies `https://inference-api.nousresearch.com/v1`, the OpenAI-compatible adapter,
+`NOUS_API_KEY` and the `/models` catalog binding. Equivalent to `provider: openai-compatible` with
+those four fields written out. The key stays in the environment: the runspec and the receipt record
+the variable NAME, never its value.
+
+### The model catalog is public
+
+`GET /v1/models` needs no credential, so the exact served ids and their per-token prices can be read
+before a key exists — useful for costing a panel in advance:
+
+```bash
+curl -s https://inference-api.nousresearch.com/v1/models \
+  | python3 -c 'import json,sys; [print(m["id"]) for m in json.load(sys.stdin)["data"]]'
+```
+
+**Trap:** the service rejects Python's default `Python-urllib/<version>` User-Agent with `403`. The
+harness is unaffected because it sends its own `ainglish-python/<version>`, but a hand-rolled helper
+script using bare `urllib.request.urlopen(url)` will fail with a 403 that looks like an auth problem
+and is not one. Send an explicit User-Agent, or use the harness.
+
+### Leave reasoning enabled
+
+Several Portal models reason by default, and `deepseek/deepseek-v4-flash` reports
+`completion_tokens_details.reasoning_tokens` on every call. Suppressing that with
+`reasoning_effort: "none"` measurably degrades the instrument. On 10 frozen `none-of / not-all-of`
+items, 2 arms each, same model, same items, `temperature: 0`:
+
+| setting | english | ainglish | delta |
+|---|---|---|---|
+| `reasoning_effort` absent (provider default) | 1/10 | 7/9 | **+60.0pp** |
+| `reasoning_effort: "none"` | 0/10 | 3/10 | **+30.0pp** |
+
+Disabling reasoning halved the measured effect and cut marker detection from 7/9 to 3/10, with zero
+empty cells in either condition. Set a `max_tokens` that leaves room to think — 1024 was ample — and
+do not disable reasoning to save tokens. (Guidance elsewhere in this project to send
+`reasoning_effort: "none"` applies to *local* readers under tight token bounds, where the model
+exhausts its budget before reaching the option list. That is a different failure and does not
+transfer to a remote reader with headroom.)
+
+### Budget serial wall-clock, not money
+
+A frozen 192-item set averages ~101 prompt tokens per cell. A 192-item, 3-reader panel with
+calibration is ~720 cells, and measured cost on `deepseek-v4-flash` is roughly **$0.03** — cheaper
+than the electricity of the local-GPU equivalent.
+
+Wall-clock is the real constraint. A reasoning reader takes several seconds per cell, so ~720 serial
+cells is hours, and a 38-cell validation run exceeded a 500-second budget. Set `timeout_s`
+generously (180 worked; the 120 default is tight for reasoning models), run long panels detached,
+and prefer bounded concurrency where available.
+
+### What the receipt may claim
+
+`model_catalog: "openai:/models"` binds the requested id and hashes the matched catalog entry into
+the reader receipt, verified before the attempt is minted and again before real spend. It does
+**not** identify weights: `model_digest` stays null and `weight_identity` is `provider-opaque`,
+because a hosted alias is a routing decision Nous may change. Describe the reader as "the requested
+model id as served by Nous Portal at the recorded run time".
+
 ## Evidence workflow
 
 1. Freeze and digest-pin the item set, comparator, model ids, sampler/bounds, calibration, and
