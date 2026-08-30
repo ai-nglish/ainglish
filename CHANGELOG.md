@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.45 — 2026-08-30
 
 - Add `AinglishClient.measurement_template(metric, models=None)`, sourced from the live
   `/protocols` submission contract rather than an SDK-side schema copy. Add a reviewed,
