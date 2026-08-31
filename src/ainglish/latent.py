@@ -54,6 +54,28 @@ _DIRECTIONS = (
 )
 
 
+def _direction_pattern(words):
+    """Boundary-aware matcher for one direction's vocabulary.
+
+    Plain substring containment was a FAIL-OPEN parser, not merely a noisy one: `"rose" in "prose"`
+    made `The prose metric changed 8%, from 52% to 60%.` report a direction its text never states,
+    and `"held" in "withheld"` manufactured a second one (@dexagon-ai, #123). An invented direction
+    does not just cause a false refusal — it lets a pair whose arms state NO direction satisfy the
+    direction check and be admitted.
+
+    Multiword entries ("up by") are matched as phrases with flexible internal whitespace, so the
+    boundary lands at the ends of the phrase rather than inside it.
+    """
+    alternatives = "|".join(
+        r"\s+".join(re.escape(part) for part in word.split())
+        for word in words
+    )
+    return re.compile(r"\b(?:%s)\b" % alternatives, re.I)
+
+
+_DIRECTION_PATTERNS = tuple((name, _direction_pattern(words)) for name, words in _DIRECTIONS)
+
+
 def _fraction(value, field):
     """Accept an exact decimal string or an integer; refuse a float outright."""
     if isinstance(value, bool) or isinstance(value, float):
@@ -103,9 +125,8 @@ def surface_facts(text):
     """
     endpoints = [(Fraction(a), Fraction(b)) for a, b in _ENDPOINTS.findall(text)]
     magnitude_text = _ENDPOINTS.sub(" ", text)
-    lowered = text.lower()
     directions = sorted({
-        name for name, words in _DIRECTIONS if any(word in lowered for word in words)
+        name for name, pattern in _DIRECTION_PATTERNS if pattern.search(text) is not None
     })
     return {
         "endpoints": endpoints,
@@ -218,6 +239,7 @@ def item_verdict(item):
     # is not thereby admissible, because determinacy is still required of both arms.
     key = item.get("answer")
     derived_key = None
+    singletons = {}
     for arm, view in arms.items():
         readings = view["readings"]
         if len(readings) != 1:
@@ -225,11 +247,30 @@ def item_verdict(item):
                            "not determine the answer it is scored against" % (arm, len(readings)))
             continue
         only = sorted(readings)[0]
-        if arm == "ainglish":
-            derived_key = only
+        singletons[arm] = only
         if key is not None and only != key:
             reasons.append("%s arm's text supports %r, but the item is keyed %r"
                            % (arm, only, key))
+
+    # BOTH ARMS MUST DERIVE THE SAME READING. Each arm being individually determinate is not
+    # enough: a minimal pair asks ONE question, and two arms that determine DIFFERENT answers are
+    # two questions wearing one id.
+    #
+    # Without this the module inverted its own purpose (@dexagon-ai, #123). Reproduced on the
+    # previous head: record 50 -> 60, english "rose 10 percentage points", ainglish "rose 20%",
+    # no `answer`. Each arm is a clean singleton, so the loop above raised nothing and the item was
+    # ADMITTED with derived_answer "relative-percent change" — while the same pair WITH a hand key
+    # was correctly refused by the mismatch check. Omitting the key rescued a contradiction, which
+    # is exactly the move deriving the key instead of trusting it is supposed to make impossible.
+    if len(singletons) == 2:
+        if singletons["english"] != singletons["ainglish"]:
+            reasons.append("the arms derive different answers (english supports %r, ainglish "
+                           "supports %r), so the pair is not one question over a minimal contrast"
+                           % (singletons["english"], singletons["ainglish"]))
+        else:
+            # Only an agreed reading may be published as the derived key: reporting one arm's
+            # answer while the other contradicts it would carry the contradiction downstream.
+            derived_key = singletons["ainglish"]
 
     differing = sorted({
         feature for feature in ("endpoints", "point_magnitudes", "bare_percents")
@@ -263,13 +304,13 @@ def item_verdict(item):
 # from admissible to inadmissible while the digest stayed byte-identical. A digest that misses the
 # thing it certifies is worse than none, because it advertises a guarantee it does not hold.
 _PREDICATE_FUNCTIONS = (
-    "_fraction", "_numbers", "record_arithmetic", "surface_facts",
+    "_fraction", "_numbers", "_direction_pattern", "record_arithmetic", "surface_facts",
     "readings_consistent_with", "item_verdict", "set_signature",
 )
 # Pinned so that (a) a predicate change forces a deliberate acknowledgement rather than a silent
 # re-key, and (b) CI running the selftest on 3.9 and 3.12 proves the digest is interpreter-
 # independent instead of asserting it. Update it only when the predicate genuinely changed.
-PREDICATE_SHA256 = "2d388da84466606f8c71c3917180f063471031014bfbc8da540632f3e272f121"
+PREDICATE_SHA256 = "48d59ca6fbb6dc7f8df1ea104aebf210152a25f6a3ee3ae519940bf0e5488eb7"
 _PREDICATE_PATTERNS = ("_POINT_FORM", "_BARE_PERCENT", "_ENDPOINTS")
 _PREDICATE_CONSTANTS = ("READING_POINT", "READING_RELATIVE", "READING_UNDETERMINED",
                         "READINGS", "_DIRECTIONS")
@@ -505,6 +546,46 @@ def selftest():
     undetermined.pop("answer")
     assert not set_signature([undetermined])["verdicts"][0]["admissible"], \
         "dropping the key must not rescue an item whose text determines nothing"
+
+    # (5) KEYLESS ARMS THAT DERIVE OPPOSITE ANSWERS. @dexagon-ai's exact counterexample (#123):
+    # each arm is individually determinate, so every per-arm check passes, and the previous head
+    # ADMITTED the pair with derived_answer "relative-percent change". The same pair WITH a hand key
+    # was refused -- so dropping the key rescued a contradiction, inverting the whole point of
+    # deriving the key rather than trusting it.
+    keyless_contradiction = {
+        "id": "keyless-opposite-readings",
+        "record": {"old_rate": "50", "new_rate": "60"},
+        "english": "The rate rose 10 percentage points, from 50% to 60%.",
+        "ainglish": "The rate rose 20%, from 50% to 60%.",
+    }
+    verdict = item_verdict(keyless_contradiction)
+    assert not verdict["admissible"], \
+        "two arms deriving different answers are two questions, and omitting the key cannot hide it"
+    assert verdict["derived_answer"] is None, \
+        "no agreed reading exists, so none may be published as the derived key"
+    assert any("derive different answers" in reason for reason in verdict["reasons"]), verdict
+    # With the key supplied the pair must still refuse: the two routes agree on the outcome.
+    assert not item_verdict(dict(keyless_contradiction, answer="point"))["admissible"]
+    # And an agreeing keyless pair is still admissible, so this is not a blanket refusal.
+    agreeing = dict(good[0])
+    agreeing.pop("answer", None)
+    assert item_verdict(agreeing)["admissible"], \
+        "a keyless pair whose arms agree must remain admissible"
+
+    # (6) DIRECTION MATCHING IS BOUNDARY-AWARE. Substring containment was FAIL-OPEN: it invented a
+    # direction from an unrelated word, which let a pair stating no direction satisfy the direction
+    # check and be admitted (@dexagon-ai, #123).
+    assert surface_facts("The rate rose 8%, from 52% to 60%.")["directions"] == ["rose"]
+    assert surface_facts("The prose metric changed 8%, from 52% to 60%.")["directions"] == [], \
+        "'rose' must not match inside 'prose'"
+    assert surface_facts("The rate held at 8%, from 52% to 52%.")["directions"] == ["held"]
+    assert surface_facts("The value withheld 8%, from 52% to 60%.")["directions"] == [], \
+        "'held' must not match inside 'withheld'"
+    # Multiword entries stay matchable as phrases, with flexible internal whitespace.
+    assert surface_facts("The rate went up by 8 percentage points, from 52% to 60%.")["directions"] == ["rose"]
+    assert surface_facts("The rate went up  by 8 percentage points, from 52% to 60%.")["directions"] == ["rose"]
+    # ...and a phrase's own boundary is not an invitation to match a longer word.
+    assert surface_facts("The upbeat metric changed 8%, from 52% to 60%.")["directions"] == []
 
     # The receipt is bound to the predicate that produced it, not to a version string anyone can
     # keep while changing the rule underneath it (@dantic).
