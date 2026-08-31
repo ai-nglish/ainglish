@@ -73,8 +73,6 @@ def _direction_pattern(words):
     return re.compile(r"\b(?:%s)\b" % alternatives, re.I)
 
 
-_DIRECTION_PATTERNS = tuple((name, _direction_pattern(words)) for name, words in _DIRECTIONS)
-
 
 def _fraction(value, field):
     """Accept an exact decimal string or an integer; refuse a float outright."""
@@ -125,8 +123,21 @@ def surface_facts(text):
     """
     endpoints = [(Fraction(a), Fraction(b)) for a, b in _ENDPOINTS.findall(text)]
     magnitude_text = _ENDPOINTS.sub(" ", text)
+    # Compiled HERE, from the committed lexicon, rather than read from a module-level cache.
+    #
+    # A precompiled `_DIRECTION_PATTERNS` global was the second version-binding hole of exactly the
+    # same class as the earlier `_ENDPOINTS` one (@dexagon-ai, #123): the digest committed to
+    # `_direction_pattern`'s source and to `_DIRECTIONS`, but the decision was made from the cache,
+    # so substituting the cache flipped a verdict from admissible to two "states no direction"
+    # refusals while the digest stayed byte-identical.
+    #
+    # Adding the cache to the hashed preimage would have closed that instance. Deleting the cache
+    # closes the CLASS: every cached derivative of hashed state is a new hole, and the way to stop
+    # producing them is to stop caching. re.compile memoises on the pattern string, so this costs a
+    # dict lookup after the first call and buys a guarantee that cannot drift.
     directions = sorted({
-        name for name, pattern in _DIRECTION_PATTERNS if pattern.search(text) is not None
+        name for name, words in _DIRECTIONS
+        if _direction_pattern(words).search(text) is not None
     })
     return {
         "endpoints": endpoints,
@@ -310,7 +321,7 @@ _PREDICATE_FUNCTIONS = (
 # Pinned so that (a) a predicate change forces a deliberate acknowledgement rather than a silent
 # re-key, and (b) CI running the selftest on 3.9 and 3.12 proves the digest is interpreter-
 # independent instead of asserting it. Update it only when the predicate genuinely changed.
-PREDICATE_SHA256 = "48d59ca6fbb6dc7f8df1ea104aebf210152a25f6a3ee3ae519940bf0e5488eb7"
+PREDICATE_SHA256 = "bbcef9c6d886f599dc3bba0000c4fde223539e04014658ffecfc517be835586c"
 _PREDICATE_PATTERNS = ("_POINT_FORM", "_BARE_PERCENT", "_ENDPOINTS")
 _PREDICATE_CONSTANTS = ("READING_POINT", "READING_RELATIVE", "READING_UNDETERMINED",
                         "READINGS", "_DIRECTIONS")
@@ -571,6 +582,20 @@ def selftest():
     agreeing.pop("answer", None)
     assert item_verdict(agreeing)["admissible"], \
         "a keyless pair whose arms agree must remain admissible"
+
+    # (6b) NO UNHASHED PATTERN CACHE MAY EXIST. This is the structural form of @dexagon-ai's
+    # finding, and it is deliberately not a test of one attribute name: a precompiled
+    # `_DIRECTION_PATTERNS` global made decisions the digest did not cover, and adding that one name
+    # to the preimage would have closed the instance while leaving the class open. Any future
+    # module-level compiled regex is caught here whatever it is called.
+    import re as _re
+    _module = sys.modules[__name__]
+    _cached = sorted(name for name, value in vars(_module).items()
+                     if isinstance(value, _re.Pattern))
+    assert _cached == sorted(_PREDICATE_PATTERNS), (
+        "every module-level compiled regex must be in the hashed preimage, or a decision can be "
+        "made from bytes the receipt does not commit to.\n  hashed:  %s\n  present: %s"
+        % (sorted(_PREDICATE_PATTERNS), _cached))
 
     # (6) DIRECTION MATCHING IS BOUNDARY-AWARE. Substring containment was FAIL-OPEN: it invented a
     # direction from an unrelated word, which let a pair stating no direction satisfy the direction
