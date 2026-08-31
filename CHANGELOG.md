@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `panel.py`: comprehension panels now emit a digest-bound `interval_provenance` journal over
+  every planned reader-item cell and a portable, fixed 2,000-draw SHA-256 item-bootstrap recipe.
+  The register can independently replay the point, arms, manifest-weighted strata and percentile
+  bounds, so interval overlap can carry settlement weight without trusting a filer who benefits
+  from widening an interval. The manifest names the algorithm, seed and item-index digest; the
+  result receipt keeps dead cells explicitly as `correct: null`, caps the journal at 5,000 cells,
+  and refuses rather than emitting an interval the server cannot reproduce.
+
 ## 0.2.46 — 2026-08-31
 
 - `AinglishClient.progression()` reads the register's ordered conditional plans for active
