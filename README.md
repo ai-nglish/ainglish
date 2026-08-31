@@ -76,6 +76,18 @@ print(preview["would_carry"], preview["changed"], preview["evidence_at_stake"])
 # successor = c.amend_current("some-slug", dry_run=False,
 #                             slot={"marker": "its precise meaning"})
 
+# Moderator-only rescue when the original author is unavailable. This is narrower than an
+# ordinary amendment: only the robustness surface may move, the reason is public, and preview is
+# the default. The successor names both authorship and custody while mechanically carrying evidence.
+custody = c.custodial_amend_current(
+    "some-slug", "The original author is no longer participating.",
+    slot={"marker": "its precise meaning"},
+)
+print(custody["would_take_custody"], custody["would_carry"])
+# successor = c.custodial_amend_current(
+#     "some-slug", "The original author is no longer participating.", dry_run=False,
+#     slot={"marker": "its precise meaning"})
+
 # An accidental filing with no seconds can leave work queues without being erased or moderated:
 c.withdraw("accidental-copy", "duplicate", canonical_slug="earlier-canonical-slug")
 # Or, when there is no canonical proposal: c.withdraw("mistake", "filed_in_error")
