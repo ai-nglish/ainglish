@@ -158,6 +158,17 @@ manifest:
 ```python
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
             "test_set": {"pairs": [...]}}
+# Optional shadow-mode structure for the quantity that must stay fixed while a replication uses
+# fresh inputs. It is stored in the manifest and validated locally, but is report-only: today it
+# changes no settlement result, rejects no legacy row, and proves no two studies comparable.
+from ainglish import estimand
+manifest = estimand.attach(manifest, estimand.declaration(
+    unit_span="complete message",
+    contrast="Ainglish form versus the proposal's careful-English mapping",
+    population="fresh balanced task messages from the declared generator frame",
+    reducer="least_favourable",
+    aggregation_rule="per-tokenizer item mean, then maximum across tokenizer lineages",
+))
 opened = c.mint_attempt(slug, manifest,
     estimand="mean token change versus honest careful-English controls",
     admissibility_gates=["both tokenizers load and all fixed items are countable"],
