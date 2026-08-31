@@ -409,6 +409,39 @@ def set_signature(items):
     }
 
 
+def _unhashed_pattern_paths():
+    """Every compiled regex reachable from module globals outside the hashed preimage.
+
+    Walks ordinary containers only — mappings, tuples, lists, sets, frozensets — cycle-safe, and
+    deliberately does NOT descend into modules, classes or functions: the goal is to find caches
+    THIS module keeps, not to index the standard library's own internals. The three names in
+    _PREDICATE_PATTERNS are the hashed preimage; a pattern reachable anywhere else, however deeply
+    wrapped, is a decision surface the receipt does not commit to.
+    """
+    module = sys.modules[__name__]
+    offenders, seen = [], set()
+
+    def walk(value, path):
+        if id(value) in seen:
+            return
+        seen.add(id(value))
+        if isinstance(value, re.Pattern):
+            offenders.append(path)
+        elif isinstance(value, dict):
+            for k, v in value.items():
+                walk(k, "%s[key]" % path)
+                walk(v, "%s[%r]" % (path, k))
+        elif isinstance(value, (tuple, list, set, frozenset)):
+            for index, v in enumerate(value):
+                walk(v, "%s[%d]" % (path, index))
+
+    for name, value in vars(module).items():
+        if name in _PREDICATE_PATTERNS or name.startswith("__"):
+            continue
+        walk(value, name)
+    return sorted(offenders)
+
+
 def selftest():
     """Every case here is a real item set from the register, not a constructed example."""
     # (1) THE ORIGINAL that preregistered endpoints (dexagon, 4274686d). Both arms carry the same
@@ -583,19 +616,29 @@ def selftest():
     assert item_verdict(agreeing)["admissible"], \
         "a keyless pair whose arms agree must remain admissible"
 
-    # (6b) NO UNHASHED PATTERN CACHE MAY EXIST. This is the structural form of @dexagon-ai's
-    # finding, and it is deliberately not a test of one attribute name: a precompiled
-    # `_DIRECTION_PATTERNS` global made decisions the digest did not cover, and adding that one name
-    # to the preimage would have closed the instance while leaving the class open. Any future
-    # module-level compiled regex is caught here whatever it is called.
+    # (6b) NO UNHASHED PATTERN CACHE MAY EXIST, however it is wrapped. The first version of this
+    # guard checked only globals whose top-level value IS a compiled pattern — and the cache that
+    # caused the incident was a TUPLE OF (name, pattern) PAIRS, which walked straight past it
+    # (@dexagon-ai, fifth review: reintroducing the exact original tuple passed the guard that
+    # claimed to forbid it). A guard that misses the very shape of its motivating incident enforces
+    # nothing, so this one traverses ordinary containers, cycle-safe, and pins that exact shape as
+    # its own in-test mutation below.
+    _offenders = _unhashed_pattern_paths()
+    assert _offenders == [], (
+        "a compiled regex is reachable outside the hashed preimage, so a decision can be made "
+        "from bytes the receipt does not commit to: %s" % ", ".join(_offenders))
+    # The incident's exact shape must FAIL the guard, not merely be absent today.
     import re as _re
     _module = sys.modules[__name__]
-    _cached = sorted(name for name, value in vars(_module).items()
-                     if isinstance(value, _re.Pattern))
-    assert _cached == sorted(_PREDICATE_PATTERNS), (
-        "every module-level compiled regex must be in the hashed preimage, or a decision can be "
-        "made from bytes the receipt does not commit to.\n  hashed:  %s\n  present: %s"
-        % (sorted(_PREDICATE_PATTERNS), _cached))
+    try:
+        _module._DIRECTION_PATTERNS = tuple(
+            (name, _re.compile(r"(?!x)x")) for name, _ in getattr(_module, "_DIRECTIONS"))
+        _reintroduced = _unhashed_pattern_paths()
+        assert any("_DIRECTION_PATTERNS" in path for path in _reintroduced), \
+            "the guard must catch the original incident's nested-tuple cache shape"
+    finally:
+        del _module._DIRECTION_PATTERNS
+    assert _unhashed_pattern_paths() == [], "the mutation must clean up after itself"
 
     # (6) DIRECTION MATCHING IS BOUNDARY-AWARE. Substring containment was FAIL-OPEN: it invented a
     # direction from an unrelated word, which let a pair stating no direction satisfy the direction
