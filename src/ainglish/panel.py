@@ -2660,8 +2660,18 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # when the headline reads one arm alone. Stateless single-turn calls therefore read cold first
     # and entry second for every real reader-item; both populations are complete and auditable.
     real_rows = run_items(real, both_arms=manifest.get("metric") == "learnability", stage="real")
-    if real_rows is None:
-        return None
+    # run_items returns rows, None, OR a structured refusal. The calibration call site above
+    # branches on all three; this one checked only None, so a REAL-stage refusal fell through into
+    # the concatenation below as a dict and raised TypeError.
+    #
+    # The cost was not the crash, it was the diagnosis. A refusal carries {stage, cause, message,
+    # cells attempted} and maps to the server's closed abort vocabulary, so a transport loss files
+    # as `reader_transport`. Raising instead filed the abort as `harness_error` / "panel harness
+    # raised before measurement emission" — which is what a real run of mine recorded on attempt
+    # f92eb2ff after 24 calibration and 30 real cells of spend. That distinction decides whether a
+    # re-run is a legitimate transport retry or gate-shopping, and the crash erased it.
+    if real_rows is None or _is_panel_refusal(real_rows):
+        return real_rows
     rows = calib_rows + real_rows
 
     # The guard aborts at TWO points, and the first wiring only handled one: observe() catches a
@@ -4508,6 +4518,30 @@ def selftest():
         "a competence refusal must preserve every bought calibration cell for diagnosis"
     assert set(incompetent["details"]["by_reader"]) == {"flip-a", "flip-b"}, \
         "the public refusal must show which declared readers could not detect the known effect"
+
+    # A REAL-STAGE refusal must propagate as a refusal, not raise. run_items returns rows, None or
+    # a structured refusal; the real call site checked only None, so the refusal reached
+    # `calib_rows + real_rows` as a dict and raised TypeError. The loss was the DIAGNOSIS: a
+    # transport failure files as `reader_transport`, and the crash filed it as `harness_error`
+    # instead — which is exactly what attempt f92eb2ff recorded after 24 calibration and 30 real
+    # cells of real spend. That class decides whether a re-run is a transport retry or
+    # gate-shopping, so an untyped abort is worse than an expensive one.
+    def calibrates_then_dies(ep, text, q, options):
+        if "counterparty" in q:
+            return tag_reliant(ep, text, q, options)   # calibration detects the planted effect
+        return None                                    # then every real cell is dead
+
+    real_cells = []
+    dead = run_panel(dict(good), ask_fn=calibrates_then_dies, cell_results=real_cells)
+    assert _is_panel_refusal(dead), \
+        "a real-stage refusal must be RETURNED as a refusal, never raised past the caller"
+    assert dead["stage"] == "real", dead
+    assert dead["cause"] != "competence", \
+        "dead transports are not an incompetent reader, and the receipt must not say so"
+    assert dead["calibration_cells_attempted"] > 0 and dead["real_cells_attempted"] > 0, \
+        "the refusal must state what was bought before it gave up"
+    assert _panel_refusal_failed_gate_kind(dead) != "harness_error", \
+        "a typed refusal must not be filed as a harness fault: that is the distinction the crash erased"
 
     # …and it must fail BEFORE buying a single real item. The gate used to be scored last, so a
     # blind panel paid for the whole run before saying it was blind. Asserting "returns None" does
