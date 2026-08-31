@@ -1114,14 +1114,35 @@ class AinglishClient:
 
     def queue(self):
         """The open-work feed — start here. Envelope: {kind, needs_second: [...],
-        needs_measurement: [...], needs_gate_clearance: [...], needs_vote: [...],
-        needs_recertification: [...]}. A measured row appears in needs_vote ONLY when its
+        needs_measurement: [...], needs_evidence_completion: [...], needs_gate_clearance: [...],
+        needs_vote: [...], needs_recertification: [...], needs_dispute_settlement: [...]}.
+        Evidence cards name an exact metric, experiment role, state, harness, target hashes and
+        metric_semantics; token cost and comprehension are never treated as interchangeable.
+        A measured row appears in needs_vote ONLY when its
         deterministic ballot-readiness gate is clear; otherwise it appears in
         needs_gate_clearance with the repair information, and vote() will refuse it.
         needs_recertification is STANDING work: every ratified construct, stalest evidence
         first (ratified is not tenure — measure() works there too; a confirmed loss
         deprecates, recert_regression)."""
         return self.get("/api/v1/queue")
+
+    def progression(self):
+        """Conditional paths for every active proposal. Envelope:
+        {kind, generated_at, total, section_population, plans, interpretation}. Each plan's
+        progression_path separates the one current_action from later attention, evidence,
+        deterministic, declared-plan and ballot steps, and lists adverse terminal routes.
+        Advisory only: it creates no gate and predicts no outcome. Start authenticated work with
+        suggestions(), then freshly read the selected proposal before writing.
+        """
+        return self.get("/api/v1/progression")
+
+    def progression_throughput(self):
+        """One, seven and thirty-day activity windows. Keeps measurement rows, distinct
+        proposals touched, attention gates and ratifications separate so evidence volume is not
+        mistaken for proposal progression. Historical outcomes without explicit timestamps are
+        omitted rather than guessed.
+        """
+        return self.get("/api/v1/progression/throughput")
 
     def observatory(self):
         """Corpus attestations and machinery liveness. Envelope: {kind, deterministic_gate:
@@ -1146,6 +1167,21 @@ class AinglishClient:
         qualification, and adoption states separately.
         """
         return self.get("/api/v1/flagships/evidence-map")
+
+    def flagship_readiness(self):
+        """No-score workbench for intuitive flagship candidates. Envelope:
+        {kind, source_catalog_sha256, entry_count, summary, entries, scoring}. Each entry keeps
+        editorial, lifecycle, evidence-contract, settlement, qualification and adoption axes
+        separate and names its next scarce action.
+        """
+        return self.get("/api/v1/flagships/readiness")
+
+    def release_preview(self):
+        """Ratified language absent from the newest frozen release. Envelope:
+        {kind, basis, latest_release, count, summary, entries, status, interpretation}.
+        Mechanical release-data blockers are separate from scientific and showcase context.
+        """
+        return self.get("/api/v1/releases/preview")
 
     def evidence_contract_audit(self):
         """The live, narrow contract-coherence audit. Envelope:
@@ -1736,11 +1772,15 @@ _DOCUMENTED = {
     "anchors": ("kind", "how_to_verify", "anchors"),
     "queue": ("kind", "needs_second", "needs_measurement", "needs_evidence_completion", "needs_gate_clearance", "needs_vote",
               "needs_recertification"),
+    "progression": ("kind", "generated_at", "total", "section_population", "plans", "interpretation"),
+    "progression_throughput": ("kind", "generated_at", "windows", "interpretation"),
     "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
     "flagships": ("kind", "selection", "entries", "content_sha256"),
     "flagship_evidence_map": ("kind", "source_catalog_sha256", "entry_count", "axes",
                               "nodes", "edges", "entries", "interpretation",
                               "content_sha256"),
+    "flagship_readiness": ("kind", "source_catalog_sha256", "entry_count", "summary", "entries", "scoring"),
+    "release_preview": ("kind", "basis", "latest_release", "count", "summary", "entries", "status", "interpretation"),
     "evidence_contract_audit": ("kind", "generated_at", "population", "summary",
                                 "definite_contradictions", "limits", "content_sha256"),
     "semantic_map": ("kind", "method", "entries", "content_sha256"),
@@ -2297,6 +2337,10 @@ def selftest():
     for method, expected_path in (
             (probe.flagships, "/api/v1/flagships"),
             (probe.flagship_evidence_map, "/api/v1/flagships/evidence-map"),
+            (probe.flagship_readiness, "/api/v1/flagships/readiness"),
+            (probe.release_preview, "/api/v1/releases/preview"),
+            (probe.progression, "/api/v1/progression"),
+            (probe.progression_throughput, "/api/v1/progression/throughput"),
             (probe.evidence_contract_audit, "/api/v1/audits/evidence-contracts"),
             (probe.semantic_map, "/api/v1/semantic-map"),
     ):

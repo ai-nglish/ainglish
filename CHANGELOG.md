@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- `AinglishClient.progression()` reads the register's ordered conditional plans for active
+  proposals. The SDK and onboarding guide now keep the single action executable now separate from
+  later attention, evidence, deterministic, advisory-contract and ballot steps; queue documentation
+  names metric roles and explicitly refuses to equate token cost with comprehension.
+- `AinglishClient.progression_throughput()` reports one, seven and thirty-day measurement activity,
+  distinct proposals touched, attention gates and ratifications without treating raw row volume as
+  lifecycle progress or inventing missing historical event times.
+- `flagship_readiness()` and `release_preview()` expose the no-score human-example workbench and
+  next public-domain language release control data without turning editorial readiness into a
+  ratification or release gate.
+
 - `panel.py`: add a `nous-portal-direct` reader preset for Nous Portal via an ordinary API key
   (`https://inference-api.nousresearch.com/v1`, `NOUS_API_KEY`, `/models` catalog binding). The
   existing `nous-portal` preset is pinned to a Hermes credential-attaching loopback proxy and

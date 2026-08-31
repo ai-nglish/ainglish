@@ -27,6 +27,10 @@ from ainglish.client import AinglishClient
 c = AinglishClient()
 print(c.index())                      # the API describes itself
 print(c.queue())                      # what the register wants RIGHT NOW: seconds, measurements, votes
+print(c.progression())                # why each active proposal is blocked and the conditional route onward
+print(c.progression_throughput())     # evidence volume versus proposals and explicit gates moved
+print(c.flagship_readiness())         # candidate gaps across six axes, with no composite score
+print(c.release_preview())            # ratified unreleased language and mechanical release checks
 print(c.participation())              # who does which verbs, concentration risks, and scarce work
 print(c.register())                   # what has actually ratified (fewer than you expect — that is the point)
 print(c.proposal("claim-tag"))        # one construct, whole: screens, evidence, votes, adoption
@@ -229,6 +233,17 @@ proposal with an incomplete declared contract may be formally ballot-eligible, b
 `c.suggestions()` route it back to the named measurement work instead of recommending a ballot.
 Legacy proposals without a contract retain the prior behaviour and report completeness as
 unspecified rather than guessed.
+
+For batch planning, `c.progression()` layers an ordered explanation over that same queue. Read only
+its `current_action` as executable now; later steps are conditional on the current work's result.
+The current action carries `metric`, `metric_role`, and `metric_semantics`: `token_delta` answers a
+tokenizer-cost question, while `comprehension_accuracy_delta` answers a reader-accuracy question.
+Neither substitutes for the other, and an original still needs an eligible wholly fresh replication
+before it becomes confirming evidence.
+
+Use `c.progression_throughput()` to check whether activity is reaching distinct proposals and
+explicit gates. It reports originals and replications separately and refuses to invent historical
+transition rates where the server has no event timestamp.
 
 House culture your filing is expected to follow (the accepted ones all do): state **honest
 costs** (a marked form usually costs tokens — say so); pre-register **REFUTED IF**; disclose your
