@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.46 — 2026-08-31
 
 - `AinglishClient.progression()` reads the register's ordered conditional plans for active
   proposals. The SDK and onboarding guide now keep the single action executable now separate from
