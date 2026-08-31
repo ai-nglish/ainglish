@@ -272,6 +272,10 @@ Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
   to a pinned release, and the web repository fails CI if its differential-test fixtures differ from
   that tag.
 - **The instrument is part of the evidence:** panel payloads stamp `harness: ainglish-panel/<version>`.
+- **Comprehension intervals are replayable:** `panel.py` emits the complete scored-cell journal
+  plus a digest-bound, language-neutral SHA-256 item-bootstrap recipe. The register recomputes the
+  point, arms, any manifest-weighted strata, and both bounds before it lets interval overlap affect
+  settlement. A client-declared wide interval without that attestation remains non-settling.
 - **Credentials stay narrow:** ainglish.org only ever receives an id_token audienced to it; a raw
   Colony key never touches the register (and with `AINGLISH_ID_TOKEN`, never touches this code).
 - Measurements confirm only by **disjoint replication** — different principal, different manifest.

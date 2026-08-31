@@ -86,6 +86,10 @@ MAX_PANEL_IN_FLIGHT = 64
 _INSTRUMENT_PREPARATION_KEY = "_ainglish_instrument_preparation"
 ANSWER_PROTOCOL = "opaque-choice-v1"
 _CHOICE_CODES = tuple(chr(code) for code in range(ord("A"), ord("Z") + 1))
+INTERVAL_PROVENANCE_KIND = "ainglish.panel.bootstrap-items-attestation.v1"
+INTERVAL_BOOTSTRAP_ALGORITHM = "sha256-counter-modulo-v1"
+INTERVAL_BOOTSTRAP_DRAWS = 2000
+INTERVAL_PROVENANCE_MAX_CELLS = 5000
 
 
 def _panel_refusal(stage, cause, message, calibration_cells_attempted,
@@ -1394,6 +1398,181 @@ def bootstrap_stratified_accuracy(rows, items, contract, n=2000, seed=0):
     return estimates[int(0.025 * len(estimates))], estimates[int(0.975 * len(estimates))]
 
 
+def _attested_draw_index(seed, draw, position, population, stratum=""):
+    """One cross-language bootstrap draw from a SHA-256 counter stream.
+
+    Python's ``random.Random`` is deterministic inside Python but is not a server-verifiable wire
+    protocol. This PRF is deliberately boring: all inputs are UTF-8 decimal/text fields separated
+    by NUL, the first unsigned 64-bit big-endian word selects one source item modulo population.
+    Symfony implements these exact bytes and can therefore recompute every claimed percentile.
+    """
+    if not isinstance(population, int) or isinstance(population, bool) or population <= 0:
+        raise ValueError("attested bootstrap population must be a positive integer")
+    preimage = "\0".join((
+        INTERVAL_PROVENANCE_KIND, str(seed), str(stratum), str(draw), str(position),
+    )).encode("utf-8")
+    word = int.from_bytes(hashlib.sha256(preimage).digest()[:8], "big", signed=False)
+    return word % population
+
+
+def _attested_accuracy_cells(rows, items, panel, seed):
+    """Normalize every planned real reader-item cell into a bounded replay journal."""
+    if len(rows) > INTERVAL_PROVENANCE_MAX_CELLS:
+        raise ValueError(
+            f"attested interval provenance supports at most {INTERVAL_PROVENANCE_MAX_CELLS} "
+            "real cells; split this measurement into preregistered strata or reduce the panel")
+    item_by_id = {item["id"]: item for item in items}
+    reader_names = [reader["name"] for reader in panel]
+    expected_keys = {(item_id, reader) for item_id in item_by_id for reader in reader_names}
+    by_key = {}
+    for item_id, arm, reader, answer in rows:
+        key = (item_id, reader)
+        if key not in expected_keys:
+            raise ValueError(f"interval provenance saw an unplanned cell {key!r}")
+        if key in by_key:
+            raise ValueError(f"interval provenance saw a duplicate cell {key!r}")
+        expected_arm = arm_for(seed, reader, item_id)
+        if arm != expected_arm:
+            raise ValueError(
+                f"interval provenance arm mismatch for {reader!r}/{item_id!r}: "
+                f"observed {arm!r}, expected {expected_arm!r}")
+        target = item_by_id[item_id].get("answer")
+        correct = None if is_absent(answer) else (
+            str(answer).casefold() == str(target).casefold())
+        by_key[key] = {
+            "item_id": item_id,
+            "reader": reader,
+            "arm": arm,
+            "correct": correct,
+        }
+    missing = sorted(expected_keys - set(by_key))
+    if missing:
+        raise ValueError(f"interval provenance is missing {len(missing)} planned real cell(s)")
+    return [by_key[key] for key in sorted(by_key)]
+
+
+def _attested_item_index(items, contract=None):
+    return [
+        ({"id": item["id"], "stratum": item["settlement_stratum"]}
+         if contract is not None else {"id": item["id"]})
+        for item in sorted(items, key=lambda row: row["id"])
+    ]
+
+
+def _attested_content_sha256(value):
+    return hashlib.sha256(json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode("utf-8")).hexdigest()
+
+
+def _attested_sample_value(cells_by_item, sampled_ids, contract=None):
+    """Replay the accuracy-delta estimator over one item-bootstrap draw."""
+    if contract is None:
+        totals = {arm: {"correct": 0, "live": 0} for arm in ("english", "ainglish")}
+        for item_id in sampled_ids:
+            for cell in cells_by_item[item_id]:
+                if not isinstance(cell["correct"], bool):
+                    continue
+                totals[cell["arm"]]["live"] += 1
+                totals[cell["arm"]]["correct"] += int(cell["correct"])
+        if any(totals[arm]["live"] == 0 for arm in totals):
+            return None
+        return 100 * (
+            totals["ainglish"]["correct"] / totals["ainglish"]["live"]
+            - totals["english"]["correct"] / totals["english"]["live"]
+        )
+
+    by_stratum = {}
+    for stratum, item_id in sampled_ids:
+        totals = by_stratum.setdefault(
+            stratum, {arm: {"correct": 0, "live": 0} for arm in ("english", "ainglish")})
+        for cell in cells_by_item[item_id]:
+            if not isinstance(cell["correct"], bool):
+                continue
+            totals[cell["arm"]]["live"] += 1
+            totals[cell["arm"]]["correct"] += int(cell["correct"])
+    estimate = 0.0
+    for row in contract:
+        totals = by_stratum.get(row["id"])
+        if totals is None or any(totals[arm]["live"] == 0 for arm in totals):
+            return None
+        estimate += row["share"] * 100 * (
+            totals["ainglish"]["correct"] / totals["ainglish"]["live"]
+            - totals["english"]["correct"] / totals["english"]["live"]
+        )
+    return estimate
+
+
+def attested_bootstrap_accuracy(rows, items, panel, contract=None, n=INTERVAL_BOOTSTRAP_DRAWS,
+                                seed=0):
+    """Return server-replayable item-bootstrap bounds and their complete sufficient journal."""
+    if not isinstance(n, int) or isinstance(n, bool) or n < 100 or n > 10000:
+        raise ValueError("attested bootstrap draws must be an integer from 100 to 10000")
+    normalized = _attested_accuracy_cells(rows, items, panel, seed)
+    cells_by_item = {item["id"]: [] for item in items}
+    for cell in normalized:
+        cells_by_item[cell["item_id"]].append(cell)
+
+    estimates = []
+    if contract is None:
+        ids = sorted(cells_by_item)
+        for draw in range(n):
+            sampled = [
+                ids[_attested_draw_index(seed, draw, position, len(ids))]
+                for position in range(len(ids))
+            ]
+            value = _attested_sample_value(cells_by_item, sampled)
+            if value is not None:
+                estimates.append(value)
+    else:
+        item_strata = {item["id"]: item.get("settlement_stratum") for item in items}
+        sources = {
+            row["id"]: sorted(item_id for item_id, stratum in item_strata.items()
+                              if stratum == row["id"])
+            for row in contract
+        }
+        for draw in range(n):
+            sampled = []
+            for row in contract:
+                ident = row["id"]
+                source = sources[ident]
+                sampled.extend(
+                    (ident, source[_attested_draw_index(
+                        seed, draw, position, len(source), stratum=ident)])
+                    for position in range(len(source))
+                )
+            value = _attested_sample_value(cells_by_item, sampled, contract)
+            if value is not None:
+                estimates.append(value)
+    if not estimates:
+        raise ValueError("attested bootstrap produced no draw with both arms observable")
+    estimates.sort()
+    lo_index = 25 * len(estimates) // 1000
+    hi_index = 975 * len(estimates) // 1000
+    lo, hi = estimates[lo_index], estimates[hi_index]
+
+    receipt = {
+        "kind": INTERVAL_PROVENANCE_KIND,
+        "metric": "comprehension_accuracy_delta",
+        "estimator": ("manifest_weighted_stratum_accuracy_delta_pp"
+                      if contract is not None else "arm_accuracy_delta_pp"),
+        "algorithm": {
+            "name": INTERVAL_BOOTSTRAP_ALGORITHM,
+            "draws": n,
+            "accepted_draws": len(estimates),
+            "sampling_unit": "item",
+            "lower_quantile": {"numerator": 25, "denominator": 1000, "index_rule": "floor"},
+            "upper_quantile": {"numerator": 975, "denominator": 1000, "index_rule": "floor"},
+        },
+        "seed": seed,
+        "items": _attested_item_index(items, contract),
+        "readers": sorted(reader["name"] for reader in panel),
+        "cells": normalized,
+    }
+    receipt["content_sha256"] = _attested_content_sha256(receipt)
+    return lo, hi, receipt
+
+
 def stratified_resample_sensitivity(rows, items, contract, headline, lo, hi, seed=0):
     """Thin within each stratum so the sensitivity check retains the declared estimand."""
     out = []
@@ -2327,6 +2506,12 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         print("REFUSING to run: comprehension panels need at least two real items — bootstrap and "
               "resample-down sensitivity are undefined for a smaller sample. No reader cell was bought.")
         return None
+    if (manifest.get("metric") == "comprehension_accuracy_delta"
+            and len(real) * len(panel) > INTERVAL_PROVENANCE_MAX_CELLS):
+        print(f"REFUSING to run: {len(real) * len(panel)} planned comprehension cells exceed the "
+              f"{INTERVAL_PROVENANCE_MAX_CELLS}-cell attested interval receipt limit. Split the "
+              "design into preregistered strata or reduce the panel; no reader cell was bought.")
+        return None
     try:
         settlement_contract = _settlement_contract(manifest, real, panel, seed)
     except ValueError as exc:
@@ -2750,10 +2935,20 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             print(f"REFUSING to emit: settlement strata became incomplete after cell-yield "
                   f"filtering ({exc}). Preserve the cell-result receipt and rerun a fresh design.")
             return None
-    lo, hi = (bootstrap_stratified_accuracy(
-        real_rows, real, settlement_contract, seed=seed)
-        if settlement_contract is not None
-        else bootstrap_delta(real_rows, real, metric, seed=seed))
+    interval_provenance = None
+    if metric == "comprehension_accuracy_delta":
+        try:
+            lo, hi, interval_provenance = attested_bootstrap_accuracy(
+                real_rows, real, panel, settlement_contract, seed=seed)
+        except ValueError as exc:
+            print(f"REFUSING to emit: interval provenance is incomplete ({exc}). The register "
+                  "cannot safely settle on client-declared bounds it cannot replay.")
+            return None
+    else:
+        lo, hi = (bootstrap_stratified_accuracy(
+            real_rows, real, settlement_contract, seed=seed)
+            if settlement_contract is not None
+            else bootstrap_delta(real_rows, real, metric, seed=seed))
 
     # RESAMPLE-DOWN sensitivity (@exori relaying @ColonistOne's collider result, DM 2026-08-04):
     # thin the item set and re-score. If the verdict moves as the set shrinks, the number was
@@ -2918,6 +3113,21 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     spec["instrument_preparation"] = instrument_preparation_receipt(
         panel, _manifest_unbound_entry_point(manifest))
     spec["item_counts"] = {"real": len(real), "calibration": len(calib)}
+    if metric == "comprehension_accuracy_delta":
+        # Register 0.35.0 compares intervals only when it can derive their kind and recompute their
+        # bounds. The replay design lives in the immutable input manifest; the observed replay
+        # journal stays result-side in interval_provenance and is digest-bound there.
+        spec["seed"] = seed
+        spec["interval_kind"] = "bootstrap_items"
+        spec["interval_estimator"] = {
+            "kind": INTERVAL_PROVENANCE_KIND,
+            "algorithm": INTERVAL_BOOTSTRAP_ALGORITHM,
+            "draws": INTERVAL_BOOTSTRAP_DRAWS,
+            "sampling_unit": "item",
+            "quantiles": ["0.025", "0.975"],
+            "items_index_sha256": _attested_content_sha256(
+                _attested_item_index(real, settlement_contract)),
+        }
     if settlement_contract is not None:
         spec["settlement_strata"] = [dict(row) for row in manifest["settlement_strata"]]
         spec["settlement_item_field"] = "settlement_stratum"
@@ -2996,6 +3206,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         "per_member": per_member,
         "manifest": spec,
     }
+    if interval_provenance is not None:
+        measurement["interval_provenance"] = interval_provenance
     if accuracy_resolution is not None:
         # First-class result data lets the register validate and serve the exact grid without
         # making every consumer retrieve manifest bytes. Keep the committed copy during the
@@ -3698,6 +3910,35 @@ def selftest():
         "description": "The proposal's complete registered careful-English mapping.",
     }, "the comparator identity must survive into the content-addressed evidence manifest"
     assert m is not None and m["value"] > 0, "calibrated tag-reliant panel must find the recovery effect"
+    provenance = m["interval_provenance"]
+    assert provenance["kind"] == INTERVAL_PROVENANCE_KIND
+    accepted_draws = provenance["algorithm"]["accepted_draws"]
+    assert 0 < accepted_draws <= INTERVAL_BOOTSTRAP_DRAWS
+    assert {key: value for key, value in provenance["algorithm"].items()
+            if key != "accepted_draws"} == {
+        "name": INTERVAL_BOOTSTRAP_ALGORITHM,
+        "draws": INTERVAL_BOOTSTRAP_DRAWS,
+        "sampling_unit": "item",
+        "lower_quantile": {"numerator": 25, "denominator": 1000, "index_rule": "floor"},
+        "upper_quantile": {"numerator": 975, "denominator": 1000, "index_rule": "floor"},
+    }
+    assert len(provenance["items"]) == 8 and len(provenance["cells"]) == 16
+    assert provenance["readers"] == ["reader-a", "reader-b"]
+    digest_body = dict(provenance)
+    claimed_digest = digest_body.pop("content_sha256")
+    assert claimed_digest == hashlib.sha256(json.dumps(
+        digest_body, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode()).hexdigest(), "the interval receipt digest must bind every scored cell"
+    assert m["manifest"]["interval_kind"] == "bootstrap_items"
+    assert m["manifest"]["interval_estimator"] == {
+        "kind": INTERVAL_PROVENANCE_KIND,
+        "algorithm": INTERVAL_BOOTSTRAP_ALGORITHM,
+        "draws": INTERVAL_BOOTSTRAP_DRAWS,
+        "sampling_unit": "item",
+        "quantiles": ["0.025", "0.975"],
+        "items_index_sha256": _attested_content_sha256(_attested_item_index(
+            [item for item in items if not item.get("calibration")], None)),
+    }, "the result must carry the immutable replay design"
     assert m["manifest"]["instrument_preparation"] == {
         "entry_point": "run_panel(custom ask_fn)", "binding": "unbound"}, \
         "a custom reader loop must never look digest-bound in a successful manifest"
@@ -3725,6 +3966,10 @@ def selftest():
         row["value"] * 0.5 for row in stratified["stratum_results"])) < 0.0001
     assert "accuracy_resolution" not in stratified, \
         "the pooled cell grid cannot describe a manifest-weighted stratified estimator"
+    assert stratified["interval_provenance"]["estimator"] == \
+        "manifest_weighted_stratum_accuracy_delta_pp"
+    assert {row["stratum"] for row in stratified["interval_provenance"]["items"]} == \
+        {"repeat", "restore"}
     unbalanced_items = [
         ({**item, "settlement_stratum": ("repeat" if item["id"] == "r1" else "restore")}
          if not item.get("calibration") else dict(item))

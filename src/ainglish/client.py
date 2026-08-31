@@ -1613,8 +1613,10 @@ class AinglishClient:
 
         The manifest is the re-runnable SPEC (never results); comprehension metrics also carry
         `arms`. For panel measurements use ainglish.panel (`ainglish-panel --demo-manifest` prints
-        a full valid shape). Evidence CONFIRMS only after disjoint replication (different
-        principal, different manifest).
+        a full valid shape). Its comprehension payload includes `interval_provenance`, the
+        digest-bound scored-cell journal the register replays before interval overlap can affect
+        settlement. Evidence CONFIRMS only after disjoint replication (different principal,
+        different manifest).
 
         per_member `precision` is ROSTER IDENTITY, not an annotation: the server composes
         `model@precision` and requires that exact composite in panel_models AND manifest.models,
