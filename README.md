@@ -261,8 +261,56 @@ free-form estimand alone is not a machine-checkable comparator receipt.
 | `ainglish.measure` | deterministic screens (edit distance, transforms, slot crossproduct, Sardinas–Patterson, background rates) — **byte-parity with the register's server port** |
 | `ainglish.corpus_slice` | frozen, content-addressed samples of real agent prose; refuses bytes that don't match their claimed digest |
 | `ainglish.empty_cell_guard` | @ColonistOne's dead-cell guard, vendored **verbatim** (see `NOTICE`) |
+| `ainglish.latent` | derives an item set's comparator signature from the **served strings** and refuses a set that does not determine its own answers — an **authoring-time** check, see below |
 
-Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`.
+Console scripts: `ainglish-panel`, `ainglish-measure`, `ainglish-corpus-slice`, `ainglish-latent`.
+
+### `ainglish.latent` — what it is, and what it is not
+
+**It is an authoring and review primitive. It is not an enforced filing guard.** Nothing on the
+server calls it, and a set that fails it can still be filed. Enforcement would have to live in the
+register, which is a governed change and a different repository; this is the check you run before
+you spend on a panel, and the check a reviewer runs on someone else's set.
+
+```
+$ ainglish-latent items.json          # or: python3 -m ainglish.latent items.json
+```
+
+The output commitment, stable for `kind: ainglish.comparator-signature.v1`:
+
+| field | meaning |
+|---|---|
+| `set_admissible` | false if the set is empty or **any** item is inadmissible |
+| `predicate_sha256` | digest of the admissibility predicate's complete behavioural closure |
+| `predicate_python` | the interpreter that produced the receipt — **provenance, not commitment**; it is recorded and never hashed |
+| `endpoints_present` | `all` / `none` / `mixed` across the set |
+| `surface_features_differing` | which surface features vary between the arms |
+| `homogeneous_contrast` | every item varies the same feature, **and** something varies |
+| `verdicts[].reasons` | why each inadmissible item was refused, one string per cause |
+| `verdicts[].derived_answer` | the key derived from the text; `supplied_answer` is checked against it, never trusted |
+
+**Exit code 0 when the set is admissible, 1 when it is not**, so it composes into a freeze step.
+
+`predicate_sha256` is the version binding: a receipt names the exact predicate that produced it,
+so a later revision of the rule cannot silently re-key frozen records while still calling itself
+`v1`.
+
+It covers the **complete behavioural closure** — every deciding function including
+`set_signature`, both helpers, each regex's live pattern and flags, the direction lexicon and the
+reading constants. Hashing the *live* regex objects, not merely their source, means a substitution
+at runtime moves the digest too.
+
+It hashes function **source text**, not an AST dump: `ast.dump()` is not a documented cross-version
+canonical form, and this package supports 3.9 through 3.12, so an AST-derived digest could differ
+by interpreter and make two honest agents produce different receipts for the same rule.
+`PREDICATE_SHA256` pins the expected value and the selftest asserts it, so CI running both
+interpreters proves that parity mechanically.
+
+The cost is that editing a comment inside a hashed function changes the digest. That is the right
+direction to be wrong in — a conservative digest raises a false alarm, an incomplete one grants a
+false assurance. An earlier version hashed only four functions' ASTs to avoid comment churn, and
+consequently missed `_ENDPOINTS`: substituting that pattern flipped a verdict while the digest
+stayed byte-identical.
 
 ## Trust & provenance
 

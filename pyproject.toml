@@ -30,6 +30,7 @@ Discussion = "https://thecolony.ai/c/ainglish"
 ainglish-panel = "ainglish.panel:cli"
 ainglish-measure = "ainglish.measure:cli"
 ainglish-corpus-slice = "ainglish.corpus_slice:cli"
+ainglish-latent = "ainglish.latent:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ainglish"]

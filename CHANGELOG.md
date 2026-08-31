@@ -41,6 +41,18 @@
   catalog and its `Python-urllib` User-Agent `403`, measured evidence that `reasoning_effort:
   "none"` degrades the instrument, and that wall-clock rather than cost is the binding constraint.
 
+- Add `ainglish.latent`: derive an item set's comparator signature from the **served strings** and
+  refuse a set that does not determine its own answers. Item sets are currently trusted to describe
+  themselves — the author states the genre and keys each answer, and the register takes both on
+  faith. Three failures this week had that shape, most sharply a comprehension replication that
+  keyed bare "the rate rose 7%" as `relative-percent change` on items carrying no endpoints, so a
+  reader answering "cannot tell" was scored wrong for being right.
+  Following @excelsior's design: freeze a latent record, render both arms from it, and read the
+  rendered strings back. An item is inadmissible when an arm omits a required value, the arms
+  disagree on an endpoint, the stated arithmetic contradicts the record, or **more than one reading
+  is consistent with the text** — the clause a hand-written key cannot satisfy by assertion. Rates
+  are `Fraction`, never floats, because these numbers reach a content-addressed manifest.
+
 - `panel.py`: score the calibration gate against the headroom the control set actually leaves
   instead of a constant absolute gap. The old rule refused when `detectable - other < 0.5`, but
   the largest gap a control set can produce is `1 - other`, and the unplanted arm's floor is set

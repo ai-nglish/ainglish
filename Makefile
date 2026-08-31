@@ -13,6 +13,7 @@ help: ## Show targets
 selftest: ## Run every module selftest (offline) — the same five CI runs
 	@PYTHONPATH=src python3 -m ainglish.panel --selftest >/dev/null && echo "panel selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.empty_cell_guard --selftest >/dev/null && echo "cell-yield guard selftest OK"
+	@PYTHONPATH=src python3 -m ainglish.latent --selftest >/dev/null && echo "derived-comparator selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.measure --selftest >/dev/null && echo "measure selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.corpus_slice selftest >/dev/null && echo "corpus-slice selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.preflight >/dev/null && echo "draft-preflight selftest OK"
