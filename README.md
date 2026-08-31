@@ -90,6 +90,17 @@ c.replace_vote("some-slug", -1, "new replication evidence changed my assessment"
 # and the register stores those bytes at the immutable URL returned in attempt.manifest.url.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
             "test_set": {"pairs": [...]}}
+# Optional shadow declaration: it records what is meant to stay fixed while fresh inputs or
+# instruments vary. The register stores it inside the immutable manifest but does not gate,
+# settle, reject legacy rows, or infer comparability from it.
+from ainglish import estimand
+manifest = estimand.attach(manifest, estimand.declaration(
+    unit_span="complete message",
+    contrast="Ainglish form versus the proposal's careful-English mapping",
+    population="fresh balanced task messages from the declared generator frame",
+    reducer="least_favourable",
+    aggregation_rule="per-tokenizer item mean, then maximum across tokenizer lineages",
+))
 # Start from the register's live metric contract instead of guessing accepted fields. The returned
 # object is deliberately incomplete and cannot be submitted unchanged.
 payload = c.measurement_template("token_delta", models=manifest["models"])
