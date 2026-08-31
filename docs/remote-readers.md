@@ -109,6 +109,154 @@ Cleartext credential transport to a non-loopback host is refused. If a proxy nor
 dummy bearer, configure it to accept unauthenticated loopback traffic or put the dummy value in an
 environment variable; do not put even placeholder credential fields in the frozen evidence file.
 
+## OpenCode on Linux with OpenCode Zen
+
+OpenCode Zen is a remote gateway, so a Linux host running OpenCode needs no local model weights or
+GPU to use it as an Ainglish reader. Use the Ainglish harness as the measurement process and call
+Zen's raw API directly. Do **not** use `opencode run` as the reader: that path is an agent session
+whose system prompt, tools, memory and conversation can change the answer-bearing cell.
+
+OpenCode stores credentials entered through `/connect` in its own local auth store. The Ainglish
+harness deliberately does not parse or copy that private file. Supply the same Zen API key to the
+harness through the conventional environment variable without placing it in shell history:
+
+```bash
+read -rsp 'OpenCode Zen API key: ' OPENCODE_API_KEY; printf '\n'
+export OPENCODE_API_KEY
+```
+
+Zen exposes one model catalog but, unlike a generic OpenAI-compatible service, uses four different
+inference protocols. View the current exact ids with `/models` inside OpenCode, or make an
+authenticated `GET https://opencode.ai/zen/v1/models` request with the same bearer key. The
+Ainglish preset performs that catalog request automatically. Then use the official
+[OpenCode Zen endpoint table](https://dev.opencode.ai/docs/zen/) to copy the matching wire into the
+reader's required `api` field:
+
+| endpoint in the Zen table | Ainglish `api` |
+|---|---|
+| `/chat/completions` | `openai` |
+| `/responses` | `responses` |
+| `/messages` | `anthropic` |
+| `/models/<model-id>` | `google` |
+
+For example, this `/chat/completions` configuration passed the two-request acceptance check below
+on 2026-08-31. Catalog availability and account tiers can change, so re-read the live catalog and
+endpoint table before freezing a real measurement:
+
+```json
+{
+  "name": "zen-reader-a",
+  "provider": "opencode-zen",
+  "api": "openai",
+  "model": "nemotron-3-ultra-free",
+  "precision": "provider-served",
+  "reasoning_effort": "none"
+}
+```
+
+The other wire shapes use the same preset and differ only in the explicit protocol and exact model
+id:
+
+```json
+[
+  {
+    "name": "zen-responses-reader",
+    "provider": "opencode-zen",
+    "api": "responses",
+    "model": "gpt-5.4-nano",
+    "precision": "provider-served"
+  },
+  {
+    "name": "zen-messages-reader",
+    "provider": "opencode-zen",
+    "api": "anthropic",
+    "model": "claude-haiku-4.5",
+    "precision": "provider-served"
+  },
+  {
+    "name": "zen-google-reader",
+    "provider": "opencode-zen",
+    "api": "google",
+    "model": "gemini-3.5-flash-lite",
+    "precision": "provider-served"
+  }
+]
+```
+
+These ids are examples, not permanent recommendations. OpenCode configuration spells them as
+`opencode/<model-id>`; the Zen API and an Ainglish panel entry use the unprefixed catalog id. Never
+infer `api` from a name such as `gpt-*` or `claude-*`: routing can change, and a frozen measurement
+must state the request/response contract it actually used. A missing `api`, an unknown protocol,
+or a model id absent from the live catalog refuses before inference.
+
+Do not infer access from a model's name either. In the 2026-08-31 acceptance run,
+`deepseek-v4-flash` required a paid workspace while the catalog-listed
+`deepseek-v4-flash-free` returned HTTP 400; neither was a portable free smoke target. The exact
+`nemotron-3-ultra-free` row succeeded for that account. A model name containing `free` is not a
+promise that the route, entitlement, retention policy or model will remain unchanged.
+
+### Two-request acceptance check
+
+After installing the SDK revision under test, run this with a cheap exact model id whose Zen table
+route is `/chat/completions`. It performs one catalog lookup and one harmless reader call; it does
+not submit anything to Ainglish:
+
+```bash
+python3 - <<'PY'
+from ainglish.panel import ask, prepare_reader_instruments
+
+reader = {
+    "name": "zen-smoke",
+    "provider": "opencode-zen",
+    "api": "openai",
+    "model": "nemotron-3-ultra-free",
+    "precision": "provider-served",
+    "max_tokens": 64,
+    "reasoning_effort": "none",
+}
+prepare_reader_instruments({"panel": [reader]})
+answer = ask(
+    reader,
+    "The integer two plus the integer two equals the integer four.",
+    "Is the arithmetic statement true?",
+    ["yes", "no"],
+)
+assert answer == "yes", answer
+print("OpenCode Zen reader OK:", answer)
+PY
+```
+
+Expected output is `OpenCode Zen reader OK: yes`. A 401/403 is a credential or account problem; a
+404 usually means the declared wire no longer matches the current Zen endpoint table; a missing or
+duplicate catalog id refuses before the paid reader call. Report the exact model id, declared
+`api`, SDK commit, UTC run time and pass/fail, but never the key. Run `unset OPENCODE_API_KEY` when
+the harness no longer needs the credential.
+
+Acceptance receipt: Captain Nemo ran this path on Linux/Python 3.12 at
+`2026-08-31T13:15:00Z` against SDK head `65424c6`, with exact model id
+`nemotron-3-ultra-free`, `api: "openai"`, and `reasoning_effort: "none"`; the catalog lookup and
+synthetic arithmetic call returned `OpenCode Zen reader OK: yes`. This establishes that the preset,
+catalog binding and OpenAI chat wire worked together. It does **not** qualify that reader for an
+Ainglish estimand, establish its base-model lineage, or promise continuing model availability.
+
+`reasoning_effort: "none"` was required for that smoke target to emit the short answer within its
+bound. It is an answer-affecting instrument setting, not a general recommendation: preserve it in
+the receipt and separately qualify the exact reader/settings combination before scientific cells.
+Other providers and models can perform worse with reasoning disabled.
+
+The preset supplies the HTTPS API root, `OPENCODE_API_KEY`, and `openai:/models` catalog binding.
+The catalog row's complete canonical JSON is hash-bound before attempt mint and again immediately
+before reader spend. This proves which service-facing id and metadata were selected at that time;
+it does not turn a hosted alias into an immutable weight digest, so the receipt still says
+`provider-opaque` at the weight layer.
+
+Use only synthetic prompts for an initial smoke test. Before exposing private development items or
+conditional holdouts, confirm that the chosen route's current retention and data-use terms satisfy
+the measurement plan. OpenCode's Zen page gives some free promotional models an explicit
+feedback/improvement notice; do not treat “free” as evidence of zero retention. If an item is sent
+to an unapproved service, retire it from future independent confirmation rather than pretending it
+remained hidden.
+
 ## Hermes Agent with Nous Portal
 
 Hermes Agent exposes a subscription proxy specifically for raw inference from other applications.

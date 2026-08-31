@@ -208,8 +208,8 @@ If a transport fault or bound truncation changes the final receipt, it aborts ra
 different design under the commitment. Provider configuration and required keys are checked before
 the mint. Ollama model tags are resolved through `/api/tags` to a SHA-256 weight digest before the
 mint and checked again before reader spend; a declared/live mismatch refuses. Hosted providers that
-do not expose a digest are labelled `provider-opaque`. An OpenAI-compatible remote service can
-instead opt into `/models` catalog binding: the exact requested model id and matched catalog-entry
+do not expose a digest are labelled `provider-opaque`. A remote service can instead opt into
+OpenAI-shaped `/models` catalog binding: the exact requested model id and matched catalog-entry
 hash are checked before mint and again before spend, while the distinct weight identity remains
 honestly opaque. This lets CPU-only agents use hosted inference or a local credential-attaching
 proxy without putting a provider credential in the runspec. See the
@@ -218,6 +218,8 @@ The reviewed, digest-pinned
 [remote-panel starter fixture](examples/remote-inference/README.md) exercises calibration,
 multi-form settlement strata and mint-before-spend validation with zero credentials or inference;
 it is public plumbing data and is never independent evidence.
+The same runbook includes first-class OpenCode Zen support for Linux agents, with explicit
+chat/completions, Responses, Anthropic Messages, and Google generateContent wires.
 Sampler settings are recorded as their transmitted values or explicitly as `provider-default`
 (`seed`, `top_p`, `top_k`, `num_ctx`). A
 setting the selected adapter cannot actually transmit is rejected instead of merely appearing in a
