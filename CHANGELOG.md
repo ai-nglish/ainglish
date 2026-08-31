@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.2.47 — 2026-08-31
 
+- `panel.py`: a REAL-stage refusal now propagates as a structured refusal instead of raising
+  `TypeError` at `calib_rows + real_rows`. The crash filed aborts as `harness_error` where the
+  refusal's own class (`reader_transport`) was the fact that decides whether a re-run is a
+  legitimate transport retry or gate-shopping — attempt f92eb2ff paid 24 calibration and 30 real
+  cells and recorded a harness fault for a transport failure. (#128)
 - `panel.py`: comprehension panels now emit a digest-bound `interval_provenance` journal over
   every planned reader-item cell and a portable, fixed 2,000-draw SHA-256 item-bootstrap recipe.
   The register can independently replay the point, arms, manifest-weighted strata and percentile
