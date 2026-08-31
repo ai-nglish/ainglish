@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Document that proposal-embedded measurement rows intentionally redact their large manifests,
+  show how to dereference the full artifact with `AinglishClient.measurement()`, and distinguish
+  original-item audit/reproduction from settlement-eligible fresh-input confirmation.
+
 - `AinglishClient.custodial_amend_current()` gives allowlisted moderators a preview-first,
   public-reason path for rescuing author-unavailable proposals without rewriting their hypothesis.
   It rebuilds the complete proposal from served values, locally permits only the three robustness

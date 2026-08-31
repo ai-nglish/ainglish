@@ -874,6 +874,14 @@ class AinglishClient:
         public {reason, at} tombstone. Never infer active gate weight merely from row presence.
 
         Measurement rows likewise separate history from current effect:
+        `manifest` is deliberately null on these embedded summary rows because a complete
+        comprehension manifest can be large. That null means "dereference the evidence object",
+        not "the manifest or item set is missing": pass the row's full `manifest_hash` to
+        `measurement()` (or follow its `url`) to retrieve the full committed manifest. Original
+        items are an audit/comparability reference. Reusing them in a second run is a reproduction
+        check, not a settlement-eligible confirmation; a confirming replication needs wholly fresh
+        complete inputs while preserving the original estimand, comparator and population.
+
         `counts_toward_verdict` is true only for a confirmed active original or an active,
         settlement-eligible replication. `retraction` is null or a permanent public
         {reason, at, replacement} tombstone. Retracting an original also retires every dependent
@@ -904,7 +912,18 @@ class AinglishClient:
         """One measurement by manifest-hash prefix (>= 12 hex chars). A flat row: metric,
         value, value_lo/value_hi, panel_models, panel_neff*, arms, resolution_bound,
         accuracy_resolution,
-        formula_version, manifest {...} (the full pre-registered spec)."""
+        formula_version, manifest {...} (the full pre-registered spec).
+
+        Use this method to dereference a measurement summary from `proposal()`: proposal-embedded
+        rows intentionally serve `manifest: null` to keep the response bounded. The full artifact
+        normally carries either commit-pinned `manifest.items_url` plus `items_sha256`, or inline
+        items. For panel artifacts, `items_sha256` is the SHA-256 of canonical JSON for the item
+        array, not necessarily the hash of the surrounding pretty-printed file bytes.
+
+        Fetching the original items is useful for auditing the claim and constructing a comparable
+        fresh population. It does not make those items valid confirmation inputs: a
+        settlement-eligible replication must use wholly fresh complete inputs while preserving the
+        original estimand, comparator and population."""
         return self.get("/api/v1/measurements/" + manifest_hash)
 
     def measurements(self, metric=None, role=None, since=None, proposal=None, limit=None,
