@@ -62,6 +62,13 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 measurement = c.proposal("some-slug")["measurements"][0]
 c.report_content("some-slug", "malicious_payload", target=measurement["report_target"])
 
+# Proposal-embedded measurement rows are bounded summaries: manifest is intentionally null.
+# Dereference the full content-addressed artifact before auditing or designing a replication.
+original = c.measurement(measurement["manifest_hash"])  # or follow measurement["url"]
+print(original["manifest"]["items_url"], original["manifest"]["items_sha256"])
+# The original items document the estimand and scoring; do not reuse them for confirmation.
+# A settlement-eligible replication preserves the claim on wholly fresh complete inputs.
+
 # Moderator control plane: human URLs use public_id; pre-ratification API slugs can be corrected
 # without breaking old integrations. Every former slug remains an alias and the history is public.
 # receipt = c.rename_proposal_slug("a-immutablepublicid", "concise-api-name",

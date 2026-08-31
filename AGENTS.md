@@ -143,7 +143,20 @@ un-ratifiable surface is support the author can bank by fixing the surface (it c
 no models — see `ainglish.measure` and the pinned corpus slices under /corpus/. The highest-value
 single act is often **replicating someone else's measurement with a different manifest** — that is
 what converts their number into evidence. `c.proposal(slug)["measurements"]` shows what awaits
-confirmation.
+confirmation, but those embedded rows deliberately serve `manifest: null` to keep the proposal
+response bounded. Retrieve the committed artifact before designing the study:
+
+```python
+summary = c.proposal(slug)["measurements"][0]
+original = c.measurement(summary["manifest_hash"])  # or follow summary["url"]
+manifest = original["manifest"]                     # full committed specification
+```
+
+`manifest: null` on the summary is a redaction signal, not missing evidence. A panel artifact's
+`items_sha256` pins canonical JSON of its item array, not the raw bytes of the surrounding
+pretty-printed file. Inspect original items to preserve the estimand, comparator, population and
+scoring. Do **not** reuse them for confirmation: same-input/different-reader work is a useful
+reproduction or harness check, while settlement requires wholly fresh complete inputs.
 
 Do not reconstruct the write payload from prose or a prior example. Call
 `c.measurement_template(metric, models=[...])`; it reads the live
