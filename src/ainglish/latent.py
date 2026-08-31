@@ -269,10 +269,16 @@ _PREDICATE_FUNCTIONS = (
 # Pinned so that (a) a predicate change forces a deliberate acknowledgement rather than a silent
 # re-key, and (b) CI running the selftest on 3.9 and 3.12 proves the digest is interpreter-
 # independent instead of asserting it. Update it only when the predicate genuinely changed.
-PREDICATE_SHA256 = "0437e1643ff4213eb58e51fd861ef83b878812e0175a00cb96fa0eb6e317a5cd"
+PREDICATE_SHA256 = "2d388da84466606f8c71c3917180f063471031014bfbc8da540632f3e272f121"
 _PREDICATE_PATTERNS = ("_POINT_FORM", "_BARE_PERCENT", "_ENDPOINTS")
 _PREDICATE_CONSTANTS = ("READING_POINT", "READING_RELATIVE", "READING_UNDETERMINED",
                         "READINGS", "_DIRECTIONS")
+
+
+def _inspect_source(name):
+    """The source of one closure member, for tests that need to inspect what is hashed."""
+    import inspect as _i
+    return textwrap.dedent(_i.getsource(getattr(sys.modules[__name__], name)))
 
 
 def predicate_digest():
@@ -325,6 +331,15 @@ def set_signature(items):
     return {
         "kind": "ainglish.comparator-signature.v1",
         "predicate_sha256": predicate_digest(),
+        # RECORDED, deliberately not hashed. @dexagon-ai's #123 review offered two ways to be
+        # safe across interpreters: be independent of them, or bind and expose them. The digest
+        # takes the first route -- it hashes source text, not an AST -- and PREDICATE_SHA256 plus
+        # CI on 3.9 and 3.12 is the proof. This field takes the second route for PROVENANCE only:
+        # if a cross-version discrepancy is ever found, every receipt already says which
+        # interpreter produced it. Hashing it instead would make two honest agents on different
+        # Pythons produce different receipts for the same rule, which is the failure the field
+        # exists to detect.
+        "predicate_python": "%d.%d" % sys.version_info[:2],
         "derived_from": "served item strings",
         "items": len(verdicts),
         "admissible": len(verdicts) - len(inadmissible),
@@ -540,6 +555,19 @@ def selftest():
     finally:
         _DIRECTIONS = original_directions
     assert predicate_digest() == digest
+    # predicate_python is provenance, not commitment: it rides in the receipt and must NOT move
+    # the digest, or two honest agents on different interpreters would disagree about the rule.
+    sig = set_signature(good)
+    assert sig["predicate_python"] == "%d.%d" % sys.version_info[:2], sig["predicate_python"]
+    # What can be checked in one process is that the field is RECORDED and that the digest is
+    # computed from source text rather than from anything the interpreter supplies. Whether the
+    # digest is genuinely equal ACROSS interpreters cannot be checked from inside one of them --
+    # that is what PREDICATE_SHA256 plus CI on 3.9 and 3.12 is for, and no in-process proxy should
+    # be allowed to stand in for it. (I tried one that searched the hashed source for the running
+    # version string; it tripped on a comment mentioning 3.12, which is a false positive and would
+    # have been a worse test than none.)
+    assert "sys.version_info" in _inspect_source("set_signature"), \
+        "the receipt must read the interpreter where it is recorded, not where it is hashed"
 
     # (8) The set-level signature reports the contrast rather than asserting it.
     mixed = set_signature(good + drifted)

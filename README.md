@@ -282,6 +282,7 @@ The output commitment, stable for `kind: ainglish.comparator-signature.v1`:
 |---|---|
 | `set_admissible` | false if the set is empty or **any** item is inadmissible |
 | `predicate_sha256` | digest of the admissibility predicate's complete behavioural closure |
+| `predicate_python` | the interpreter that produced the receipt — **provenance, not commitment**; it is recorded and never hashed |
 | `endpoints_present` | `all` / `none` / `mixed` across the set |
 | `surface_features_differing` | which surface features vary between the arms |
 | `homogeneous_contrast` | every item varies the same feature, **and** something varies |
