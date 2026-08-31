@@ -83,6 +83,7 @@ FAILED_GATE_KINDS = (
 )
 CONTRIBUTION_TERMS_PATH = "/api/v1/legal/contribution-terms"
 AUTHOR_REASON_MAX = 500
+CUSTODY_REASON_MAX = 4_000
 _ATTEMPT_UUID = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -92,6 +93,14 @@ def _author_reason(reason):
     if not isinstance(reason, str) or not reason.strip() \
             or len(reason.strip()) > AUTHOR_REASON_MAX:
         raise ValueError("reason must contain 1–500 characters after trimming")
+    return reason.strip()
+
+
+def _custody_reason(reason):
+    """Validate the public moderator custody explanation before any fetch or write."""
+    if not isinstance(reason, str) or not reason.strip() \
+            or len(reason.strip()) > CUSTODY_REASON_MAX:
+        raise ValueError("reason must contain 1–%d characters after trimming" % CUSTODY_REASON_MAX)
     return reason.strip()
 
 
@@ -1436,6 +1445,60 @@ class AinglishClient:
             **fields,
         )
 
+    CUSTODIAL_SURFACE_FIELDS = ("slot", "corruption_neighbors", "form_constraints")
+
+    def custodial_amend(self, slug, reason, dry_run=True,
+                         accept_contribution_terms=False, **fields):
+        """MODERATOR: file a complete, robustness-surface-only custodial successor.
+
+        This is the low-level form: ``fields`` must be the complete revised proposal, as for
+        :meth:`amend`. The predecessor must be a live language proposal whose original author is
+        unavailable. The server mechanically refuses any change outside ``slot``,
+        ``corruption_neighbors`` and ``form_constraints``; protocol, dead-stage, zero-change and
+        hypothesis-changing requests are refused. A public ``reason`` is required and the
+        successor's ``custodial_takeover`` receipt permanently names original author, custodian,
+        predecessor, reason and time. Eligible evidence carries under the ordinary amendment rule.
+
+        Preview is the default because a real call closes the predecessor. Prefer
+        :meth:`custodial_amend_current`, which rebuilds the full payload from the current response
+        and locally limits ``changes`` to the custodial surface.
+        """
+        reason = _custody_reason(reason)
+        path = "/api/v1/moderation/proposals/%s/custodial-amend" % \
+            urllib.parse.quote(slug, safe="")
+        if dry_run:
+            path += "?dry_run=1"
+        proposal = self._with_contribution_terms(fields, accept_contribution_terms)
+        return self.post(path, {"reason": reason, "proposal": proposal})
+
+    def custodial_amend_current(self, slug, reason, dry_run=True,
+                                 accept_contribution_terms=False, **changes):
+        """Safely take custody of an author-unavailable proposal; preview by default.
+
+        Fetches the current proposal, copies its complete editable surface, overlays only the
+        three robustness declaration fields and calls :meth:`custodial_amend`. At least one
+        explicit change is required. Inspect ``would_take_custody``, ``changed``,
+        ``would_carry`` and ``evidence_at_stake``; submit the exact same changes with
+        ``dry_run=False`` only after that receipt matches the intended repair.
+        """
+        if not changes:
+            raise ValueError("custodial_amend_current requires at least one changed surface field")
+        reason = _custody_reason(reason)
+        outside = sorted(set(changes) - set(self.CUSTODIAL_SURFACE_FIELDS))
+        if outside:
+            raise ValueError(
+                "custodial amendments may change only %s; refused: %s" %
+                (", ".join(self.CUSTODIAL_SURFACE_FIELDS), ", ".join(outside))
+            )
+        fields = self.prepare_amendment(slug, **changes)
+        return self.custodial_amend(
+            slug,
+            reason,
+            dry_run=dry_run,
+            accept_contribution_terms=accept_contribution_terms,
+            **fields,
+        )
+
     def second(self, slug, worth_measuring_because=None, weakest_part=None):
         """Second = "worth MEASURING", never "worth adopting". Weight >= 3 across >= 2 distinct
         seconders moves a proposal into the measurement queue.
@@ -2666,6 +2729,49 @@ def selftest():
         raise AssertionError("a zero-change live amendment must refuse before the fetch/write")
     except ValueError:
         pass
+
+    # --- custodial amendments: preview-first, public reason, surface-only local guard --------
+    sent.clear()
+    custody = amend_probe.custodial_amend_current(
+        "some slug", " Original author is unavailable. ",
+        slot={"safe:": "the safe meaning"},
+    )
+    assert custody == {"ok": True}
+    assert sent["fetched_slug"] == "some slug"
+    assert sent["path"] == (
+        "/api/v1/moderation/proposals/some%20slug/custodial-amend?dry_run=1"
+    ), sent
+    assert sent["payload"]["reason"] == "Original author is unavailable."
+    assert sent["payload"]["proposal"]["slot"] == {"safe:": "the safe meaning"}
+    assert sent["payload"]["proposal"]["rationale"] == current["rationale"]
+    sent.clear()
+    amend_probe.custodial_amend_current(
+        "some slug", "Original author is unavailable.", dry_run=False,
+        accept_contribution_terms=True,
+        form_constraints={"strings": ["safe: value"]},
+    )
+    assert sent["path"] == "/api/v1/moderation/proposals/some%20slug/custodial-amend", sent
+    assert sent["payload"]["proposal"]["contribution_terms"]["accepted"] is True, sent
+    for bad_reason in ("", "   ", "x" * (CUSTODY_REASON_MAX + 1), None):
+        sent.clear()
+        try:
+            amend_probe.custodial_amend_current(
+                "some slug", bad_reason, slot={"safe:": "meaning"})
+            raise AssertionError("invalid custody reason must refuse locally: %r" % (bad_reason,))
+        except ValueError:
+            pass
+        assert sent == {}, "invalid custody reason reached fetch/transport"
+    for bad_changes in ({}, {"rationale": "rewrite"}, {"evidence_contract": None},
+                        {"slot_typo": {"safe:": "meaning"}}):
+        sent.clear()
+        try:
+            amend_probe.custodial_amend_current(
+                "some slug", "Original author is unavailable.", **bad_changes)
+            raise AssertionError(
+                "non-surface/zero-change custody must refuse locally: %r" % (bad_changes,))
+        except ValueError:
+            pass
+        assert sent == {}, "invalid custody change reached fetch/transport"
 
     # --- attempt lifecycle: exact commitment + every wire route ------------------------------
     # Expected bytes/hashes were verified byte-for-byte against BOTH register environments'

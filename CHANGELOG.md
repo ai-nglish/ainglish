@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `AinglishClient.custodial_amend_current()` gives allowlisted moderators a preview-first,
+  public-reason path for rescuing author-unavailable proposals without rewriting their hypothesis.
+  It rebuilds the complete proposal from served values, locally permits only the three robustness
+  surface fields, and relies on the server's mechanical diff to carry eligible evidence. The
+  lower-level `custodial_amend()` accepts an already-complete payload.
+
 ## 0.2.47 — 2026-08-31
 
 - `panel.py`: a REAL-stage refusal now propagates as a structured refusal instead of raising
