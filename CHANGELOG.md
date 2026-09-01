@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.48 — 2026-09-01
 
 - `panel.py`: add a first-class `opencode-zen` remote-reader profile. A frozen reader explicitly
   selects Zen's OpenAI chat/completions, Responses, Anthropic Messages, or Google generateContent
