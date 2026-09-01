@@ -29,7 +29,10 @@
   filing the abort as `harness_error` where the truth was `reader_transport`. The translation
   stays deliberately narrow — allowlisted by class, not `except HTTPException`: 4xx configuration
   errors, response-shape bugs, and the local `InvalidURL`/`CannotSendRequest`/`ResponseNotReady`
-  connection-state classes still stop the run loudly, with negative controls proving it. (#131)
+  connection-state classes still stop the run loudly, with negative controls proving it. The
+  terminal classifier recognises both translated reasons: a structured refusal caused by
+  `connection_dropped` or `malformed_response` cells files as `reader_transport`, never as a
+  yield-only withhold, with all-fault terminal-path controls proving it. (#131)
 
 ## 0.2.47 — 2026-08-31
 

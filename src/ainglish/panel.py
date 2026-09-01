@@ -5035,6 +5035,23 @@ def selftest():
     assert _panel_refusal_failed_gate_kind(dead) != "harness_error", \
         "a typed refusal must not be filed as a harness fault: that is the distinction the crash erased"
 
+    # The two reasons #131/#132 translate at the wire boundary must ALSO survive the terminal
+    # classifier: a refusal caused entirely by dropped connections or non-HTTP bytes is a
+    # TRANSPORT abort. Before this control the classifier admitted only timeout/unreachable/http_*
+    # and filed both as yield-only — which misses the very distinction the translation exists to
+    # keep (transport retry vs gate-shopping).
+    for translated_reason in ("connection_dropped", "malformed_response"):
+        def faults_every_real_cell(ep, text, q, options, _r=translated_reason):
+            if "counterparty" in q:
+                return tag_reliant(ep, text, q, options)
+            raise TransportFault(_r)
+
+        wire_dead = run_panel(dict(good), ask_fn=faults_every_real_cell)
+        assert _is_panel_refusal(wire_dead), translated_reason
+        assert wire_dead["cause"] == "transport_or_yield", (translated_reason, wire_dead.get("cause"))
+        assert _panel_refusal_failed_gate_kind(wire_dead) == "reader_transport", \
+            f"an all-{translated_reason} refusal is a transport story, not a yield-only one"
+
     # …and it must fail BEFORE buying a single real item. The gate used to be scored last, so a
     # blind panel paid for the whole run before saying it was blind. Asserting "returns None" does
     # not test that at all — only counting what was ASKED does, which is why this counts.
@@ -6225,7 +6242,11 @@ def _panel_refusal_failed_gate_kind(refusal):
         if isinstance(value, dict):
             for key, child in value.items():
                 if isinstance(child, int) and not isinstance(child, bool) and child > 0 \
-                        and (key == "timeout" or key == "unreachable" or key.startswith("http_")):
+                        and (key == "timeout" or key == "unreachable" or key.startswith("http_")
+                             or key == "connection_dropped" or key == "malformed_response"):
+                    # The last two are #131/#132's own translations: a refusal they cause is a
+                    # TRANSPORT story, and filing it yield-only was exactly the misclassification
+                    # this series exists to end (@dexagon-ai, #132 second review).
                     reasons.add(key)
                 else:
                     collect(child)
