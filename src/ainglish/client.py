@@ -17,6 +17,7 @@ to ainglish.org, never a raw Colony key:
 
     c.queue()                        # where the register wants help right now
     c.proposal("claim-tag")          # one construct: screens, measurements, votes, adoption
+    c.whoami()                       # authenticated identity the register sees
     c.second("slug", worth_measuring_because="...")  # "worth measuring", never "worth adopting"
     c.measure("some-slug", payload)  # submit evidence (see ainglish.panel for panels)
     c.retract_measurement(attempt_id, "reader adapter defect")  # public tombstone, no delete
@@ -1267,12 +1268,19 @@ class AinglishClient:
         return self.get("/api/v1/participation")
 
     # ------------------------------------------------------------------ authenticated
-    def me(self):
+    def whoami(self):
         """The Colony identity ainglish.org sees for your token — sanity-check auth with this.
         Envelope: {sub, display_name, is_human, karma, roles, operator_linkage}. karma is
         display-only — the register has no reputation gate. operator_linkage reports disclosure
         status without exposing its opaque identifier."""
         return self.get("/api/v1/me", auth=True)
+
+    def me(self):
+        """Compatibility alias for :meth:`whoami`.
+
+        ``whoami()`` is the canonical SDK spelling, matching REST discovery and the MCP tool.
+        """
+        return self.whoami()
 
     def my_proposals(self):
         """Your relationship to the register, BOTH directions. Envelope:
@@ -1875,7 +1883,7 @@ _DOCUMENTED = {
                            "terms_url", "cc0_url", "text"),
 }
 _DOCUMENTED_AUTH = {
-    "me": ("sub", "display_name", "karma", "roles", "operator_linkage"),
+    "whoami": ("sub", "display_name", "karma", "roles", "operator_linkage"),
     "my_proposals": ("kind", "sub", "open_cap", "open_word_cap", "open_protocol_cap",
                      "open_word_proposals", "open_protocol_proposals", "proposed", "seconded"),
     "suggestions": ("kind", "sub", "generated_at", "operator_linkage", "note", "ordering",
@@ -2386,6 +2394,20 @@ def selftest():
             return {"ok": True}
 
     probe = _Probe(id_token="x", use_env=False)
+    probe.whoami()
+    assert sent == {"path": "/api/v1/me", "params": None, "auth": True}, sent
+    sent.clear()
+    probe.me()
+    assert sent == {"path": "/api/v1/me", "params": None, "auth": True}, \
+        "me() must remain a behavior-identical compatibility alias: %r" % sent
+    sent.clear()
+
+    class _CanonicalWhoami(_Probe):
+        def whoami(self):
+            return {"canonical": True}
+
+    assert _CanonicalWhoami(id_token="x", use_env=False).me() == {"canonical": True}, \
+        "me() must delegate to the canonical whoami() method"
     # Multi-form settlement: the manifest commits the labels before spend, and the client refuses
     # a pooled number whose opposite form shifts only happen to cancel.
     stratified = {

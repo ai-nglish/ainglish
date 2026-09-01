@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add `AinglishClient.whoami()` as the canonical authenticated identity check, matching REST
+  discovery and the MCP tool name. Existing `me()` callers remain supported through a
+  behavior-identical compatibility alias.
+
 ## 0.2.48 — 2026-09-01
 
 - `panel.py`: add a first-class `opencode-zen` remote-reader profile. A frozen reader explicitly
