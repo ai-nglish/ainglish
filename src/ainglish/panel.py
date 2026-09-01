@@ -65,6 +65,7 @@ import threading
 import time
 import os
 import random
+import http.client
 import socket
 import sys
 import urllib.error
@@ -430,6 +431,21 @@ def _fetch(req, timeout=None):
         raise TransportFault("timeout") from e
     except urllib.error.URLError as e:
         raise TransportFault("unreachable") from e
+    except ConnectionError as e:
+        # The server accepted the connection and then dropped it: RemoteDisconnected mid-request,
+        # a reset during read(). urllib does not wrap these in URLError on every path, so without
+        # this clause they raised straight out of run_panel and the abort filed as harness_error
+        # where the truth was reader_transport — the class that decides whether a re-run is a
+        # legitimate transport retry or gate-shopping (#131; attempt f497c7a1 paid a mint for it).
+        raise TransportFault("connection_dropped") from e
+    except (http.client.BadStatusLine, http.client.IncompleteRead) as e:
+        # The wire produced bytes that are not HTTP: weather from a flaky edge, not a bug in this
+        # file. Allowlisted by class, NOT `except HTTPException` — that superclass also covers
+        # InvalidURL, CannotSendRequest and ResponseNotReady, which are local misconfiguration or
+        # connection-state bugs; converting those to dead cells would let a bad frozen endpoint
+        # yield-gate a run instead of stopping it. (RemoteDisconnected subclasses BadStatusLine
+        # but is caught by the ConnectionError clause above, as connection_dropped.)
+        raise TransportFault("malformed_response") from e
 
 
 # ------------------------------------------------------------------ adapters
@@ -4074,6 +4090,13 @@ def selftest():
             (urllib.error.HTTPError("u", 523, "origin unreachable", {}, None), "http_523"),
             (urllib.error.HTTPError("u", 524, "a timeout occurred", {}, None), "http_524"),
             (urllib.error.URLError("connection refused"), "unreachable"),
+            # #131's exact class: the server accepted the connection then dropped it. This raised
+            # straight through run_panel on a live run and filed the abort as harness_error.
+            (http.client.RemoteDisconnected("Remote end closed connection without response"),
+             "connection_dropped"),
+            (ConnectionResetError(104, "Connection reset by peer"), "connection_dropped"),
+            (http.client.BadStatusLine("garbage"), "malformed_response"),
+            (http.client.IncompleteRead(b"partial"), "malformed_response"),
         ):
             _open = _Raiser(exc)
             try:
@@ -4085,7 +4108,13 @@ def selftest():
         for exc in (urllib.error.HTTPError("u", 400, "bad request", {}, None),
                     urllib.error.HTTPError("u", 401, "unauthorized", {}, None),
                     urllib.error.HTTPError("u", 404, "no such model", {}, None),
-                    ValueError("response shape changed")):
+                    ValueError("response shape changed"),
+                    # HTTPException subclasses that are LOCAL bugs, not wire weather — the review
+                    # of #132 reproduced all three quietly becoming malformed_response dead cells
+                    # under an `except HTTPException` superclass catch. The allowlist must hold.
+                    http.client.InvalidURL("no such scheme"),
+                    http.client.CannotSendRequest("connection state broken"),
+                    http.client.ResponseNotReady("request never sent")):
             _open = _Raiser(exc)
             try:
                 _fetch(urllib.request.Request("http://x", b"{}"))
@@ -4094,7 +4123,9 @@ def selftest():
                 raise AssertionError(
                     f"{exc!r} was swallowed as a transport fault — a bug or a misconfiguration "
                     f"must stop the run, not become a quiet dead cell")
-            except (urllib.error.HTTPError, ValueError):
+            except (urllib.error.HTTPError, ValueError, http.client.HTTPException):
+                # Reaching any of these means the exception PROPAGATED (TransportFault is
+                # checked first) — exactly what the negatives demand.
                 pass
     finally:
         _open = real_open
@@ -5003,6 +5034,23 @@ def selftest():
         "the refusal must state what was bought before it gave up"
     assert _panel_refusal_failed_gate_kind(dead) != "harness_error", \
         "a typed refusal must not be filed as a harness fault: that is the distinction the crash erased"
+
+    # The two reasons #131/#132 translate at the wire boundary must ALSO survive the terminal
+    # classifier: a refusal caused entirely by dropped connections or non-HTTP bytes is a
+    # TRANSPORT abort. Before this control the classifier admitted only timeout/unreachable/http_*
+    # and filed both as yield-only — which misses the very distinction the translation exists to
+    # keep (transport retry vs gate-shopping).
+    for translated_reason in ("connection_dropped", "malformed_response"):
+        def faults_every_real_cell(ep, text, q, options, _r=translated_reason):
+            if "counterparty" in q:
+                return tag_reliant(ep, text, q, options)
+            raise TransportFault(_r)
+
+        wire_dead = run_panel(dict(good), ask_fn=faults_every_real_cell)
+        assert _is_panel_refusal(wire_dead), translated_reason
+        assert wire_dead["cause"] == "transport_or_yield", (translated_reason, wire_dead.get("cause"))
+        assert _panel_refusal_failed_gate_kind(wire_dead) == "reader_transport", \
+            f"an all-{translated_reason} refusal is a transport story, not a yield-only one"
 
     # …and it must fail BEFORE buying a single real item. The gate used to be scored last, so a
     # blind panel paid for the whole run before saying it was blind. Asserting "returns None" does
@@ -6194,7 +6242,11 @@ def _panel_refusal_failed_gate_kind(refusal):
         if isinstance(value, dict):
             for key, child in value.items():
                 if isinstance(child, int) and not isinstance(child, bool) and child > 0 \
-                        and (key == "timeout" or key == "unreachable" or key.startswith("http_")):
+                        and (key == "timeout" or key == "unreachable" or key.startswith("http_")
+                             or key == "connection_dropped" or key == "malformed_response"):
+                    # The last two are #131/#132's own translations: a refusal they cause is a
+                    # TRANSPORT story, and filing it yield-only was exactly the misclassification
+                    # this series exists to end (@dexagon-ai, #132 second review).
                     reasons.add(key)
                 else:
                     collect(child)
