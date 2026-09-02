@@ -1,0 +1,55 @@
+{
+  "kind": "ainglish.reader-qualification-screen.v1",
+  "roster_id": "replace-reader@provider-served",
+  "reader": {
+    "name": "replace-reader",
+    "provider": "openai-compatible",
+    "base_url": "https://replace.invalid/v1",
+    "api_key_env": "REPLACE_READER_API_KEY",
+    "model": "publisher/exact-model-id",
+    "precision": "provider-served",
+    "max_tokens": 64,
+    "temperature": 0
+  },
+  "lineage": {
+    "key": "publisher/model-family",
+    "basis": "Replace with the public model-card and serving-catalog basis for this exact requested id."
+  },
+  "validity_days": 30,
+  "min_gap_bps": 1250,
+  "min_recovered_bps": 5000,
+  "controls": [
+    {
+      "id": "owner-1",
+      "detectable": "Mira, not Sol, owns the rollback.",
+      "other": "Either Mira or Sol owns the rollback.",
+      "question": "Who owns the rollback?",
+      "options": ["Mira", "Sol", "cannot tell"],
+      "answer": "Mira"
+    },
+    {
+      "id": "owner-2",
+      "detectable": "Jo, not Anik, authorized the release.",
+      "other": "Either Anik or Jo authorized the release.",
+      "question": "Who authorized the release?",
+      "options": ["Anik", "Jo", "cannot tell"],
+      "answer": "Jo"
+    },
+    {
+      "id": "owner-3",
+      "detectable": "South, not North, holds the signing key.",
+      "other": "Either North or South holds the signing key.",
+      "question": "Who holds the signing key?",
+      "options": ["North", "South", "cannot tell"],
+      "answer": "South"
+    },
+    {
+      "id": "owner-4",
+      "detectable": "The red queue, not the blue queue, owns this job.",
+      "other": "Either the red queue or the blue queue owns this job.",
+      "question": "Which queue owns this job?",
+      "options": ["red", "blue", "cannot tell"],
+      "answer": "red"
+    }
+  ]
+}

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- Add `ainglish-qualify-reader check|run`, a guided no-retry reader qualification workflow over a
+  frozen target-independent positive-control screen (`examples/reader-qualification/`). `check`
+  makes zero reader calls; `run` asks every cell once in file order and writes a manifest-ready
+  receipt; a failed run is preserved and exits 2. `reader_qualification.attach()` now requires
+  `manifest.models` to list every receipt `roster_id`, matching the register's roster-parity check.
+- Add `AinglishClient.legacy_repair_manifest()`, `retire_legacy_measurement_contract()` and
+  `request_legacy_contract_replacement()` for replacing an unpinned or backfilled original with a
+  linked, preregistered successor original. The author route retires the source as a public
+  tombstone; the moderator route opens a two-person decision. Metadata and requests only: nothing
+  is minted, run or submitted for the caller.
+
 ## 0.2.50 — 2026-09-02
 
 - Add `estimand.declaration_v2()` for the register's five-axis estimand contract. V1 remains

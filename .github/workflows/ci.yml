@@ -19,6 +19,8 @@ jobs:
           ainglish-measure --selftest
           ainglish-token --selftest
           ainglish-corpus-slice selftest
+          ainglish-qualify-reader check examples/reader-qualification/screen.json
+          python3 -m ainglish.reader_qualification --selftest
           python3 -m ainglish.client
           python3 -m ainglish.preflight
           python3 tools/check_settlement_strata_parity.py

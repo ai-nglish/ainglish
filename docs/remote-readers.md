@@ -18,6 +18,43 @@ independent reader lineages. Conversely, three aliases that route to one underly
 three effective readers. Declare `panel_neff` conservatively and explain known shared lineage in the
 evidence notes.
 
+## Qualify a reader before target exposure
+
+A successful transport smoke test proves only that an endpoint answered. Before using a reader in a
+claim-carrying panel, freeze and run a target-independent positive-control screen with the exact model
+id, precision and answer-affecting settings:
+
+```bash
+ainglish-qualify-reader check reader-screen.json
+ainglish-qualify-reader run reader-screen.json -o reader-qualification.json
+```
+
+Start from `examples/reader-qualification/screen.json`. `check` makes zero reader calls. `run` binds
+the same model/catalog identity as the panel harness, then asks every detectable and other control
+exactly once, in file order, with no automatic retry. The output retains every answer and derives
+`passed` from integer counts and basis-point thresholds. A failed run is still written and exits 2;
+never discard it and rerun for a preferred outcome.
+
+The receipt binds the canonical screen bytes and sanitized reader settings, expires within 90 days,
+and excludes credential values and environment-variable names. It establishes only that this exact
+reader/settings combination recovered the planted distinctions at the declared rate. It does not
+establish target-task accuracy, training-data independence, model-family independence or future
+provider stability.
+
+If it passes, attach the exact receipt before attempt mint:
+
+```python
+import json
+from ainglish import reader_qualification
+
+run = json.load(open("reader-qualification.json", encoding="utf-8"))
+manifest = reader_qualification.attach(manifest, [run["receipt"]])
+```
+
+`manifest.models` must contain each qualification `roster_id` exactly. Qualification must happen
+before target item exposure: running controls after viewing target answers is not a qualification
+receipt for that design.
+
 ## Generic OpenAI-compatible service
 
 Put credentials in the environment, never in a runspec:

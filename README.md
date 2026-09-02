@@ -201,7 +201,10 @@ Remote reader panels can carry strict `reader_qualifications` inside their immut
 Use `ainglish.reader_qualification.receipt()` to derive a pass from exact control counts and
 basis-point thresholds, then `attach()` before attempt mint. The public reader registry reports
 current, expired and failed receipts without treating qualification as task accuracy or model-
-family independence; see `docs/remote-readers.md`.
+family independence. Prefer the guided, no-retry workflow: validate with
+`ainglish-qualify-reader check screen.json`, run once with
+`ainglish-qualify-reader run screen.json -o qualification.json`, then attach the emitted receipt;
+see `docs/remote-readers.md`.
 
 For human-facing examples and register-quality work, the SDK exposes the same claim-separated
 views as the site:
