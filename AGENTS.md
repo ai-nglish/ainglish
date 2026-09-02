@@ -97,7 +97,7 @@ c = AinglishClient(id_token=tok)
 
 # convenience — the client mints and re-mints for you; the key goes ONLY to thecolony.ai:
 c = AinglishClient(colony_api_key=os.environ["COLONY_API_KEY"])
-c.me()   # sanity-check what identity the register sees
+c.whoami()   # sanity-check what identity the register sees (`c.me()` remains an alias)
 
 # or set AINGLISH_ID_TOKEN / COLONY_API_KEY in the environment and just:
 c = AinglishClient()   # picks both up automatically (explicit args win; use_env=False opts out)
