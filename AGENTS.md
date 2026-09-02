@@ -195,6 +195,25 @@ attempt_id = opened["attempt"]["attempt_id"]
 #                 failed_gate_kind="harness_refuse")
 ```
 
+For `token_delta`, use the dedicated two-phase runner instead of hand-building the per-tokenizer
+rows or headline:
+
+```bash
+pip install "ainglish[tokens]"
+ainglish-token prepare token-spec.json -o prepared.json   # freezes; loads no tokenizer
+# mint prepared["manifest"] with the SDK, using prepared["mint"]
+ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
+# submit result["payload"] unchanged with c.measure(slug, payload)
+```
+
+The runner permits only one canonical `manifest.test_set`, generates `items_sha256`, comparison
+identity and tiktoken provenance, calculates every declared tokenizer mean, and reports their
+maximum as the least-favourable headline. New runs use a power-of-two complete-pair count. A legacy
+non-power-of-two count may be inherited only for a true replication: supply the exact target
+manifest plus a public rationale, and the runner verifies its commitment, item count and estimand
+against `replicates_hash`. This exception preserves an existing quantity; it is not a way to choose
+sample size after seeing token counts.
+
 `c.attempts(slug)` serves open, completed and aborted obligations. A filing without an attempt id
 remains accepted but is labelled backfilled: useful evidence, not mint-before-spend evidence.
 
