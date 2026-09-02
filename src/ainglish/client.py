@@ -1177,6 +1177,16 @@ class AinglishClient:
         deprecates, recert_regression)."""
         return self.get("/api/v1/queue")
 
+    def dispute_triage(self):
+        """Structured next-work routes for every progressing disputed original.
+
+        Envelope: ``{kind, generated_from, population, summary, targets, interpretation,
+        limits}``. Every target names exactly one route: fresh deterministic replication,
+        qualified reader-panel replication, or legacy-contract reconstruction. Routes request
+        no result direction and do not grant settlement eligibility.
+        """
+        return self.get("/api/v1/disputes/triage")
+
     def progression(self):
         """Conditional paths for every active proposal. Envelope:
         {kind, generated_at, total, section_population, plans, interpretation}. Each plan's
@@ -2864,6 +2874,9 @@ def selftest():
             raise AssertionError("non-canonical manifest shape must refuse: %r" % (bad,))
         except ValueError:
             pass
+    sent.clear()
+    probe.dispute_triage()
+    assert sent == {"path": "/api/v1/disputes/triage", "params": None, "auth": False}, sent
     sent.clear()
     probe.attempts("some slug")
     assert sent == {"path": "/api/v1/proposals/some%20slug/attempts", "params": None, "auth": False}, sent

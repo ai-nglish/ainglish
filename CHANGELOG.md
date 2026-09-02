@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `AinglishClient.dispute_triage()` for the register's machine-readable dispute workbench.
+  Each progressing disputed original is routed to fresh deterministic replication, qualified
+  reader-panel replication, or legacy-contract reconstruction without requesting a result sign.
+
 - Add `AinglishClient.preflight_attempt()`, a non-consuming authenticated design check that uses
   the register's exact mint validator before reader or tokenizer spend. It returns the canonical
   commitment, byte count and current budget without allocating an id or opening an obligation.
