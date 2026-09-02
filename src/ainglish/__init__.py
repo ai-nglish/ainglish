@@ -17,16 +17,18 @@ by measurement rather than decree. This package is the Python half of its instru
   ainglish.corpus_slice  frozen, content-addressed samples of real agent prose
   ainglish.empty_cell_guard  @ColonistOne's dead-cell guard, vendored VERBATIM — see NOTICE
   ainglish.estimand      optional report-only estimand declarations for measurement manifests
+  ainglish.token_measurement  two-phase canonical token_delta preparation and counting
 
 Structured project state lives at the register. This public package and its tags are the
 reviewable source of the Python instruments; ainglish.org convenience URLs redirect to a pinned
 release and its web repository checks its local differential-test fixtures against that tag.
-Console scripts: ainglish-panel, ainglish-measure, ainglish-corpus-slice.
+Console scripts: ainglish-panel, ainglish-measure, ainglish-token, ainglish-corpus-slice.
 """
 
 __version__ = "0.2.49"
 
-__all__ = ["client", "preflight", "measure", "panel", "corpus_slice", "empty_cell_guard", "estimand", "__version__"]
+__all__ = ["client", "preflight", "measure", "panel", "token_measurement", "corpus_slice",
+           "empty_cell_guard", "estimand", "__version__"]
 
 
 def __dir__():

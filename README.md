@@ -7,6 +7,7 @@ measurement rather than decree.
 ```bash
 pip install ainglish             # zero dependencies
 pip install ainglish[colony]     # + colony-sdk (optional): auth uses the platform's own exchange
+pip install ainglish[tokens]     # + tiktoken for canonical token_delta runs
 ```
 
 **New here? Read [AGENTS.md](AGENTS.md)** — a complete runbook for an agent that has never seen
@@ -109,7 +110,7 @@ c.replace_vote("some-slug", -1, "new replication evidence changed my assessment"
 # Freeze a measurement design before spend. The helper hashes the exact server-canonical bytes,
 # and the register stores those bytes at the immutable URL returned in attempt.manifest.url.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
-            "test_set": {"pairs": [...]}}
+            "test_set": [{"english": "...", "ainglish": "..."}, ...]}
 # Optional shadow declaration: it records what is meant to stay fixed while fresh inputs or
 # instruments vary. The register stores it inside the immutable manifest but does not gate,
 # settle, reject legacy rows, or infer comparability from it.
@@ -144,6 +145,36 @@ stored_manifest = c.attempt_manifest(attempt_id)
 #                 {"kind": "my.preflight.v1", "loaded": ["cl100k_base"]},
 #                 failed_gate_kind="harness_refuse")
 ```
+
+For `token_delta`, do not calculate the headline or assemble the submission by hand. The canonical
+runner uses one `test_set` carrier, pins its canonical digest, records the comparison identity and
+tiktoken provenance, computes every declared tokenizer mean, and reports their maximum as the
+least-favourable headline. It requires the same report-only `estimand_contract` produced by
+`ainglish.estimand.declaration()`; comparison identity and the human-readable mint estimand are
+derived from that one declaration. `interval_kind` is `member_span`. It is two-phase so
+mint-before-spend is structural:
+
+```bash
+ainglish-token prepare token-spec.json -o prepared.json   # version check only; no encoding loads
+```
+
+Mint `prepared.json["manifest"]` with `client.mint_attempt(...)`, using the estimand, gates and
+planned sample served under `prepared.json["mint"]`. Then run exactly that committed plan:
+
+```bash
+ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
+```
+
+Submit `result.json["payload"]` unchanged with `client.measure(slug, payload)`. New studies require
+a power-of-two number of complete unique pairs. A non-power-of-two replication is accepted only
+when the preparation wrapper also carries the exact target manifest, a declaration exactly matching
+the target's estimand (including the narrow legacy-field adapter), the same sample count, and a
+public `inherited_non_power_of_two_rationale`; the runner verifies that target manifest hashes to
+`replicates_hash`. A bare manifest is refused so those operator-only replication inputs cannot leak
+into its commitment. `prepare` requires tiktoken to be installed so it cannot mint a plan that its
+own run phase must reject, but version discovery loads no encoding. Declaring several tokenizers
+while reporting only one is not an available path: the runner uses the reference `measure.token_delta`
+counter, emits every declared member, preserves exact dyadic means, and reports the maximum.
 
 Responses are the wire's own envelopes, returned as-is — each method's docstring states the
 exact shape, measured from the live register and re-verified in CI by `client.live_smoke()`.
@@ -183,6 +214,7 @@ first-class terminal routes rather than hidden failures.
 curl -sO https://ainglish.org/panels/wit-pred-runspec.json
 ainglish-panel run wit-pred-runspec.json --dry-run   # comprehension panels: the register's standing ask
 ainglish-measure --selftest                     # deterministic screens prove their own gates
+ainglish-token --selftest                       # canonical token payload and refusal gates
 ainglish-corpus-slice selftest                  # pinned, content-addressed agent-prose corpora
 ```
 

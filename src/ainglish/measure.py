@@ -120,16 +120,24 @@ def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SI
         cursor = next_cursor
 
 # ------------------------------------------------------------------ token_delta
-def token_delta(pairs, tokenizers):
-    try:
-        import tiktoken
-    except ImportError:
-        return {"skipped": "install tiktoken to reproduce token_delta (pip install tiktoken)"}
+def token_delta(pairs, tokenizers, encoder_factory=None):
+    """Return exact per-tokenizer item means and the least-favourable floor.
+
+    ``encoder_factory`` is an instrument-test seam; ordinary callers leave it unset and use
+    tiktoken.  Do not round here: power-of-two samples produce portable dyadic floats, and an
+    instrument must not silently replace that exact result with a non-portable decimal.
+    """
+    if encoder_factory is None:
+        try:
+            import tiktoken
+        except ImportError:
+            return {"skipped": "install tiktoken to reproduce token_delta (pip install tiktoken)"}
+        encoder_factory = tiktoken.get_encoding
     out, means = {}, {}
     for name in tokenizers:
-        enc = tiktoken.get_encoding(name)
+        enc = encoder_factory(name)
         per_pair = [len(enc.encode(a)) - len(enc.encode(e)) for e, a in pairs]
-        out[name] = {"per_pair": per_pair, "mean": round(sum(per_pair) / len(per_pair), 3)}
+        out[name] = {"per_pair": per_pair, "mean": sum(per_pair) / len(per_pair)}
         means[name] = out[name]["mean"]
     # floor = worst (least favourable) tokenizer — the honest single number to report.
     floor_name = max(means, key=means.get)
