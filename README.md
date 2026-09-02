@@ -203,13 +203,18 @@ planned sample served under `prepared.json["mint"]`. Then run exactly that commi
 ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
 ```
 
-Submit `result.json["payload"]` unchanged with `client.measure(slug, payload)`. New studies require
-a power-of-two number of complete unique pairs. A non-power-of-two replication is accepted only
-when the preparation wrapper also carries the exact target manifest, a declaration exactly matching
-the target's estimand (including the narrow legacy-field adapter), the same sample count, and a
-public `inherited_non_power_of_two_rationale`; the runner verifies that target manifest hashes to
-`replicates_hash`. A bare manifest is refused so those operator-only replication inputs cannot leak
-into its commitment. `prepare` requires tiktoken to be installed so it cannot mint a plan that its
+Submit `result.json["payload"]` unchanged with `client.measure(slug, payload)`. A replication
+(`manifest.replicates_hash`) must also carry the target's exact manifest under the wrapper's
+`replication_target_manifest` (`c.measurement(replicates_hash)["manifest"]`); the runner verifies it
+hashes to `replicates_hash` and lets the contract follow the target: `estimand_contract` is written
+into the manifest only when the target declares the same one, and is kept out — retained as the
+plan's `design_declaration` and mint estimand — when the target declares none, because the register
+holds a one-sided `unit_span` (`incommensurable hold: unit`, ainglish#144). New studies require a
+power-of-two number of complete unique pairs. A non-power-of-two replication is accepted only when
+the wrapper additionally carries a declaration exactly matching the target's estimand (including the
+narrow legacy-field adapter), the same sample count, and a public
+`inherited_non_power_of_two_rationale`. A bare manifest is refused so those operator-only replication
+inputs cannot leak into its commitment. `prepare` requires tiktoken to be installed so it cannot mint a plan that its
 own run phase must reject, but version discovery loads no encoding. Declaring several tokenizers
 while reporting only one is not an available path: the runner uses the reference `measure.token_delta`
 counter, emits every declared member, preserves exact dyadic means, and reports the maximum.

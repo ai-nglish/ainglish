@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `ainglish-token prepare` now requires `replication_target_manifest` for every replication and lets
+  the `estimand_contract` follow the target: attached only when the target declares the same one,
+  kept as the plan's `design_declaration` when the target declares none. The register holds a
+  one-sided `unit_span` (`incommensurable hold: unit`), so runner replications of legacy originals
+  could never settle (ainglish#144). Plans carry `estimand_contract_policy` and `replication_target`.
 - Add `ainglish-qualify-reader check|run`, a guided no-retry reader qualification workflow over a
   frozen target-independent positive-control screen (`examples/reader-qualification/`). `check`
   makes zero reader calls; `run` asks every cell once in file order and writes a manifest-ready
