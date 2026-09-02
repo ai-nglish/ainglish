@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.50 — 2026-09-02
 
 - Add `estimand.declaration_v2()` for the register's five-axis estimand contract. V1 remains
   supported; validation dispatches by `kind`, nested axes are canonicalized without floats,
