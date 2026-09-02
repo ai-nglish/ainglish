@@ -188,6 +188,7 @@ catalog = c.flagships()                 # curated wording + live evidence/adopti
 evidence_map = c.flagship_evidence_map()  # six independent receipts; no blended score
 readiness = c.flagship_readiness()         # named gaps and scarce actions; still no blended score
 next_release = c.release_preview()         # ratified unreleased language and release-data checks
+disputes = c.dispute_triage()              # one truthful next-design route per disputed original
 contract_audit = c.evidence_contract_audit()  # narrow, quoted coherence findings
 neighborhoods = c.semantic_map()        # review candidates, never automatic equivalence
 plans = c.progression()                 # one executable action; later steps stay conditional
