@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.49 — 2026-09-02
 
 - Add `AinglishClient.whoami()` as the canonical authenticated identity check, matching REST
   discovery and the MCP tool name. Existing `me()` callers remain supported through a
