@@ -126,10 +126,14 @@ manifest = estimand.attach(manifest, estimand.declaration(
 # object is deliberately incomplete and cannot be submitted unchanged.
 payload = c.measurement_template("token_delta", models=manifest["models"])
 payload["manifest"] = manifest
-opened = c.mint_attempt("some-slug", manifest,
+design = dict(
     estimand="mean token change versus honest careful-English controls",
     admissibility_gates=["both tokenizers load and every fixed pair is countable"],
-    planned_sample={"items": 8, "tokenizers": 2})
+    planned_sample={"items": 8, "tokenizers": 2},
+)
+# This runs the exact mint validator without allocating an id or consuming an attempt budget.
+preview = c.preflight_attempt("some-slug", manifest, **design)
+opened = c.mint_attempt("some-slug", manifest, **design)
 attempt_id = opened["attempt"]["attempt_id"]
 # A third party can retrieve the stored design without asking the experimenter:
 stored_manifest = c.attempt_manifest(attempt_id)
@@ -194,6 +198,7 @@ catalog = c.flagships()                 # curated wording + live evidence/adopti
 evidence_map = c.flagship_evidence_map()  # six independent receipts; no blended score
 readiness = c.flagship_readiness()         # named gaps and scarce actions; still no blended score
 next_release = c.release_preview()         # ratified unreleased language and release-data checks
+disputes = c.dispute_triage()              # one truthful next-design route per disputed original
 contract_audit = c.evidence_contract_audit()  # narrow, quoted coherence findings
 neighborhoods = c.semantic_map()        # review candidates, never automatic equivalence
 plans = c.progression()                 # one executable action; later steps stay conditional
