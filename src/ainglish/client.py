@@ -274,6 +274,28 @@ def _validate_attempt_manifest(manifest):
     return canonical
 
 
+def _attempt_pin(slug, manifest, estimand, admissibility_gates, planned_sample,
+                 proposal_revision=None, store_manifest=True):
+    """Build the one locally validated pin used by preview and mint."""
+    canonical = _validate_attempt_manifest(manifest)
+    if not isinstance(estimand, str) or not estimand.strip():
+        raise ValueError("estimand must be a non-empty string")
+    if len(estimand.strip()) > MAX_ATTEMPT_ESTIMAND_CHARS:
+        raise ValueError("estimand must be at most 2000 characters")
+    if not isinstance(store_manifest, bool):
+        raise ValueError("store_manifest must be true or false")
+    body = {
+        "proposal_revision": proposal_revision or slug,
+        "manifest_commitment": hashlib.sha256(canonical).hexdigest(),
+        "estimand": estimand,
+        "admissibility_gates": admissibility_gates,
+        "planned_sample": planned_sample,
+    }
+    if store_manifest:
+        body["manifest"] = manifest
+    return body
+
+
 def _finite_number(value, field):
     if isinstance(value, bool) or not isinstance(value, (int, float)) \
             or not math.isfinite(float(value)):
@@ -1784,23 +1806,27 @@ class AinglishClient:
         # Refuse locally as well as server-side before an invalid commitment creates an obligation
         # that can never be completed. This also keeps store_manifest=False safe against a legacy
         # server that sees only the commitment.
-        canonical = _validate_attempt_manifest(manifest)
-        if not isinstance(estimand, str) or not estimand.strip():
-            raise ValueError("estimand must be a non-empty string")
-        if len(estimand.strip()) > MAX_ATTEMPT_ESTIMAND_CHARS:
-            raise ValueError("estimand must be at most 2000 characters")
-        body = {
-            "proposal_revision": proposal_revision or slug,
-            "manifest_commitment": hashlib.sha256(canonical).hexdigest(),
-            "estimand": estimand,
-            "admissibility_gates": admissibility_gates,
-            "planned_sample": planned_sample,
-        }
-        if not isinstance(store_manifest, bool):
-            raise ValueError("store_manifest must be true or false")
-        if store_manifest:
-            body["manifest"] = manifest
+        body = _attempt_pin(
+            slug, manifest, estimand, admissibility_gates, planned_sample,
+            proposal_revision, store_manifest,
+        )
         path = "/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe="")
+        return self.post(path, body)
+
+    def preflight_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
+                          proposal_revision=None):
+        """Validate an exact design without opening or spending an attempt.
+
+        Returns ``ainglish.attempt-preflight.v1`` with the canonical manifest commitment,
+        byte count, current attempt budget and the mint route. The server runs the same validator
+        as :meth:`mint_attempt`, but makes no write and consumes no budget. Because proposal stage
+        and rate windows can change, mint still repeats every check under its proposal lock.
+        """
+        body = _attempt_pin(
+            slug, manifest, estimand, admissibility_gates, planned_sample,
+            proposal_revision, True,
+        )
+        path = "/api/v1/proposals/%s/attempts/preflight" % urllib.parse.quote(slug, safe="")
         return self.post(path, body)
 
     def abort_attempt(self, attempt_id, failed_gate, preflight_receipt, *, failed_gate_kind,
@@ -2850,6 +2876,18 @@ def selftest():
                     "auth": False}, sent
     sent.clear()
     attempt_manifest = {"metric": "token_delta", "models": ["cl100k_base"]}
+    probe.preflight_attempt("some slug", attempt_manifest, "mean token change",
+                            ["both tokenizers load"], {"items": 8})
+    assert sent["path"] == "/api/v1/proposals/some%20slug/attempts/preflight", sent
+    assert sent["payload"] == {
+        "proposal_revision": "some slug",
+        "manifest_commitment": manifest_commitment(attempt_manifest),
+        "estimand": "mean token change",
+        "admissibility_gates": ["both tokenizers load"],
+        "planned_sample": {"items": 8},
+        "manifest": attempt_manifest,
+    }, sent
+    sent.clear()
     probe.mint_attempt("some slug", attempt_manifest, "mean token change",
                        ["both tokenizers load"], {"items": 8})
     assert sent["path"] == "/api/v1/proposals/some%20slug/attempts", sent
