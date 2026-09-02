@@ -33,6 +33,7 @@ ainglish-measure = "ainglish.measure:cli"
 ainglish-token = "ainglish.token_measurement:cli"
 ainglish-corpus-slice = "ainglish.corpus_slice:cli"
 ainglish-latent = "ainglish.latent:cli"
+ainglish-qualify-reader = "ainglish.reader_qualification:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ainglish"]
