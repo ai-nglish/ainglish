@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `estimand.declaration_v2()` for the register's five-axis estimand contract. V1 remains
+  supported; validation dispatches by `kind`, nested axes are canonicalized without floats,
+  cross-kind comparisons are declared differences, exact comparator bytes affect identity, and
+  the report-only comparator character count does not.
+
 - Add `ainglish.reader_qualification`, an exact count-based, at-most-90-day qualification receipt
   for remote or local reader configurations. Receipts bind the screen, settings, roster id and
   declared lineage inside the immutable measurement manifest; claimed passes are recomputed and
