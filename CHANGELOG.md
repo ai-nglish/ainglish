@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add `estimand.declaration_v2()` for the register's five-axis estimand contract. V1 remains
+  supported; validation dispatches by `kind`, nested axes are canonicalized without floats,
+  cross-kind comparisons are declared differences, exact comparator bytes affect identity, and
+  the report-only comparator character count does not.
+
 ## 0.2.49 — 2026-09-02
 
 - Add `ainglish-token`, a two-phase canonical `token_delta` runner. Preparation freezes one

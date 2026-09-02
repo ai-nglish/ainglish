@@ -111,9 +111,9 @@ c.replace_vote("some-slug", -1, "new replication evidence changed my assessment"
 # and the register stores those bytes at the immutable URL returned in attempt.manifest.url.
 manifest = {"metric": "token_delta", "models": ["cl100k_base", "o200k_base"],
             "test_set": [{"english": "...", "ainglish": "..."}, ...]}
-# Optional shadow declaration: it records what is meant to stay fixed while fresh inputs or
-# instruments vary. The register stores it inside the immutable manifest but does not gate,
-# settle, reject legacy rows, or infer comparability from it.
+# Optional v1 declaration: it records what is meant to stay fixed while fresh inputs or
+# instruments vary. The register stores it inside the immutable manifest and compares two
+# declared contracts before treating their rows as attempts at the same estimand.
 from ainglish import estimand
 manifest = estimand.attach(manifest, estimand.declaration(
     unit_span="complete message",
@@ -122,6 +122,19 @@ manifest = estimand.attach(manifest, estimand.declaration(
     reducer="least_favourable",
     aggregation_rule="per-tokenizer item mean, then maximum across tokenizer lineages",
 ))
+# New studies can instead declare the register's five-axis v2 contract. Axis values may be text
+# or bounded structured JSON. Exact comparator bytes affect identity; the character count is
+# descriptive only.
+manifest_v2 = estimand.attach({"metric": "comprehension_accuracy_delta", "test_set": [...]},
+    estimand.declaration_v2(
+        population={"frame": "fresh task messages", "strata": ["planning", "reporting"]},
+        item_set_construction="digest-pinned generator frame with disjoint seeds",
+        reader_class="cold qualified remote readers",
+        window={"start": "2026-09-01", "end": "2026-09-30"},
+        selection_rules={"exclude": ["training examples", "original items"]},
+        comparator_bytes_sha256="a" * 64,  # replace with SHA-256 of the exact comparator bytes
+        comparator_char_count=137,
+    ))
 # Start from the register's live metric contract instead of guessing accepted fields. The returned
 # object is deliberately incomplete and cannot be submitted unchanged.
 payload = c.measurement_template("token_delta", models=manifest["models"])

@@ -1,8 +1,8 @@
-"""Small, report-only estimand declarations for measurement manifests.
+"""Versioned estimand declarations for measurement manifests.
 
-This module does not change Ainglish settlement.  It gives experimenters one
-strict shape for declaring the quantity a design estimates while the register
-evaluates whether a governed comparability rule would be worth its complexity.
+The register uses matching declarations when deciding whether two rows answer
+the same question.  The declaration's ``governance_effect`` remains an
+authoring-stance field; the register, not this artifact, decides its effect.
 
 Input realisation and instrument identity deliberately stay in their existing
 manifest fields (``test_set``, ``models``, tokenizer provenance, and so on).
@@ -17,6 +17,8 @@ import sys
 
 
 KIND = "ainglish.estimand-shadow.v1"
+KIND_V1 = KIND
+KIND_V2 = "ainglish.estimand-contract.v2"
 COMPARISON_KIND = "ainglish.estimand-shadow-comparison.v1"
 MANIFEST_KEY = "estimand_contract"
 REDUCERS = frozenset({
@@ -30,6 +32,15 @@ REDUCERS = frozenset({
     "custom",
 })
 CORE_FIELDS = ("unit_span", "contrast", "population", "aggregation")
+CORE_FIELDS_V2 = (
+    "kind",
+    "population",
+    "item_set_construction",
+    "reader_class",
+    "window",
+    "selection_rules",
+    "comparator_bytes_sha256",
+)
 MAX_TEXT = 1000
 
 
@@ -71,10 +82,48 @@ def declaration(*, unit_span, contrast, population, reducer, aggregation_rule):
     return result
 
 
+def declaration_v2(
+    *,
+    population,
+    item_set_construction,
+    reader_class,
+    window,
+    selection_rules,
+    comparator_bytes_sha256=None,
+    comparator_char_count=None,
+):
+    """Build a v2 contract over the five register axes.
+
+    Axis values may be concise text or bounded, float-free JSON structures.
+    ``comparator_bytes_sha256`` identifies the exact comparator and therefore
+    enters comparison identity. ``comparator_char_count`` is descriptive only
+    and never changes which estimand was declared.
+    """
+    result = {
+        "kind": KIND_V2,
+        "population": population,
+        "item_set_construction": item_set_construction,
+        "reader_class": reader_class,
+        "window": window,
+        "selection_rules": selection_rules,
+        "governance_effect": "report_only",
+    }
+    if comparator_bytes_sha256 is not None:
+        result["comparator_bytes_sha256"] = comparator_bytes_sha256
+    if comparator_char_count is not None:
+        result["comparator_char_count"] = comparator_char_count
+    return validate(result)
+
+
 def validate(value):
     """Return a normalized copy or raise ``ValueError`` on a malformed claim."""
     if not isinstance(value, dict):
         raise ValueError("estimand declaration must be an object")
+    kind = value.get("kind")
+    if kind == KIND_V2:
+        return _validate_v2(value)
+    if kind != KIND_V1:
+        raise ValueError("estimand declaration kind is not supported")
     expected = {"kind", *CORE_FIELDS, "governance_effect"}
     unknown = sorted(set(value) - expected)
     missing = sorted(expected - set(value))
@@ -110,6 +159,62 @@ def validate(value):
     return normalized
 
 
+def _axis(value, field, depth=0):
+    if depth > 8:
+        raise ValueError("%s is nested too deeply" % field)
+    if isinstance(value, str):
+        return _text(value, field)
+    if isinstance(value, bool) or isinstance(value, int):
+        return value
+    if not isinstance(value, (dict, list)) or not value or len(value) > 100:
+        raise ValueError("%s must be non-empty text or bounded structured JSON" % field)
+    if isinstance(value, list):
+        return [_axis(item, "%s[]" % field, depth + 1) for item in value]
+    normalized = {}
+    for key in sorted(value):
+        normalized[_text(key, "%s key" % field)] = _axis(
+            value[key], "%s.%s" % (field, key), depth + 1
+        )
+    return normalized
+
+
+def _validate_v2(value):
+    required = {
+        "kind", "population", "item_set_construction", "reader_class", "window",
+        "selection_rules", "governance_effect",
+    }
+    allowed = required | {"comparator_bytes_sha256", "comparator_char_count"}
+    missing = sorted(required - set(value))
+    unknown = sorted(set(value) - allowed)
+    if missing:
+        raise ValueError("estimand declaration is missing: %s" % ", ".join(missing))
+    if unknown:
+        raise ValueError("estimand declaration has unknown fields: %s" % ", ".join(unknown))
+    if not isinstance(value["governance_effect"], str) or not value["governance_effect"].strip():
+        raise ValueError("estimand declaration governance_effect must be non-empty text")
+    normalized = {"kind": KIND_V2}
+    for field in (
+        "population", "item_set_construction", "reader_class", "window", "selection_rules"
+    ):
+        normalized[field] = _axis(value[field], field)
+    if "comparator_bytes_sha256" in value:
+        digest = value["comparator_bytes_sha256"]
+        if (
+            not isinstance(digest, str)
+            or len(digest) != 64
+            or any(ch not in "0123456789abcdef" for ch in digest)
+        ):
+            raise ValueError("comparator_bytes_sha256 must be a lowercase SHA-256 digest")
+        normalized["comparator_bytes_sha256"] = digest
+    if "comparator_char_count" in value:
+        count = value["comparator_char_count"]
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("comparator_char_count must be a non-negative integer")
+        normalized["comparator_char_count"] = count
+    normalized["governance_effect"] = value["governance_effect"].strip()
+    return normalized
+
+
 def inspect_manifest(manifest):
     """Describe declaration presence without turning absence into a verdict."""
     if not isinstance(manifest, dict):
@@ -136,7 +241,7 @@ def inspect_manifest(manifest):
             "governance_effect": "report_only",
         }
     return {
-        "kind": KIND,
+        "kind": normalized["kind"],
         "status": "declared",
         "declaration": normalized,
         "governance_effect": "report_only",
@@ -155,15 +260,22 @@ def attach(manifest, value):
 
 
 def compare(left, right):
-    """Compare two valid declarations, report-only.
+    """Compare two valid declarations locally.
 
-    ``same_declared_estimand`` means only that these four declarations match.
+    ``same_declared_estimand`` means only that the selected kind's core axes match.
     It is not a settlement verdict: item disjointness, instrument scope,
     implementation, and admissibility remain separate evidence.
     """
     left = validate(left)
     right = validate(right)
-    differences = [field for field in CORE_FIELDS if left[field] != right[field]]
+    if left["kind"] != right["kind"]:
+        differences = ["kind"]
+    else:
+        fields = CORE_FIELDS if left["kind"] == KIND_V1 else CORE_FIELDS_V2
+        differences = [
+            field for field in fields
+            if left.get(field) != right.get(field)
+        ]
     return {
         "kind": COMPARISON_KIND,
         "status": "declared_difference" if differences else "same_declared_estimand",
@@ -209,6 +321,21 @@ def selftest():
     assert different["status"] == "declared_difference"
     assert different["different_dimensions"] == ["aggregation"]
 
+    v2 = declaration_v2(
+        population={"frame": "fresh task messages", "strata": ["planning", "reporting"]},
+        item_set_construction="digest-pinned generator frame with disjoint seeds",
+        reader_class="cold frontier readers",
+        window={"start": "2026-09-01", "end": "2026-09-30"},
+        selection_rules={"exclude": ["training examples", "original items"]},
+        comparator_bytes_sha256="a" * 64,
+        comparator_char_count=137,
+    )
+    assert validate(v2) == v2
+    report_only_change = deepcopy(v2)
+    report_only_change["comparator_char_count"] = 999
+    assert compare(v2, report_only_change)["status"] == "same_declared_estimand"
+    assert compare(base, v2)["different_dimensions"] == ["kind"]
+
     try:
         attach(first, base)
         raise AssertionError("an overwrite must refuse")
@@ -226,7 +353,7 @@ def selftest():
     return {
         "kind": "ainglish.estimand-shadow-selftest.v1",
         "status": "ok",
-        "checks": 10,
+        "checks": 13,
     }
 
 
