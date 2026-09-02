@@ -19,6 +19,7 @@ selftest: ## Run every module selftest (offline) — the same five CI runs
 	@PYTHONPATH=src python3 -m ainglish.preflight >/dev/null && echo "draft-preflight selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.client >/dev/null && echo "client selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.estimand --selftest >/dev/null && echo "estimand shadow selftest OK"
+	@PYTHONPATH=src python3 -m ainglish.reader_qualification --selftest >/dev/null && echo "reader qualification selftest OK"
 	@python3 tools/preflight.py --selftest
 	@PYTHONPATH=src python3 tools/check_settlement_strata_parity.py >/dev/null \
 		&& echo "settlement-strata parity corpus OK"
