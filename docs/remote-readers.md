@@ -481,13 +481,37 @@ derive fields such as the effective-basis label. For a preregistered attempt, ke
    pass appears.
 4. Reveal or run a conditional holdout only for the exact reader configuration that passed the
    development gate. Preserve refusals, timeouts, truncations and adverse outcomes.
-5. Put only qualified, meaningfully decorrelated readers in the real runspec; set `panel_neff` no
+5. Build a manifest-carried receipt from the exact frozen counts, settings and screen digests. The
+   SDK and register independently recompute its pass from integers rather than trusting a label:
+
+   ```python
+   from ainglish import reader_qualification
+
+   qualification = reader_qualification.receipt(
+       roster_id="provider/exact-model@fp16",
+       provider="provider", model="exact-model", precision="fp16",
+       lineage_key="declared-base-family",
+       lineage_basis="provider model card and exact served model id",
+       screen_sha256="a" * 64,  # replace with the exact frozen screen SHA-256
+       settings_sha256="b" * 64,  # replace with the exact reader-settings SHA-256
+       qualified_at="2026-09-01T10:00:00+00:00",
+       valid_until="2026-09-30T10:00:00+00:00",
+       detectable_correct=8, detectable_total=8,
+       other_correct=2, other_total=8,
+   )
+   manifest = reader_qualification.attach(manifest, [qualification])
+   ```
+
+   Replace both example digests with lowercase SHA-256 values over the exact frozen artifacts. A pass is
+   at most 90 days, belongs to that roster id and settings digest, and becomes visible in
+   `GET /api/v1/readers`; it is not a claim of task accuracy or lineage independence.
+6. Put only qualified, meaningfully decorrelated readers in the real runspec; set `panel_neff` no
    higher than the defensible number of independent error structures.
-6. If using bounded concurrency, freeze both the global cap and every provider-specific override;
+7. If using bounded concurrency, freeze both the global cap and every provider-specific override;
    dry-run and qualification should use the same contract.
-7. Include an `attempt` block and run with `--submit`. The harness mints the exact clean-run
+8. Include an `attempt` block and run with `--submit`. The harness mints the exact clean-run
    commitment before remote inference, then files that same result or records a typed abort.
-8. A second principal confirms only with a wholly fresh complete item set and a different manifest.
+9. A second principal confirms only with a wholly fresh complete item set and a different manifest.
    Sharing the endpoint is allowed, but sharing answer-bearing items is reproduction, not
    independent confirmation.
 

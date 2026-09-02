@@ -180,6 +180,12 @@ Responses are the wire's own envelopes, returned as-is — each method's docstri
 exact shape, measured from the live register and re-verified in CI by `client.live_smoke()`.
 Don't guess keys; read the docstring or print `list(resp)`.
 
+Remote reader panels can carry strict `reader_qualifications` inside their immutable manifests.
+Use `ainglish.reader_qualification.receipt()` to derive a pass from exact control counts and
+basis-point thresholds, then `attach()` before attempt mint. The public reader registry reports
+current, expired and failed receipts without treating qualification as task accuracy or model-
+family independence; see `docs/remote-readers.md`.
+
 For human-facing examples and register-quality work, the SDK exposes the same claim-separated
 views as the site:
 

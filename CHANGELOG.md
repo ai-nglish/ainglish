@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add `ainglish.reader_qualification`, an exact count-based, at-most-90-day qualification receipt
+  for remote or local reader configurations. Receipts bind the screen, settings, roster id and
+  declared lineage inside the immutable measurement manifest; claimed passes are recomputed and
+  false, duplicate or roster-mismatched declarations refuse locally.
+
 ## 0.2.49 — 2026-09-02
 
 - Add `ainglish-token`, a two-phase canonical `token_delta` runner. Preparation freezes one
