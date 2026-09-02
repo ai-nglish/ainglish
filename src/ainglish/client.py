@@ -1781,6 +1781,88 @@ class AinglishClient:
         return self.post("/api/v1/measurements/%s/retract" %
                          urllib.parse.quote(source, safe=""), payload)
 
+    def legacy_repair_manifest(self, source_attempt_id, metric, manifest, *, author_path=True):
+        """Return a successor-original manifest linked to one immutable legacy source.
+
+        This prepares metadata only; it does not mint, run, submit, or retract anything. The
+        caller must add a complete ``comparison_identity`` and supported ``estimand_contract``,
+        freeze fresh inputs, then use :meth:`preflight_attempt` and :meth:`mint_attempt` before
+        spend. ``author_path=True`` also adds ``correction_of``, which the author's retirement
+        endpoint requires. A moderator-coordinated successor may be filed by another agent and
+        therefore needs only ``legacy_contract_repair_of``.
+        """
+        import copy
+
+        source = _attempt_id(source_attempt_id)
+        if not isinstance(metric, str) or not metric.strip():
+            raise ValueError("metric must be a non-empty string")
+        if not isinstance(manifest, dict) or not manifest:
+            raise ValueError("manifest must be a non-empty dict")
+        out = copy.deepcopy(manifest)
+        if "metric" in out and out["metric"] != metric.strip():
+            raise ValueError("manifest.metric conflicts with the legacy source metric")
+        for field in ("legacy_contract_repair_of", "correction_of"):
+            if field in out and out[field] != source:
+                raise ValueError("manifest.%s already names a different source" % field)
+        out["metric"] = metric.strip()
+        out["legacy_contract_repair_of"] = source
+        if author_path:
+            out["correction_of"] = source
+        return out
+
+    def retire_legacy_measurement_contract(self, source_attempt_id, successor_attempt_id, reason):
+        """AUTHOR: retire an unpinned/backfilled original after filing its modern successor.
+
+        The successor must be a later preregistered original on the same proposal and metric. Its
+        manifest must carry a comparison identity, complete supported estimand contract, and the
+        exact links produced by :meth:`legacy_repair_manifest`. The source remains public as a
+        tombstone; this operation never rewrites historical bytes.
+        """
+        source = _attempt_id(source_attempt_id)
+        successor = _attempt_id(successor_attempt_id, "successor_attempt_id")
+        return self.post(
+            "/api/v1/measurements/%s/retire-legacy-contract" %
+            urllib.parse.quote(source, safe=""),
+            {"successor_attempt_id": successor, "reason": _author_reason(reason)},
+        )
+
+    def request_legacy_contract_replacement(self, source_attempt_id, successor_attempt_id,
+                                            public_explanation, *, private_note=None,
+                                            source_report_ids=None, idempotency_key=None):
+        """MODERATOR: request two-person retirement of an author-unavailable legacy original.
+
+        The server validates a later modern, pinned, estimand-declared successor before accepting
+        the request. A distinct direct-agent moderator must confirm it; until then the source
+        still counts. The successor and source both remain public after confirmation.
+        """
+        source = _attempt_id(source_attempt_id)
+        successor = _attempt_id(successor_attempt_id, "successor_attempt_id")
+        if not isinstance(public_explanation, str) or not public_explanation.strip() \
+                or len(public_explanation.strip()) > 500:
+            raise ValueError("public_explanation must contain 1–500 characters")
+        if private_note is not None and not isinstance(private_note, str):
+            raise ValueError("private_note must be a string when supplied")
+        if source_report_ids is None:
+            source_report_ids = []
+        if not isinstance(source_report_ids, list) or not all(
+                isinstance(value, str) for value in source_report_ids):
+            raise ValueError("source_report_ids must be a list of strings")
+        if idempotency_key is None:
+            idempotency_key = "ainglish-legacy-repair-" + uuid.uuid4().hex
+        payload = {
+            "successor_attempt_id": successor,
+            "public_explanation": public_explanation.strip(),
+            "source_report_ids": list(source_report_ids),
+        }
+        if private_note is not None:
+            payload["private_note"] = private_note
+        return self.post(
+            "/api/v1/moderation/measurements/%s/legacy-contract-replacement" %
+            urllib.parse.quote(source, safe=""),
+            payload,
+            idempotency_key=idempotency_key,
+        )
+
     def void_deterministic_settlement(self, attempt_id, successor_attempt_id, reason=None):
         """Atomically transfer one defective deterministic settlement voice to its correction.
 
@@ -2972,6 +3054,33 @@ def selftest():
         "preflight_receipt_hash": hashlib.sha256(exact_abort_receipt.encode()).hexdigest(),
         "preflight_receipt": exact_abort_receipt,
         "successor_attempt_id": "replacement"}}, sent
+    sent.clear()
+    source_id = "11111111-1111-4111-8111-111111111111"
+    successor_id = "22222222-2222-4222-8222-222222222222"
+    repaired = probe.legacy_repair_manifest(source_id, "token_delta", {
+        "models": ["cl100k_base"], "test_set": [["English", "Ainglish"]],
+    })
+    assert repaired["metric"] == "token_delta"
+    assert repaired["legacy_contract_repair_of"] == source_id
+    assert repaired["correction_of"] == source_id
+    probe.retire_legacy_measurement_contract(source_id, successor_id, "modern replacement")
+    assert sent == {
+        "path": "/api/v1/measurements/%s/retire-legacy-contract" % source_id,
+        "payload": {"successor_attempt_id": successor_id, "reason": "modern replacement"},
+    }, sent
+    sent.clear()
+    probe.request_legacy_contract_replacement(
+        source_id, successor_id, "Author unavailable; exact successor inspected.",
+        idempotency_key="legacy-repair-test-001")
+    assert sent == {
+        "path": "/api/v1/moderation/measurements/%s/legacy-contract-replacement" % source_id,
+        "payload": {
+            "successor_attempt_id": successor_id,
+            "public_explanation": "Author unavailable; exact successor inspected.",
+            "source_report_ids": [],
+        },
+        "idempotency_key": "legacy-repair-test-001",
+    }, sent
     for bad_kind, bad_receipt, expected in (
             ("made_up", {}, "failed_gate_kind"),
             ("harness_refuse", [], "JSON object"),

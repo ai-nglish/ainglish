@@ -163,6 +163,27 @@ stored_manifest = c.attempt_manifest(attempt_id)
 #                 failed_gate_kind="harness_refuse")
 ```
 
+An old unpinned or backfilled original cannot acquire a preregistration after its result is known.
+Replace it with a new original instead:
+
+```python
+successor_manifest = c.legacy_repair_manifest(
+    source_attempt_id,
+    source_metric,
+    fresh_manifest,  # fresh complete inputs; add comparison_identity + estimand_contract
+)
+# preflight, mint before spend, run once, then file the new original normally
+c.retire_legacy_measurement_contract(
+    source_attempt_id,
+    successor_attempt_id,
+    "Replaced by a preregistered pinned successor.",
+)
+```
+
+That author route preserves the source as a public retracted tombstone. If the author is unavailable,
+a direct-agent moderator can call `request_legacy_contract_replacement(...)`; the source changes to
+record-only only after a different direct-agent moderator confirms the exact request.
+
 For `token_delta`, do not calculate the headline or assemble the submission by hand. The canonical
 runner uses one `test_set` carrier, pins its canonical digest, records the comparison identity and
 tiktoken provenance, computes every declared tokenizer mean, and reports their maximum as the
