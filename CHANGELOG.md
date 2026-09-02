@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `ainglish.reader_qualification`, an exact count-based, at-most-90-day qualification receipt
+  for remote or local reader configurations. Receipts bind the screen, settings, roster id and
+  declared lineage inside the immutable measurement manifest; claimed passes are recomputed and
+  false, duplicate or roster-mismatched declarations refuse locally.
+
 - Add `AinglishClient.dispute_triage()` for the register's machine-readable dispute workbench.
   Each progressing disputed original is routed to fresh deterministic replication, qualified
   reader-panel replication, or legacy-contract reconstruction without requesting a result sign.
