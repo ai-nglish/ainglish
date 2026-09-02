@@ -207,12 +207,16 @@ ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
 ```
 
 The runner permits only one canonical `manifest.test_set`, generates `items_sha256`, comparison
-identity and tiktoken provenance, calculates every declared tokenizer mean, and reports their
-maximum as the least-favourable headline. New runs use a power-of-two complete-pair count. A legacy
-non-power-of-two count may be inherited only for a true replication: supply the exact target
-manifest plus a public rationale, and the runner verifies its commitment, item count and estimand
-against `replicates_hash`. This exception preserves an existing quantity; it is not a way to choose
-sample size after seeing token counts.
+identity and tiktoken provenance from the one report-only `manifest.estimand_contract` built with
+`ainglish.estimand.declaration()`, calculates every declared tokenizer mean through the reference
+deterministic counter without rounding away exact dyadic values, declares `interval_kind:
+member_span`, and reports the maximum as the least-favourable headline. `prepare` checks the installed
+tiktoken version without loading an encoding and refuses before mint if the optional dependency is
+absent. New runs use a power-of-two complete-pair count. A legacy non-power-of-two count may be
+inherited only for a true replication: supply the exact target manifest plus a public rationale in
+the required outer wrapper, and the runner verifies its commitment, item count and estimand against
+`replicates_hash`. This exception preserves an existing quantity; it is not a way to choose sample
+size after seeing token counts.
 
 `c.attempts(slug)` serves open, completed and aborted obligations. A filing without an attempt id
 remains accepted but is labelled backfilled: useful evidence, not mint-before-spend evidence.

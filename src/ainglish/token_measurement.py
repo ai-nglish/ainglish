@@ -9,6 +9,7 @@ tokenizer cell, and emits the ready-to-submit payload bound to that attempt.
 
 import argparse
 import copy
+from fractions import Fraction
 import hashlib
 import importlib.metadata
 import json
@@ -17,7 +18,9 @@ import pathlib
 import re
 import sys
 
+from ainglish import estimand
 from ainglish.client import _canonical_json, manifest_commitment
+from ainglish.measure import token_delta
 
 
 PLAN_KIND = "ainglish.token-measurement-plan.v1"
@@ -26,7 +29,7 @@ ATTEMPT_ID = re.compile(
 )
 PROTECTED_COMPARISON_FIELDS = (
     "kind", "items_sha256", "item_count", "tokenizer_roster", "comparator",
-    "population", "aggregation",
+    "population", "aggregation", "unit_span",
 )
 
 
@@ -86,7 +89,21 @@ def _models(manifest):
     return clean
 
 
-def _inherited_size_exception(spec, manifest, rows):
+def _target_estimand_matches(target, declaration):
+    """Compare a target's declaration, with one narrow legacy-read compatibility adapter."""
+    if estimand.MANIFEST_KEY in target:
+        return estimand.validate(target[estimand.MANIFEST_KEY]) == declaration
+    legacy = target.get("estimand")
+    if not isinstance(legacy, dict):
+        return False
+    return (
+        legacy.get("comparator") == declaration["contrast"]
+        and legacy.get("population") == declaration["population"]
+        and legacy.get("aggregation") == declaration["aggregation"]["rule"]
+    )
+
+
+def _inherited_size_exception(spec, manifest, rows, declaration):
     target = spec.get("replication_target_manifest")
     rationale = spec.get("inherited_non_power_of_two_rationale")
     if not isinstance(target, dict) or not isinstance(rationale, str) or not rationale.strip():
@@ -102,8 +119,11 @@ def _inherited_size_exception(spec, manifest, rows):
     target_rows = _test_set(target)
     if len(target_rows) != len(rows):
         raise ValueError("the replication sample count must exactly match the target sample count")
-    if not isinstance(manifest.get("estimand"), dict) or manifest.get("estimand") != target.get("estimand"):
-        raise ValueError("the inherited-size exception requires an estimand exactly matching the target")
+    if not _target_estimand_matches(target, declaration):
+        raise ValueError(
+            "the inherited-size exception requires an estimand_contract exactly matching the "
+            "target (or an exact mapping to its legacy comparator/population/aggregation)"
+        )
     return {
         "kind": "inherited-replication-sample-size-v1",
         "target_manifest_hash": target_hash,
@@ -116,7 +136,17 @@ def prepare(spec):
     """Return a frozen, mint-ready plan without importing or loading a tokenizer."""
     if not isinstance(spec, dict):
         raise ValueError("the run specification must be a JSON object")
-    source = spec.get("manifest", spec)
+    if "manifest" not in spec:
+        raise ValueError(
+            "the run specification must wrap the committed object under spec.manifest; "
+            "replication_target_manifest and rationale are operator inputs, not manifest fields"
+        )
+    unknown_wrapper = sorted(
+        set(spec) - {"manifest", "replication_target_manifest", "inherited_non_power_of_two_rationale"}
+    )
+    if unknown_wrapper:
+        raise ValueError("unknown run-specification field(s): %s" % ", ".join(unknown_wrapper))
+    source = spec.get("manifest")
     if not isinstance(source, dict):
         raise ValueError("spec.manifest must be a JSON object")
     manifest = copy.deepcopy(source)
@@ -129,26 +159,39 @@ def prepare(spec):
     manifest["models"] = models
     manifest["test_set"] = rows
 
+    if "estimand" in manifest:
+        raise ValueError(
+            "manifest.estimand is a retired duplicate vocabulary; declare the quantity once "
+            "under manifest.estimand_contract using ainglish.estimand.declaration()"
+        )
+    declaration = estimand.validate(manifest.get(estimand.MANIFEST_KEY))
+    if declaration["aggregation"]["reducer"] != "least_favourable":
+        raise ValueError(
+            "manifest.estimand_contract.aggregation.reducer must be least_favourable for the "
+            "maximum-tokenizer headline"
+        )
+    manifest[estimand.MANIFEST_KEY] = declaration
+
     sample_exception = None
     if not _power_of_two(len(rows)):
-        sample_exception = _inherited_size_exception(spec, manifest, rows)
+        sample_exception = _inherited_size_exception(spec, manifest, rows, declaration)
         manifest["sample_size_exception"] = sample_exception
     elif "sample_size_exception" in manifest:
         raise ValueError("remove manifest.sample_size_exception from a power-of-two sample")
-
-    estimand = manifest.get("estimand")
-    if not isinstance(estimand, dict):
+    elif "replication_target_manifest" in spec or "inherited_non_power_of_two_rationale" in spec:
         raise ValueError(
-            "manifest.estimand must declare comparator, population and aggregation before counting"
+            "remove inherited-size operator inputs from a power-of-two run specification"
         )
-    comparator = _nonempty(estimand.get("comparator"), "manifest.estimand.comparator")
-    population = _nonempty(estimand.get("population"), "manifest.estimand.population")
-    aggregation = _nonempty(estimand.get("aggregation"), "manifest.estimand.aggregation")
+
+    comparator = declaration["contrast"]
+    population = declaration["population"]
+    aggregation = declaration["aggregation"]["rule"]
     if "maximum tokenizer mean" not in aggregation.lower() \
             and "least-favourable" not in aggregation.lower() \
             and "least_favourable" not in aggregation.lower():
         raise ValueError(
-            "manifest.estimand.aggregation must name the maximum tokenizer mean or least-favourable rule"
+            "manifest.estimand_contract.aggregation.rule must name the maximum tokenizer mean "
+            "or least-favourable rule"
         )
 
     items_sha256 = _digest(rows)
@@ -165,6 +208,7 @@ def prepare(spec):
         "comparator": comparator,
         "population": population,
         "aggregation": aggregation,
+        "unit_span": declaration["unit_span"],
     }
     supplied_identity = manifest.get("comparison_identity", {})
     if not isinstance(supplied_identity, dict):
@@ -174,10 +218,17 @@ def prepare(spec):
             raise ValueError("manifest.comparison_identity.%s conflicts with the frozen design" % key)
     manifest["comparison_identity"] = dict(copy.deepcopy(supplied_identity), **expected_identity)
 
+    if manifest.get("interval_kind") not in (None, "member_span"):
+        raise ValueError("manifest.interval_kind conflicts with the token runner's member_span interval")
+    manifest["interval_kind"] = "member_span"
+
     try:
         tiktoken_version = importlib.metadata.version("tiktoken")
     except importlib.metadata.PackageNotFoundError:
-        tiktoken_version = "not-installed-at-prepare"
+        raise ValueError(
+            'tiktoken is required before prepare; install "ainglish[tokens]". Version discovery '
+            "does not load a tokenizer or expose the frozen items to one"
+        ) from None
     provenance = {
         "kind": "ainglish.tiktoken-provenance.v1",
         "library": "tiktoken",
@@ -190,6 +241,13 @@ def prepare(spec):
     manifest["tokenizer_provenance"] = provenance
 
     commitment = manifest_commitment(manifest)
+    mint_estimand = (
+        "token_delta over %s: %s; population: %s; aggregation: %s"
+        % (declaration["unit_span"], declaration["contrast"],
+           declaration["population"], declaration["aggregation"]["rule"])
+    )
+    if len(mint_estimand) > 2000:
+        raise ValueError("the estimand_contract renders a mint estimand longer than 2000 characters")
     return {
         "kind": PLAN_KIND,
         "state": "prepared_not_run",
@@ -201,7 +259,7 @@ def prepare(spec):
             "kind": "power-of-two-v1", "item_count": len(rows), "passed": True,
         },
         "mint": {
-            "estimand": "mean token change versus the frozen complete careful-English controls; least-favourable maximum across tokenizer lineages",
+            "estimand": mint_estimand,
             "admissibility_gates": [
                 "every declared tiktoken encoding loads",
                 "every frozen English and Ainglish string is countable",
@@ -240,12 +298,14 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
             )
         encoder_factory = tiktoken.get_encoding
 
+    counted = token_delta(
+        [(row["english"], row["ainglish"]) for row in rows],
+        models,
+        encoder_factory=encoder_factory,
+    )
     member_rows, means = [], []
     for name in models:
-        encoder = encoder_factory(name)
-        per_pair = [len(encoder.encode(row["ainglish"])) - len(encoder.encode(row["english"]))
-                    for row in rows]
-        mean = round(sum(per_pair) / len(per_pair), 6)
+        mean = counted["by_tokenizer"][name]["mean"]
         if not math.isfinite(mean):
             raise ValueError("non-finite tokenizer mean for %s" % name)
         means.append(mean)
@@ -300,11 +360,13 @@ def selftest():
             {"english": "one two", "ainglish": "one"},
             {"english": "one two three", "ainglish": "one"},
         ],
-        "estimand": {
-            "comparator": "complete careful English",
-            "population": "four frozen selftest pairs",
-            "aggregation": "equal item mean, then maximum tokenizer mean",
-        },
+        "estimand_contract": estimand.declaration(
+            unit_span="complete message",
+            contrast="Ainglish form versus complete careful English",
+            population="four frozen selftest pairs",
+            reducer="least_favourable",
+            aggregation_rule="equal item mean, then maximum tokenizer mean",
+        ),
     }
     plan = prepare({"manifest": manifest})
     assert plan["pair_count"] == 4 and plan["sample_size_rule"]["passed"] is True
@@ -316,6 +378,25 @@ def selftest():
     assert result["payload"]["value"] == -1.75
     assert [row["value"] for row in result["payload"]["per_member"]] == [-1.75, -3.5]
     assert result["payload"]["panel_models"] == plan["manifest"]["models"]
+    assert result["payload"]["manifest"]["interval_kind"] == "member_span"
+    assert result["payload"]["manifest"]["estimand_contract"]["governance_effect"] == "report_only"
+
+    dyadic = copy.deepcopy(manifest)
+    dyadic["test_set"] = [
+        ({"english": "left right e%03d" % index,
+          "ainglish": "left a%03d" % index, "id": "d%03d" % index}
+         if index < 127 else
+         {"english": "left e127", "ainglish": "right a127", "id": "d127"})
+        for index in range(128)
+    ]
+    dyadic_plan = prepare({"manifest": dyadic})
+    dyadic_result = run_prepared(
+        dyadic_plan, "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+        encoder_factory=lambda name: _FakeEncoding(1 if name == "tok-a" else 2),
+    )
+    exact = dyadic_result["payload"]["per_member"][0]["value"]
+    assert Fraction(exact) == Fraction(-127, 128) and exact != round(exact, 6)
+    _canonical_json(dyadic_result["payload"])
 
     bad = copy.deepcopy(manifest)
     bad["models"] = ["tok-a", "tok-b", "tok-c"]

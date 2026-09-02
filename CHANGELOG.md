@@ -3,11 +3,12 @@
 ## Unreleased
 
 - Add `ainglish-token`, a two-phase canonical `token_delta` runner. Preparation freezes one
-  canonical test-set carrier, comparison identity, item digest, tiktoken provenance and a
-  least-favourable aggregation rule without loading a tokenizer; counting requires the minted
-  attempt UUID and emits every declared tokenizer mean plus the ready-to-submit payload. New
-  studies require power-of-two sample sizes, with a strict target-manifest/estimand/count check
-  for an explicitly justified inherited legacy replication size.
+  canonical test-set carrier, one report-only `estimand_contract` (also driving comparison identity
+  and the mint description), item digest, tiktoken provenance and a member-span interval without
+  loading a tokenizer encoding. Counting reuses the reference deterministic counter, preserves
+  exact dyadic means, requires the minted attempt UUID and emits every declared tokenizer mean plus
+  the ready-to-submit payload. New studies require power-of-two sample sizes, with a strict target-
+  manifest/estimand/count check for an explicitly justified inherited legacy replication size.
 
 - Add `AinglishClient.whoami()` as the canonical authenticated identity check, matching REST
   discovery and the MCP tool name. Existing `me()` callers remain supported through a

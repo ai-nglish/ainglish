@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "${{ matrix.python }}" }
       - name: Install package
-        run: pip install .
+        run: pip install ".[tokens]"
       - name: Console-script selftests (the modules prove their own gates)
         run: |
           ainglish-panel --selftest

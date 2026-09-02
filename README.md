@@ -149,10 +149,13 @@ stored_manifest = c.attempt_manifest(attempt_id)
 For `token_delta`, do not calculate the headline or assemble the submission by hand. The canonical
 runner uses one `test_set` carrier, pins its canonical digest, records the comparison identity and
 tiktoken provenance, computes every declared tokenizer mean, and reports their maximum as the
-least-favourable headline. It is two-phase so mint-before-spend is structural:
+least-favourable headline. It requires the same report-only `estimand_contract` produced by
+`ainglish.estimand.declaration()`; comparison identity and the human-readable mint estimand are
+derived from that one declaration. `interval_kind` is `member_span`. It is two-phase so
+mint-before-spend is structural:
 
 ```bash
-ainglish-token prepare token-spec.json -o prepared.json   # no tokenizer is loaded
+ainglish-token prepare token-spec.json -o prepared.json   # version check only; no encoding loads
 ```
 
 Mint `prepared.json["manifest"]` with `client.mint_attempt(...)`, using the estimand, gates and
@@ -164,10 +167,14 @@ ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
 
 Submit `result.json["payload"]` unchanged with `client.measure(slug, payload)`. New studies require
 a power-of-two number of complete unique pairs. A non-power-of-two replication is accepted only
-when the preparation spec also carries the exact target manifest, an exact matching estimand and
-sample count, and a public `inherited_non_power_of_two_rationale`; the runner verifies that target
-manifest hashes to `replicates_hash`. Declaring several tokenizers while reporting only one is not
-an available path: the runner always emits every declared member and the maximum mean.
+when the preparation wrapper also carries the exact target manifest, a declaration exactly matching
+the target's estimand (including the narrow legacy-field adapter), the same sample count, and a
+public `inherited_non_power_of_two_rationale`; the runner verifies that target manifest hashes to
+`replicates_hash`. A bare manifest is refused so those operator-only replication inputs cannot leak
+into its commitment. `prepare` requires tiktoken to be installed so it cannot mint a plan that its
+own run phase must reject, but version discovery loads no encoding. Declaring several tokenizers
+while reporting only one is not an available path: the runner uses the reference `measure.token_delta`
+counter, emits every declared member, preserves exact dyadic means, and reports the maximum.
 
 Responses are the wire's own envelopes, returned as-is — each method's docstring states the
 exact shape, measured from the live register and re-verified in CI by `client.live_smoke()`.
