@@ -71,6 +71,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 
 NEUTRAL_EPS = 1e-9
 # Statuses that mean "the far side is busy or broken", as opposed to "you asked wrongly".
@@ -93,6 +94,133 @@ INTERVAL_PROVENANCE_KIND = "ainglish.panel.bootstrap-items-attestation.v1"
 INTERVAL_BOOTSTRAP_ALGORITHM = "sha256-counter-modulo-v1"
 INTERVAL_BOOTSTRAP_DRAWS = 2000
 INTERVAL_PROVENANCE_MAX_CELLS = 5000
+_QUALIFICATION_DIGEST = re.compile(r"^[0-9a-f]{64}$")
+_QUALIFICATION_MODEL_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def _qualification_text(value, field, maximum):
+    if not isinstance(value, str) or not value.strip() or len(value.strip()) > maximum:
+        raise ValueError("%s must contain 1-%d characters" % (field, maximum))
+    return value.strip()
+
+
+def _qualification_instant(value, field):
+    if not isinstance(value, str):
+        raise ValueError("%s must be an ISO-8601 datetime" % field)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("%s must be an ISO-8601 datetime" % field) from exc
+    if not parsed.tzinfo:
+        raise ValueError("%s must include a timezone" % field)
+    return parsed.astimezone(timezone.utc)
+
+
+def _validate_reader_qualification(value):
+    """Strict standalone copy of the qualification receipt contract.
+
+    ``panel.py`` is intentionally downloadable and runnable as one stdlib file, so this boundary
+    cannot rely on importing the installed package. Keep this validator aligned with
+    reader_qualification.validate; its selftest exercises the served-file path in CI.
+    """
+    if not isinstance(value, dict):
+        raise ValueError("reader qualification must be an object")
+    expected = {
+        "kind", "roster_id", "reader", "lineage", "screen_sha256", "settings_sha256",
+        "qualified_at", "valid_until", "result",
+    }
+    if expected - set(value) or set(value) - expected - {"screen_url"}:
+        raise ValueError("reader qualification has missing or unknown fields")
+    if value.get("kind") != "ainglish.reader-qualification.v1":
+        raise ValueError("reader qualification kind is not supported")
+    reader, lineage, result = value["reader"], value["lineage"], value["result"]
+    if not isinstance(reader, dict) or not isinstance(lineage, dict) or not isinstance(result, dict):
+        raise ValueError("reader, lineage and result must be objects")
+    if (set(reader) - {"provider", "model", "precision", "model_digest", "digest_source"}
+            or not {"provider", "model", "precision"}.issubset(reader)):
+        raise ValueError("reader has missing or unknown fields")
+    if set(lineage) != {"key", "basis"}:
+        raise ValueError("lineage must contain exactly key and basis")
+    result_fields = {
+        "detectable_correct", "detectable_total", "other_correct", "other_total",
+        "min_gap_bps", "min_recovered_bps", "passed",
+    }
+    if set(result) != result_fields:
+        raise ValueError("result has missing or unknown fields")
+    for field in result_fields - {"passed"}:
+        item = result[field]
+        if isinstance(item, bool) or not isinstance(item, int) or item < 0:
+            raise ValueError("%s must be a non-negative integer" % field)
+    if not isinstance(result["passed"], bool):
+        raise ValueError("result.passed must be boolean")
+    dc, dt = result["detectable_correct"], result["detectable_total"]
+    oc, ot = result["other_correct"], result["other_total"]
+    mg, mr = result["min_gap_bps"], result["min_recovered_bps"]
+    if dt < 1 or ot < 1 or dc > dt or oc > ot or mg > 10000 or mr > 10000:
+        raise ValueError("qualification result has impossible counts or thresholds")
+    gap_numerator = dc * ot - oc * dt
+    headroom_numerator = ot - oc
+    calculated_pass = (
+        gap_numerator * 10000 >= mg * dt * ot
+        and headroom_numerator > 0
+        and gap_numerator * 10000 >= mr * dt * headroom_numerator
+    )
+    if result["passed"] != calculated_pass:
+        raise ValueError("result.passed disagrees with exact counts and thresholds")
+    start = _qualification_instant(value["qualified_at"], "qualified_at")
+    end = _qualification_instant(value["valid_until"], "valid_until")
+    if end <= start or (end - start).total_seconds() > 90 * 86400:
+        raise ValueError("valid_until must be after qualified_at and no more than 90 days later")
+    for field in ("screen_sha256", "settings_sha256"):
+        if not isinstance(value[field], str) or not _QUALIFICATION_DIGEST.fullmatch(value[field]):
+            raise ValueError("%s must be a lowercase SHA-256 digest" % field)
+    normalized_reader = {
+        "provider": _qualification_text(reader["provider"], "provider", 160),
+        "model": _qualification_text(reader["model"], "model", 160),
+        "precision": _qualification_text(reader["precision"], "precision", 160),
+    }
+    absent = object()
+    model_digest = reader.get("model_digest", absent)
+    if model_digest is not absent:
+        if not isinstance(model_digest, str) or not _QUALIFICATION_MODEL_DIGEST.fullmatch(model_digest):
+            raise ValueError("model_digest must be sha256: followed by 64 lowercase hex characters")
+        normalized_reader["model_digest"] = model_digest
+    digest_source = reader.get("digest_source", absent)
+    if digest_source is not absent:
+        normalized_reader["digest_source"] = _qualification_text(digest_source, "digest_source", 500)
+    normalized = {
+        "kind": value["kind"],
+        "roster_id": _qualification_text(value["roster_id"], "roster_id", 120),
+        "reader": normalized_reader,
+        "lineage": {
+            "key": _qualification_text(lineage["key"], "lineage.key", 160),
+            "basis": _qualification_text(lineage["basis"], "lineage.basis", 1000),
+        },
+        "screen_sha256": value["screen_sha256"],
+        "settings_sha256": value["settings_sha256"],
+        "qualified_at": value["qualified_at"],
+        "valid_until": value["valid_until"],
+        "result": dict(result),
+    }
+    screen_url = value.get("screen_url", absent)
+    if screen_url is not absent:
+        screen_url = _qualification_text(screen_url, "screen_url", 2000)
+        if not screen_url.lower().startswith("https://"):
+            raise ValueError("screen_url must be an https URL")
+        normalized["screen_url"] = screen_url
+    return normalized
+
+
+def _attach_reader_qualifications(models, receipts):
+    if not isinstance(receipts, list) or not 1 <= len(receipts) <= 16:
+        raise ValueError("receipts must be a list of 1-16 qualification receipts")
+    normalized = [_validate_reader_qualification(item) for item in receipts]
+    roster = [item["roster_id"] for item in normalized]
+    if len(roster) != len(set(roster)):
+        raise ValueError("qualification roster_id values must be unique")
+    if any(name not in models for name in roster):
+        raise ValueError("every qualification roster_id must name a declared manifest model")
+    return normalized
 
 
 def _panel_refusal(stage, cause, message, calibration_cells_attempted,
@@ -2139,7 +2267,8 @@ def _validate_learnability_v2(manifest, real, calibration):
 
 
 def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRATION_MIN_GAP,
-                   min_recovered=CALIBRATION_MIN_RECOVERED, rule=CALIBRATION_RULE):
+                   min_recovered=CALIBRATION_MIN_RECOVERED, rule=CALIBRATION_RULE,
+                   reader_qualifications=None):
     """robustness_delta v4: DIFFERENTIAL degradation under one corruption event, in PERCENTAGE
     POINTS (the API contract's unit — accuracy differences scale by 100 exactly as the
     comprehension branch's do).
@@ -2434,6 +2563,8 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
         return p_["name"] + ("@" + p_["precision"] if p_.get("precision") else "")
 
     spec["models"] = [_labelled(p_) for p_ in panel]
+    if reader_qualifications is not None:
+        spec["reader_qualifications"] = reader_qualifications
     spec["readers"] = [reader_receipt(p_) for p_ in panel]
     spec["instrument_preparation"] = instrument_preparation_receipt(
         panel, _manifest_unbound_entry_point(manifest))
@@ -2550,6 +2681,21 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
               "unique names and represent shared lineage with panel_neff.")
         return None
 
+    qualified_receipts = None
+    if manifest.get("reader_qualifications") is not None:
+        try:
+            qualification_models = [
+                p["name"] + ("@" + p["precision"] if p.get("precision") else "")
+                for p in panel
+            ]
+            qualified_receipts = _attach_reader_qualifications(
+                qualification_models, manifest["reader_qualifications"]
+            )
+        except ValueError as exc:
+            print(f"REFUSING to run: invalid reader qualifications ({exc}). No reader cell was "
+                  "bought; a malformed instrument receipt cannot qualify a result.")
+            return None
+
     try:
         concurrency = concurrency_contract(manifest, panel)
     except ValueError as exc:
@@ -2593,7 +2739,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             print(exc)
             return None
         return run_robustness(manifest, ask_fn, planted_arm, calibration_min_gap,
-                              calibration_min_recovered, calibration_rule)
+                              calibration_min_recovered, calibration_rule, qualified_receipts)
 
     calib = [i for i in items if i.get("calibration")]
     real = [i for i in items if not i.get("calibration")]
@@ -3215,6 +3361,14 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # keep the exact items in the spec; bulky sets should be published and digest-pinned by URL.
         spec["items"] = items
     spec["models"] = [labelled(p_) for p_ in panel]
+    if qualified_receipts is not None:
+        # `reader_qualification.attach()` validates a receipt on the caller's input manifest,
+        # but the panel deliberately derives a smaller, immutable filed manifest here. Dropping
+        # the receipts at that boundary made a qualified run indistinguishable from an
+        # unqualified one in the public reader registry. Revalidate against the roster names the
+        # harness itself just derived, then preserve only normalized receipts in both the dry
+        # preregistration preview and the real result.
+        spec["reader_qualifications"] = qualified_receipts
     spec["readers"] = [reader_receipt(p_) for p_ in panel]
     spec["instrument_preparation"] = instrument_preparation_receipt(
         panel, _manifest_unbound_entry_point(manifest))
@@ -3424,6 +3578,37 @@ def selftest():
 
     good = {"construct": "wit-demo", "slug": "demo", "metric": "comprehension_accuracy_delta",
             "seed": 7, "items": items, "panel": [{"name": "reader-a"}, {"name": "reader-b"}]}
+
+    # Qualification receipts survive the input-manifest -> immutable filed-manifest boundary.
+    # The omission this pins was especially subtle because attach() succeeded and the panel run
+    # succeeded, while the public register then had no receipt to index.
+    qualified_receipt = {
+        "kind": "ainglish.reader-qualification.v1", "roster_id": "reader-a",
+        "reader": {"provider": "test", "model": "reader-a", "precision": "test"},
+        "lineage": {"key": "test/reader-a", "basis": "selftest distinct reader fixture"},
+        "screen_sha256": "a" * 64, "settings_sha256": "b" * 64,
+        "qualified_at": "2026-09-03T00:00:00+00:00",
+        "valid_until": "2026-10-03T00:00:00+00:00",
+        "result": {
+            "detectable_correct": 8, "detectable_total": 8,
+            "other_correct": 0, "other_total": 8,
+            "min_gap_bps": 1250, "min_recovered_bps": 5000, "passed": True,
+        },
+    }
+    qualified_result = run_panel(
+        dict(good, reader_qualifications=[qualified_receipt]), ask_fn=tag_reliant,
+    )
+    assert qualified_result["manifest"]["reader_qualifications"] == [qualified_receipt]
+    assert qualified_result["manifest"]["models"] == ["reader-a", "reader-b"]
+
+    qualification_calls = []
+    false_receipt = json.loads(json.dumps(qualified_receipt))
+    false_receipt["result"]["passed"] = False
+    assert run_panel(
+        dict(good, reader_qualifications=[false_receipt]),
+        ask_fn=lambda *args: qualification_calls.append(args),
+    ) is None
+    assert qualification_calls == [], "invalid qualifications must refuse before reader spend"
 
     def assert_pre_spend_refusal(candidate, label):
         calls = []
