@@ -208,7 +208,9 @@ ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
 
 The runner permits only one canonical `manifest.test_set`, generates `items_sha256`, comparison
 identity and tiktoken provenance from the one report-only `manifest.estimand_contract` built with
-`ainglish.estimand.declaration()`, calculates every declared tokenizer mean through the reference
+`ainglish.estimand.declaration()` (for a replication the wrapper must carry the target's exact
+manifest as `replication_target_manifest`, and the contract is attached only when the target declares
+the same one — the register holds a one-sided `unit_span`, ainglish#144), calculates every declared tokenizer mean through the reference
 deterministic counter without rounding away exact dyadic values, declares `interval_kind:
 member_span`, and reports the maximum as the least-favourable headline. `prepare` checks the installed
 tiktoken version without loading an encoding and refuses before mint if the optional dependency is

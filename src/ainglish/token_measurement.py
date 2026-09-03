@@ -132,6 +132,81 @@ def _inherited_size_exception(spec, manifest, rows, declaration):
     }
 
 
+def _replication_target(spec, manifest):
+    """Return the verified target manifest for a replication, or None for an original."""
+    target = spec.get("replication_target_manifest")
+    target_hash = manifest.get("replicates_hash")
+    if target_hash is None:
+        if target is not None:
+            raise ValueError(
+                "replication_target_manifest requires manifest.replicates_hash; an original has no target"
+            )
+        return None
+    if not isinstance(target_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", target_hash):
+        raise ValueError("manifest.replicates_hash must be the target's 64-hex manifest commitment")
+    if not isinstance(target, dict):
+        raise ValueError(
+            "a replication requires spec.replication_target_manifest: the target's exact manifest "
+            "(client.measurement(replicates_hash)['manifest']). The runner verifies it hashes to "
+            "manifest.replicates_hash and decides from it whether an estimand_contract may be attached"
+        )
+    if manifest_commitment(target) != target_hash:
+        raise ValueError("replication_target_manifest does not hash to manifest.replicates_hash")
+    return target
+
+
+def _contract_policy(target, declaration):
+    """Decide whether the design declaration is written into the committed manifest.
+
+    The register's commensurability gate holds a ``unit_span`` declared on one side only
+    (``incommensurable hold: unit``, ainglish#144). A replication therefore carries an
+    ``estimand_contract`` exactly when its target does, and then the same one.
+    """
+    if target is None:
+        return {
+            "attached": True,
+            "reason": "original study: the declaration is this row's own estimand_contract",
+        }
+    if estimand.MANIFEST_KEY not in target:
+        legacy = target.get("estimand")
+        return {
+            "attached": False,
+            "register_gate": "unit_declared_one_sided",
+            "reason": (
+                "the replication target declares no estimand_contract; a one-sided unit_span is "
+                "held by the register (incommensurable hold: unit), so the design declaration is "
+                "kept in plan.design_declaration and the mint estimand, not in the manifest"
+            ),
+            "target_legacy_estimand_matches": (
+                _target_estimand_matches(target, declaration) if isinstance(legacy, dict) else None
+            ),
+        }
+    try:
+        target_declaration = estimand.validate(target[estimand.MANIFEST_KEY])
+    except ValueError as exc:
+        raise ValueError(
+            "the replication target's estimand_contract is malformed (%s); the runner cannot "
+            "match it, so replicate this target by hand or ask its author to retract and refile" % exc
+        ) from None
+    if target_declaration.get("kind") != estimand.KIND_V1:
+        raise ValueError(
+            "the replication target declares a %s estimand_contract; the token runner produces "
+            "only %s declarations, so this target cannot be replicated with the runner"
+            % (target_declaration.get("kind"), estimand.KIND_V1)
+        )
+    if target_declaration != declaration:
+        raise ValueError(
+            "manifest.estimand_contract must equal the target's declaration exactly: a replication "
+            "answers the target's question, and the register holds any unit_span difference "
+            "(target unit_span %r, yours %r)"
+            % (target_declaration.get("unit_span"), declaration.get("unit_span"))
+        )
+    return {
+        "attached": True,
+        "reason": "the replication target declares the same estimand_contract",
+    }
+
+
 def prepare(spec):
     """Return a frozen, mint-ready plan without importing or loading a tokenizer."""
     if not isinstance(spec, dict):
@@ -158,6 +233,7 @@ def prepare(spec):
         raise ValueError("token_delta requires at least four complete pairs")
     manifest["models"] = models
     manifest["test_set"] = rows
+    target = _replication_target(spec, manifest)
 
     if "estimand" in manifest:
         raise ValueError(
@@ -170,7 +246,11 @@ def prepare(spec):
             "manifest.estimand_contract.aggregation.reducer must be least_favourable for the "
             "maximum-tokenizer headline"
         )
-    manifest[estimand.MANIFEST_KEY] = declaration
+    policy = _contract_policy(target, declaration)
+    if policy["attached"]:
+        manifest[estimand.MANIFEST_KEY] = declaration
+    else:
+        del manifest[estimand.MANIFEST_KEY]
 
     sample_exception = None
     if not _power_of_two(len(rows)):
@@ -178,9 +258,9 @@ def prepare(spec):
         manifest["sample_size_exception"] = sample_exception
     elif "sample_size_exception" in manifest:
         raise ValueError("remove manifest.sample_size_exception from a power-of-two sample")
-    elif "replication_target_manifest" in spec or "inherited_non_power_of_two_rationale" in spec:
+    elif "inherited_non_power_of_two_rationale" in spec:
         raise ValueError(
-            "remove inherited-size operator inputs from a power-of-two run specification"
+            "remove inherited_non_power_of_two_rationale from a power-of-two run specification"
         )
 
     comparator = declaration["contrast"]
@@ -253,6 +333,12 @@ def prepare(spec):
         "state": "prepared_not_run",
         "manifest": manifest,
         "manifest_commitment": commitment,
+        "estimand_contract_policy": policy,
+        "design_declaration": declaration,
+        "replication_target": None if target is None else {
+            "manifest_hash": manifest["replicates_hash"],
+            "estimand_contract_declared": estimand.MANIFEST_KEY in target,
+        },
         "items_sha256": items_sha256,
         "pair_count": len(rows),
         "sample_size_rule": sample_exception or {
@@ -322,6 +408,12 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
         "manifest": manifest,
         "attempt_id": attempt_id,
     }
+    if manifest.get("replicates_hash") is not None:
+        # The register classifies a row as a replication from the TOP-LEVEL payload field; the
+        # copy inside the manifest is identity only. Without this line the documented
+        # client.measure(slug, result["payload"]) path files an intended replication as a new
+        # original — two live rows were misfiled that way on 2026-09-02 (@dexagon-ai, #147 review).
+        payload["replicates_hash"] = manifest["replicates_hash"]
     return {
         "kind": "ainglish.token-measurement-result.v1",
         "state": "computed_not_submitted",
@@ -380,6 +472,7 @@ def selftest():
     assert result["payload"]["panel_models"] == plan["manifest"]["models"]
     assert result["payload"]["manifest"]["interval_kind"] == "member_span"
     assert result["payload"]["manifest"]["estimand_contract"]["governance_effect"] == "report_only"
+    assert "replicates_hash" not in result["payload"], "an original carries no top-level replicates_hash"
 
     dyadic = copy.deepcopy(manifest)
     dyadic["test_set"] = [
@@ -407,6 +500,80 @@ def selftest():
         assert "non-power-of-two" in str(exc)
     else:
         raise AssertionError("unjustified non-power-of-two sample was accepted")
+
+    # Replications: the estimand_contract follows the TARGET (ainglish#144). The register's unit
+    # gate holds any one-sided unit_span, so a runner replication of a contract-less legacy original
+    # must not carry one; a replication of a declared original must carry the same one.
+    fake = lambda name: _FakeEncoding(1 if name == "tok-a" else 2)
+    legacy_target = {
+        "metric": "token_delta", "models": ["tok-a", "tok-b"],
+        "test_set": [{"english": "alpha beta gamma %d" % i, "ainglish": "alpha %d" % i} for i in range(4)],
+    }
+    replication = copy.deepcopy(manifest)
+    replication["test_set"] = [
+        {"english": "delta epsilon zeta %d" % i, "ainglish": "delta %d" % i} for i in range(4)
+    ]
+    replication["replicates_hash"] = manifest_commitment(legacy_target)
+    try:
+        prepare({"manifest": replication})
+    except ValueError as exc:
+        assert "replication_target_manifest" in str(exc), exc
+    else:
+        raise AssertionError("a replication without its target manifest was accepted")
+    try:
+        prepare({"manifest": manifest, "replication_target_manifest": legacy_target})
+    except ValueError as exc:
+        assert "replicates_hash" in str(exc), exc
+    else:
+        raise AssertionError("an original carrying a target manifest was accepted")
+    legacy_plan = prepare({"manifest": replication, "replication_target_manifest": legacy_target})
+    assert estimand.MANIFEST_KEY not in legacy_plan["manifest"], "one-sided contract would hold at the unit gate"
+    assert legacy_plan["estimand_contract_policy"]["attached"] is False
+    assert legacy_plan["estimand_contract_policy"]["register_gate"] == "unit_declared_one_sided"
+    assert legacy_plan["design_declaration"]["unit_span"] == "complete message"
+    assert legacy_plan["replication_target"]["estimand_contract_declared"] is False
+    assert legacy_plan["manifest"]["comparison_identity"]["comparator"] == manifest["estimand_contract"]["contrast"]
+    assert legacy_plan["manifest"]["replicates_hash"] == replication["replicates_hash"]
+    assert "complete message" in legacy_plan["mint"]["estimand"]
+    legacy_result = run_prepared(legacy_plan, "11111111-2222-4333-8444-555555555555", encoder_factory=fake)
+    assert estimand.MANIFEST_KEY not in legacy_result["payload"]["manifest"]
+    assert legacy_result["payload"]["value"] == -2.0
+    # The register routes a row as a replication from the TOP-LEVEL payload field, never from the
+    # manifest copy; two live rows were misfiled as originals on 2026-09-02 for exactly this gap.
+    assert legacy_result["payload"]["replicates_hash"] == legacy_plan["manifest"]["replicates_hash"]
+
+    declared_target = copy.deepcopy(legacy_target)
+    declared_target["estimand_contract"] = copy.deepcopy(manifest["estimand_contract"])
+    declared_replication = copy.deepcopy(replication)
+    declared_replication["replicates_hash"] = manifest_commitment(declared_target)
+    declared_plan = prepare({"manifest": declared_replication, "replication_target_manifest": declared_target})
+    assert declared_plan["manifest"][estimand.MANIFEST_KEY] == estimand.validate(manifest["estimand_contract"])
+    assert declared_plan["estimand_contract_policy"]["attached"] is True
+    assert declared_plan["replication_target"]["estimand_contract_declared"] is True
+
+    mismatched = copy.deepcopy(declared_replication)
+    mismatched["estimand_contract"] = estimand.declaration(
+        unit_span="single clause",
+        contrast="Ainglish form versus complete careful English",
+        population="four frozen selftest pairs",
+        reducer="least_favourable",
+        aggregation_rule="equal item mean, then maximum tokenizer mean",
+    )
+    try:
+        prepare({"manifest": mismatched, "replication_target_manifest": declared_target})
+    except ValueError as exc:
+        assert "unit_span" in str(exc) and "target" in str(exc), exc
+    else:
+        raise AssertionError("a replication whose contract differs from the target's was accepted")
+
+    wrong_target = copy.deepcopy(declared_target)
+    wrong_target["models"] = ["tok-a"]
+    try:
+        prepare({"manifest": declared_replication, "replication_target_manifest": wrong_target})
+    except ValueError as exc:
+        assert "does not hash" in str(exc), exc
+    else:
+        raise AssertionError("a target manifest that does not hash to replicates_hash was accepted")
     print("token_measurement selftest: canonical carrier, provenance, aggregation and refusal gates OK")
 
 
