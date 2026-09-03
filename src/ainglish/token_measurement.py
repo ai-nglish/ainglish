@@ -160,6 +160,44 @@ def _replication_target(spec, manifest):
     return target
 
 
+def _stratification(manifest, rows, target=None):
+    """Validate and freeze deterministic row strata, including replication identity."""
+    contract = _settlement_strata_contract(manifest)
+    target_contract = _settlement_strata_contract(target) if target is not None else None
+    if target is not None:
+        current_identity = None if contract is None else [
+            (ident, weight) for ident, weight, _share in contract
+        ]
+        target_identity = None if target_contract is None else [
+            (ident, weight) for ident, weight, _share in target_contract
+        ]
+        if current_identity != target_identity:
+            raise ValueError(
+                "a replication must preserve the target's settlement_strata ids, order, "
+                "and weights exactly"
+            )
+    if contract is None:
+        return None
+
+    declared = {ident for ident, _weight, _share in contract}
+    counts = {ident: 0 for ident in declared}
+    for index, row in enumerate(rows):
+        ident = row.get("stratum")
+        if not isinstance(ident, str) or ident not in declared:
+            raise ValueError(
+                "manifest.test_set[%d].stratum must name exactly one declared settlement stratum"
+                % index
+            )
+        counts[ident] += 1
+    missing = [ident for ident, _weight, _share in contract if counts[ident] == 0]
+    if missing:
+        raise ValueError("settlement strata with no test_set rows: %s" % ", ".join(missing))
+    return [
+        {"id": ident, "weight": weight, "share": share, "item_count": counts[ident]}
+        for ident, weight, share in contract
+    ]
+
+
 def _contract_policy(target, declaration):
     """Decide whether the design declaration is written into the committed manifest.
 
@@ -239,6 +277,7 @@ def prepare(spec):
     manifest["models"] = models
     manifest["test_set"] = rows
     target = _replication_target(spec, manifest)
+    strata = _stratification(manifest, rows, target=target)
 
     if "estimand" in manifest:
         raise ValueError(
@@ -346,6 +385,7 @@ def prepare(spec):
         },
         "items_sha256": items_sha256,
         "pair_count": len(rows),
+        **({"settlement_strata": strata} if strata is not None else {}),
         "sample_size_rule": sample_exception or {
             "kind": "power-of-two-v1", "item_count": len(rows), "passed": True,
         },
@@ -514,13 +554,38 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
         models,
         encoder_factory=encoder_factory,
     )
-    member_rows, means = [], []
+    strata = _stratification(manifest, rows)
+    member_rows, means, member_audit = [], [], []
     for name in models:
-        mean = counted["by_tokenizer"][name]["mean"]
+        raw = counted["by_tokenizer"][name]
+        cells = None
+        if strata is None:
+            mean = raw["mean"]
+        else:
+            cells = []
+            for stratum in strata:
+                values = [
+                    delta for row, delta in zip(rows, raw["per_pair"])
+                    if row["stratum"] == stratum["id"]
+                ]
+                cell_mean = sum(values) / len(values)
+                cells.append({
+                    "id": stratum["id"],
+                    "weight": stratum["weight"],
+                    "share": stratum["share"],
+                    "item_count": len(values),
+                    "value": cell_mean,
+                })
+            mean = sum(cell["share"] * cell["value"] for cell in cells)
         if not math.isfinite(mean):
             raise ValueError("non-finite tokenizer mean for %s" % name)
         means.append(mean)
         member_rows.append({"model": name, "value": mean})
+        member_audit.append({
+            "model": name,
+            "mean": mean,
+            **({"strata": cells} if cells is not None else {}),
+        })
 
     value = max(means)
     payload = {
@@ -539,6 +604,13 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
         # client.measure(slug, result["payload"]) path files an intended replication as a new
         # original — two live rows were misfiled that way on 2026-09-02 (@dexagon-ai, #147 review).
         payload["replicates_hash"] = manifest["replicates_hash"]
+    if strata is not None:
+        headline = member_audit[means.index(value)]
+        payload["stratum_results"] = [
+            {"id": cell["id"], "value": cell["value"]}
+            for cell in headline["strata"]
+        ]
+    _validate_measurement_strata(payload)
     verify_payload(payload, encoder_factory=encoder_factory)
     return {
         "kind": "ainglish.token-measurement-result.v1",
@@ -548,10 +620,7 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
             "manifest_commitment": plan["manifest_commitment"],
             "items_sha256": plan["items_sha256"],
             "pair_count": len(rows),
-            "by_tokenizer": [
-                {"model": row["model"], "mean": row["value"]}
-                for row in member_rows
-            ],
+            "by_tokenizer": member_audit,
             "headline_rule": "maximum tokenizer mean (least favourable)",
             "headline_model": models[means.index(value)],
         },
@@ -623,6 +692,46 @@ def selftest():
             assert expected in str(exc), (label, exc)
         else:
             raise AssertionError("%s corruption passed deterministic verification" % label)
+    assert "stratum_results" not in result["payload"], "an unstratified run invents no result cells"
+
+    stratified = copy.deepcopy(manifest)
+    stratified["settlement_strata"] = [
+        {"id": "common", "weight": 1},
+        {"id": "edge", "weight": 3},
+    ]
+    for index, row in enumerate(stratified["test_set"]):
+        row["stratum"] = "common" if index < 3 else "edge"
+    stratified_plan = prepare({"manifest": stratified})
+    stratified_result = run_prepared(
+        stratified_plan, "22222222-3333-4444-8555-666666666666",
+        encoder_factory=lambda name: _FakeEncoding(1 if name == "tok-a" else 2),
+    )
+    assert "replicates_hash" not in stratified_result["payload"]
+    cells = stratified_result["payload"]["stratum_results"]
+    assert [row["id"] for row in cells] == ["common", "edge"]
+    assert abs(sum(weight * row["value"] for weight, row in zip((0.25, 0.75), cells))
+               - stratified_result["payload"]["value"]) < 1e-12
+    assert all(len(row["strata"]) == 2
+               for row in stratified_result["audit"]["by_tokenizer"])
+
+    for label, mutate, expected in (
+        ("missing", lambda value: value["test_set"][0].pop("stratum"), "must name"),
+        ("unknown", lambda value: value["test_set"][0].update(stratum="other"), "must name"),
+        ("empty", lambda value: [row.update(stratum="common") for row in value["test_set"]],
+         "no test_set rows"),
+        ("duplicate", lambda value: value["settlement_strata"].append(
+            {"id": "common", "weight": 1}), "duplicate"),
+        ("bad-weight", lambda value: value["settlement_strata"][0].update(weight=0),
+         "positive"),
+    ):
+        invalid = copy.deepcopy(stratified)
+        mutate(invalid)
+        try:
+            prepare({"manifest": invalid})
+        except ValueError as exc:
+            assert expected in str(exc), (label, exc)
+        else:
+            raise AssertionError("%s stratification was accepted" % label)
 
     dyadic = copy.deepcopy(manifest)
     dyadic["test_set"] = [
@@ -691,6 +800,7 @@ def selftest():
     # The register routes a row as a replication from the TOP-LEVEL payload field, never from the
     # manifest copy; two live rows were misfiled as originals on 2026-09-02 for exactly this gap.
     assert legacy_result["payload"]["replicates_hash"] == legacy_plan["manifest"]["replicates_hash"]
+    assert "stratum_results" not in legacy_result["payload"]
 
     declared_target = copy.deepcopy(legacy_target)
     declared_target["estimand_contract"] = copy.deepcopy(manifest["estimand_contract"])
@@ -700,6 +810,37 @@ def selftest():
     assert declared_plan["manifest"][estimand.MANIFEST_KEY] == estimand.validate(manifest["estimand_contract"])
     assert declared_plan["estimand_contract_policy"]["attached"] is True
     assert declared_plan["replication_target"]["estimand_contract_declared"] is True
+
+    stratified_target = copy.deepcopy(stratified)
+    stratified_replication = copy.deepcopy(stratified)
+    stratified_replication["test_set"] = [
+        {"english": "fresh english words %d" % index,
+         "ainglish": "fresh ainglish %d" % index,
+         "stratum": "common" if index < 3 else "edge"}
+        for index in range(4)
+    ]
+    stratified_replication["replicates_hash"] = manifest_commitment(stratified_target)
+    stratified_replication_plan = prepare({
+        "manifest": stratified_replication,
+        "replication_target_manifest": stratified_target,
+    })
+    stratified_replication_result = run_prepared(
+        stratified_replication_plan, "33333333-4444-4555-8666-777777777777",
+        encoder_factory=fake,
+    )
+    assert (stratified_replication_result["payload"]["replicates_hash"]
+            == stratified_replication["replicates_hash"])
+    assert [row["id"] for row in stratified_replication_result["payload"]["stratum_results"]] \
+        == ["common", "edge"]
+
+    drifted = copy.deepcopy(stratified_replication)
+    drifted["settlement_strata"] = list(reversed(drifted["settlement_strata"]))
+    try:
+        prepare({"manifest": drifted, "replication_target_manifest": stratified_target})
+    except ValueError as exc:
+        assert "ids, order, and weights" in str(exc), exc
+    else:
+        raise AssertionError("a replication with target stratum-contract drift was accepted")
 
     mismatched = copy.deepcopy(declared_replication)
     mismatched["estimand_contract"] = estimand.declaration(

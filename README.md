@@ -360,7 +360,11 @@ English and Ainglish exposure before any reader call, resamples within cells, an
 `stratum_results`. The register requires
 the aggregate and every cell to reproduce; a good repeat result cannot cancel a failed restore
 result. Use the same contract directly in `manifest.settlement_strata` for deterministic token
-measurements.
+measurements. In an `ainglish-token` test set, every row must then carry `"stratum": "repeat"`
+(or another declared id). The runner freezes those assignments before mint, computes every
+tokenizer within every stratum, chooses the least-favourable tokenizer from the manifest-weighted
+overall results, and reports that same tokenizer's complete cell vector. A replication must retain
+the target's exact stratum ids, order, and weights.
 
 For a comprehension carrier against the proposal's full registered expansion, declare
 `"comparator": {"kind": "complete-careful-english-v1", "description": "…"}`. The harness validates
