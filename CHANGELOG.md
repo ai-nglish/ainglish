@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.51 — 2026-09-03
 
 - Add `token_measurement.verify_payload()`: a canonical `token_delta` payload is recomputed from its final
   manifest (frozen `test_set`, tiktoken provenance, per-member values, member-span bounds, least-favourable
