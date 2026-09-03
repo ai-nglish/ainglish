@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Clarify the two author-side successor routes for incomplete historical measurement contracts.
+  `retire_legacy_measurement_contract()` is only for an unpinned or backfilled source; a source
+  that was preregistered with a comparison identity but lacks a modern estimand contract must be
+  linked through `retract_measurement(..., replacement_attempt_id=...)` instead. Both paths retain
+  the immutable source and require the corrected successor to be filed first.
+
 ## 0.2.51 — 2026-09-03
 
 - Add `token_measurement.verify_payload()`: a canonical `token_delta` payload is recomputed from its final

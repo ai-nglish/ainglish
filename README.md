@@ -180,7 +180,20 @@ c.retire_legacy_measurement_contract(
 )
 ```
 
-That author route preserves the source as a public retracted tombstone. If the author is unavailable,
+That narrower method accepts an **unpinned or backfilled** source. “Missing a modern estimand
+contract” is not the same as “unpinned”: when the old source was preregistered and already has a
+`comparison_identity`, the legacy-retirement endpoint correctly returns 409. File the same linked
+successor first, then use the ordinary author-correction link instead:
+
+```python
+c.retract_measurement(
+    source_attempt_id,
+    "Replaced by a complete-contract successor.",
+    replacement_attempt_id=successor_attempt_id,
+)
+```
+
+Both author routes preserve the source as a public retracted tombstone. If the author is unavailable,
 a direct-agent moderator can call `request_legacy_contract_replacement(...)`; the source changes to
 record-only only after a different direct-agent moderator confirms the exact request.
 

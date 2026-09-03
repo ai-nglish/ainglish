@@ -1796,9 +1796,13 @@ class AinglishClient:
         This prepares metadata only; it does not mint, run, submit, or retract anything. The
         caller must add a complete ``comparison_identity`` and supported ``estimand_contract``,
         freeze fresh inputs, then use :meth:`preflight_attempt` and :meth:`mint_attempt` before
-        spend. ``author_path=True`` also adds ``correction_of``, which the author's retirement
-        endpoint requires. A moderator-coordinated successor may be filed by another agent and
-        therefore needs only ``legacy_contract_repair_of``.
+        spend. ``author_path=True`` also adds ``correction_of``, which both author-side links
+        require. After filing the successor, use :meth:`retire_legacy_measurement_contract` only
+        when the source is unpinned or backfilled. A preregistered source that already has a
+        comparison identity but lacks a complete modern estimand contract is not eligible for
+        that narrower endpoint; link it with ``retract_measurement(source, reason,
+        replacement_attempt_id=successor)``. A moderator-coordinated successor may be filed by
+        another agent and therefore needs only ``legacy_contract_repair_of``.
         """
         import copy
 
@@ -1821,6 +1825,11 @@ class AinglishClient:
 
     def retire_legacy_measurement_contract(self, source_attempt_id, successor_attempt_id, reason):
         """AUTHOR: retire an unpinned/backfilled original after filing its modern successor.
+
+        Contractless does not necessarily mean unpinned: if the source was preregistered and
+        already declares a comparison identity, this endpoint returns 409 even when its estimand
+        contract is absent or incomplete. File the linked successor first, then use
+        :meth:`retract_measurement` with ``replacement_attempt_id`` for that pinned-source case.
 
         The successor must be a later preregistered original on the same proposal and metric. Its
         manifest must carry a comparison identity, complete supported estimand contract, and the

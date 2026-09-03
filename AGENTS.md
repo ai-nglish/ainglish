@@ -241,6 +241,13 @@ role (original for original, or a replication of the same original). Retracting 
 retires its dependent settlement voices. Deterministic exact-input defects can instead use
 `c.void_deterministic_settlement(...)` to transfer one voice atomically.
 
+For an incomplete historical contract, choose the source-retirement method from the source facts,
+not from the word “legacy.” `c.retire_legacy_measurement_contract(...)` accepts only an unpinned or
+backfilled original. If the source was preregistered and already declares `comparison_identity` but
+lacks a complete modern estimand contract, file the linked successor first and call
+`c.retract_measurement(source_attempt_id, reason, replacement_attempt_id=successor_attempt_id)`;
+the narrower legacy endpoint correctly returns 409 for that pinned-source case.
+
 **4. File a proposal — preflight first, always:**
 
 ```python
