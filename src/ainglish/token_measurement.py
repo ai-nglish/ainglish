@@ -19,7 +19,12 @@ import re
 import sys
 
 from ainglish import estimand
-from ainglish.client import _canonical_json, manifest_commitment
+from ainglish.client import (
+    _canonical_json,
+    _settlement_strata_contract,
+    _validate_measurement_strata,
+    manifest_commitment,
+)
 from ainglish.measure import token_delta
 
 
@@ -356,6 +361,126 @@ def prepare(spec):
     }
 
 
+def verify_payload(payload, encoder_factory=None):
+    """Recompute a canonical token payload from its final manifest before submission.
+
+    The manifest is the experiment; headline and member rows are only claims about that
+    experiment. This verifier loads the declared encodings, repeats every count from the frozen
+    ``test_set``, and refuses if any submitted result differs. It deliberately supports only the
+    canonical runner's digest-pinned tiktoken payloads: hand-authored legacy evidence remains a
+    server concern and is never given a misleading local verification receipt.
+    """
+    if not isinstance(payload, dict) or payload.get("metric") != "token_delta":
+        raise ValueError("token payload verification requires metric token_delta")
+    manifest = payload.get("manifest")
+    if not isinstance(manifest, dict) or manifest.get("metric") != "token_delta":
+        raise ValueError("token payload verification requires manifest.metric token_delta")
+    rows, models = _test_set(manifest), _models(manifest)
+    if manifest.get("items_sha256") != _digest(rows):
+        raise ValueError("manifest.items_sha256 does not match canonical manifest.test_set")
+    if manifest.get("interval_kind") != "member_span":
+        raise ValueError("canonical token payloads require manifest.interval_kind member_span")
+
+    provenance = manifest.get("tokenizer_provenance")
+    if not isinstance(provenance, dict) \
+            or provenance.get("kind") != "ainglish.tiktoken-provenance.v1" \
+            or provenance.get("library") != "tiktoken" \
+            or provenance.get("encodings") != models:
+        raise ValueError("canonical token payload verification requires matching tiktoken provenance")
+    if encoder_factory is None:
+        try:
+            import tiktoken
+        except ImportError:
+            raise ValueError(
+                'tiktoken is required to verify this payload before submission; install "ainglish[tokens]"'
+            ) from None
+        installed = getattr(tiktoken, "__version__", importlib.metadata.version("tiktoken"))
+        if provenance.get("library_version") != installed:
+            raise ValueError(
+                "cannot verify a payload produced with tiktoken %s using installed version %s"
+                % (provenance.get("library_version"), installed)
+            )
+        encoder_factory = tiktoken.get_encoding
+
+    counted = token_delta(
+        [(row["english"], row["ainglish"]) for row in rows],
+        models,
+        encoder_factory=encoder_factory,
+    )
+    strata = _settlement_strata_contract(manifest)
+    expected_members = []
+    expected_strata = {}
+    for model in models:
+        raw = counted["by_tokenizer"][model]
+        if strata is None:
+            mean = raw["mean"]
+        else:
+            cells = {}
+            for ident, _weight, share in strata:
+                values = [
+                    delta for row, delta in zip(rows, raw["per_pair"])
+                    if row.get("stratum") == ident
+                ]
+                if not values:
+                    raise ValueError("manifest settlement stratum %r has no test_set rows" % ident)
+                cells[ident] = sum(values) / len(values)
+            unknown = {row.get("stratum") for row in rows} - {row[0] for row in strata}
+            if unknown:
+                raise ValueError("manifest.test_set carries unknown settlement strata: %s" %
+                                 sorted(map(repr, unknown)))
+            mean = sum(share * cells[ident] for ident, _weight, share in strata)
+            expected_strata[model] = cells
+        if not math.isfinite(mean):
+            raise ValueError("non-finite recomputed tokenizer mean for %s" % model)
+        expected_members.append({"model": model, "value": mean})
+
+    def same(actual, expected, field):
+        if isinstance(actual, bool) or not isinstance(actual, (int, float)) \
+                or not math.isfinite(float(actual)) \
+                or not math.isclose(float(actual), float(expected), rel_tol=0, abs_tol=1e-12):
+            raise ValueError("%s does not match the value recomputed from manifest.test_set" % field)
+
+    if payload.get("panel_models") != models:
+        raise ValueError("panel_models must exactly match manifest.models for a canonical token payload")
+    members = payload.get("per_member")
+    if not isinstance(members, list) or len(members) != len(expected_members):
+        raise ValueError("per_member must report every manifest.models encoding exactly once")
+    for index, (actual, expected) in enumerate(zip(members, expected_members)):
+        if not isinstance(actual, dict) or actual.get("model") != expected["model"]:
+            raise ValueError("per_member order and model ids must exactly match manifest.models")
+        same(actual.get("value"), expected["value"], "per_member[%d].value" % index)
+
+    means = [row["value"] for row in expected_members]
+    headline = max(means)
+    same(payload.get("value"), headline, "value")
+    same(payload.get("value_lo"), min(means), "value_lo")
+    same(payload.get("value_hi"), headline, "value_hi")
+    target = manifest.get("replicates_hash")
+    if (target is None and "replicates_hash" in payload) \
+            or (target is not None and payload.get("replicates_hash") != target):
+        raise ValueError("top-level replicates_hash must exactly match manifest.replicates_hash")
+
+    if strata is not None:
+        results = payload.get("stratum_results")
+        if not isinstance(results, list) or [row.get("id") for row in results if isinstance(row, dict)] \
+                != [row[0] for row in strata]:
+            raise ValueError("stratum_results must follow manifest.settlement_strata order")
+        cells = expected_strata[models[means.index(headline)]]
+        for index, row in enumerate(results):
+            same(row.get("value"), cells[row["id"]], "stratum_results[%d].value" % index)
+    elif "stratum_results" in payload:
+        raise ValueError("unstratified canonical token payload must not carry stratum_results")
+    _validate_measurement_strata(payload)
+    return {
+        "kind": "ainglish.token-measurement-integrity.v1",
+        "verified": True,
+        "items_sha256": manifest["items_sha256"],
+        "pair_count": len(rows),
+        "headline_model": models[means.index(headline)],
+        "headline_value": headline,
+    }
+
+
 def run_prepared(plan, attempt_id, encoder_factory=None):
     """Count a previously prepared plan and return a complete measurement payload plus audit."""
     if not isinstance(plan, dict) or plan.get("kind") != PLAN_KIND \
@@ -414,6 +539,7 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
         # client.measure(slug, result["payload"]) path files an intended replication as a new
         # original — two live rows were misfiled that way on 2026-09-02 (@dexagon-ai, #147 review).
         payload["replicates_hash"] = manifest["replicates_hash"]
+    verify_payload(payload, encoder_factory=encoder_factory)
     return {
         "kind": "ainglish.token-measurement-result.v1",
         "state": "computed_not_submitted",
@@ -473,6 +599,30 @@ def selftest():
     assert result["payload"]["manifest"]["interval_kind"] == "member_span"
     assert result["payload"]["manifest"]["estimand_contract"]["governance_effect"] == "report_only"
     assert "replicates_hash" not in result["payload"], "an original carries no top-level replicates_hash"
+    receipt = verify_payload(result["payload"], encoder_factory=lambda name: _FakeEncoding(
+        1 if name == "tok-a" else 2))
+    assert receipt["verified"] is True and receipt["headline_model"] == "tok-a"
+    for label, mutate, expected in (
+        ("headline", lambda value: value.update(value=value["value"] + 1), "value does not match"),
+        ("lower bound", lambda value: value.update(value_lo=value["value_lo"] + 1),
+         "value_lo does not match"),
+        ("member", lambda value: value["per_member"][0].update(
+            value=value["per_member"][0]["value"] + 1), "per_member[0].value"),
+        ("model order", lambda value: value["panel_models"].reverse(), "panel_models"),
+        ("replication role", lambda value: value.update(replicates_hash="0" * 64),
+         "replicates_hash"),
+        ("frozen input", lambda value: value["manifest"]["test_set"][0].update(
+            english="changed after counting"), "items_sha256"),
+    ):
+        corrupt = copy.deepcopy(result["payload"])
+        mutate(corrupt)
+        try:
+            verify_payload(corrupt, encoder_factory=lambda name: _FakeEncoding(
+                1 if name == "tok-a" else 2))
+        except ValueError as exc:
+            assert expected in str(exc), (label, exc)
+        else:
+            raise AssertionError("%s corruption passed deterministic verification" % label)
 
     dyadic = copy.deepcopy(manifest)
     dyadic["test_set"] = [
