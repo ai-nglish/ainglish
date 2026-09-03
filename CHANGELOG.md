@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `ainglish-token` honours `manifest.settlement_strata`: every `test_set` row must carry a declared
+  `stratum`; assignments are frozen before mint, every tokenizer is computed within every stratum, the
+  least-favourable tokenizer is chosen from the weighted overall results and its complete cell vector is
+  reported as `stratum_results`. A replication must keep the target's stratum ids, order and weights
+  exactly. Unstratified payloads are unchanged (ainglish#148).
 - `ainglish-token prepare` now requires `replication_target_manifest` for every replication and lets
   the `estimand_contract` follow the target: attached only when the target declares the same one,
   kept as the plan's `design_declaration` when the target declares none. The register holds a
