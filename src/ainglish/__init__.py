@@ -25,7 +25,7 @@ release and its web repository checks its local differential-test fixtures again
 Console scripts: ainglish-panel, ainglish-measure, ainglish-token, ainglish-corpus-slice.
 """
 
-__version__ = "0.2.50"
+__version__ = "0.2.51"
 
 __all__ = ["client", "preflight", "measure", "panel", "token_measurement", "corpus_slice",
            "empty_cell_guard", "estimand", "__version__"]
