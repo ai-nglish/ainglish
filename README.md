@@ -205,7 +205,14 @@ ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
 
 Submit `result.json["payload"]` unchanged with `client.measure(slug, payload)`; for a replication the
 runner copies `replicates_hash` to the payload's top level, which is the field the register routes
-on — inside the manifest it is identity only. A replication
+on — inside the manifest it is identity only. The runner recomputes its completed payload from the
+final manifest before returning it, and `client.measure()` repeats that deterministic verification
+at the authenticated write boundary. Any changed frozen input, tokenizer roster, per-member value,
+stratum cell, headline or interval bound is refused locally. This second pass is intentional: it
+catches corruption introduced after the count but before submission. It applies automatically to
+canonical payloads carrying `ainglish.tiktoken-provenance.v1`; install `ainglish[tokens]` on the
+submitting host so the declared encodings can be loaded. Hand-authored legacy token rows are not
+labelled locally verified. A replication
 (`manifest.replicates_hash`) must also carry the target's exact manifest under the wrapper's
 `replication_target_manifest` (`c.measurement(replicates_hash)["manifest"]`); the runner verifies it
 hashes to `replicates_hash` and lets the contract follow the target: `estimand_contract` is written

@@ -1759,6 +1759,15 @@ class AinglishClient:
         checks that the weighted cells equal the headline before sending; the register requires
         the pool AND every cell to reproduce, so opposite per-form drift cannot cancel."""
         _validate_measurement_strata(payload)
+        manifest = payload.get("manifest") if isinstance(payload, dict) else None
+        provenance = manifest.get("tokenizer_provenance") if isinstance(manifest, dict) else None
+        if payload.get("metric") == "token_delta" and isinstance(provenance, dict) \
+                and provenance.get("kind") == "ainglish.tiktoken-provenance.v1":
+            # A canonical deterministic result is cheap enough to verify twice: once when the
+            # runner builds it and again at the authenticated write boundary, after any caller or
+            # serialization step had its chance to corrupt headline/member values.
+            from ainglish.token_measurement import verify_payload
+            verify_payload(payload)
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
 
     def retract_measurement(self, attempt_id, reason, replacement_attempt_id=None):
@@ -2540,6 +2549,24 @@ def selftest():
     probe.measure("some slug", stratified)
     assert sent["path"] == "/api/v1/proposals/some%20slug/measurements", sent
     assert sent["payload"] is stratified, "validation must not rewrite commitment-bearing input"
+    sent.clear()
+    # Canonical token-runner evidence is recomputed at the authenticated write boundary. Keep the
+    # import lazy so the dependency-free client remains usable for every other API operation.
+    from ainglish import token_measurement as _token_measurement
+    real_verify_payload = _token_measurement.verify_payload
+    verified = []
+    _token_measurement.verify_payload = lambda payload: verified.append(payload)
+    canonical_marker = {
+        "metric": "token_delta", "value": 0,
+        "manifest": {"metric": "token_delta", "tokenizer_provenance": {
+            "kind": "ainglish.tiktoken-provenance.v1"}},
+    }
+    try:
+        probe.measure("canonical", canonical_marker)
+    finally:
+        _token_measurement.verify_payload = real_verify_payload
+    assert verified == [canonical_marker], "canonical payload skipped pre-submission verification"
+    assert sent["payload"] is canonical_marker
     sent.clear()
     bad_pool = dict(stratified, value=-9)
     try:

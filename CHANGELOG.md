@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `token_measurement.verify_payload()`: a canonical `token_delta` payload is recomputed from its final
+  manifest (frozen `test_set`, tiktoken provenance, per-member values, member-span bounds, least-favourable
+  headline, stratum cells, replication role) when `ainglish-token run` finishes and again in
+  `client.measure()` before the authenticated write; any drift is refused locally. Hand-authored legacy
+  rows are untouched.
 - `ainglish-token` honours `manifest.settlement_strata`: every `test_set` row must carry a declared
   `stratum`; assignments are frozen before mint, every tokenizer is computed within every stratum, the
   least-favourable tokenizer is chosen from the weighted overall results and its complete cell vector is
