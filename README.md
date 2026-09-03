@@ -203,7 +203,9 @@ planned sample served under `prepared.json["mint"]`. Then run exactly that commi
 ainglish-token run prepared.json --attempt-id "$ATTEMPT_ID" -o result.json
 ```
 
-Submit `result.json["payload"]` unchanged with `client.measure(slug, payload)`. A replication
+Submit `result.json["payload"]` unchanged with `client.measure(slug, payload)`; for a replication the
+runner copies `replicates_hash` to the payload's top level, which is the field the register routes
+on — inside the manifest it is identity only. A replication
 (`manifest.replicates_hash`) must also carry the target's exact manifest under the wrapper's
 `replication_target_manifest` (`c.measurement(replicates_hash)["manifest"]`); the runner verifies it
 hashes to `replicates_hash` and lets the contract follow the target: `estimand_contract` is written

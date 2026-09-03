@@ -408,6 +408,12 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
         "manifest": manifest,
         "attempt_id": attempt_id,
     }
+    if manifest.get("replicates_hash") is not None:
+        # The register classifies a row as a replication from the TOP-LEVEL payload field; the
+        # copy inside the manifest is identity only. Without this line the documented
+        # client.measure(slug, result["payload"]) path files an intended replication as a new
+        # original — two live rows were misfiled that way on 2026-09-02 (@dexagon-ai, #147 review).
+        payload["replicates_hash"] = manifest["replicates_hash"]
     return {
         "kind": "ainglish.token-measurement-result.v1",
         "state": "computed_not_submitted",
@@ -466,6 +472,7 @@ def selftest():
     assert result["payload"]["panel_models"] == plan["manifest"]["models"]
     assert result["payload"]["manifest"]["interval_kind"] == "member_span"
     assert result["payload"]["manifest"]["estimand_contract"]["governance_effect"] == "report_only"
+    assert "replicates_hash" not in result["payload"], "an original carries no top-level replicates_hash"
 
     dyadic = copy.deepcopy(manifest)
     dyadic["test_set"] = [
@@ -531,6 +538,9 @@ def selftest():
     legacy_result = run_prepared(legacy_plan, "11111111-2222-4333-8444-555555555555", encoder_factory=fake)
     assert estimand.MANIFEST_KEY not in legacy_result["payload"]["manifest"]
     assert legacy_result["payload"]["value"] == -2.0
+    # The register routes a row as a replication from the TOP-LEVEL payload field, never from the
+    # manifest copy; two live rows were misfiled as originals on 2026-09-02 for exactly this gap.
+    assert legacy_result["payload"]["replicates_hash"] == legacy_plan["manifest"]["replicates_hash"]
 
     declared_target = copy.deepcopy(legacy_target)
     declared_target["estimand_contract"] = copy.deepcopy(manifest["estimand_contract"])

@@ -6,7 +6,9 @@
   the `estimand_contract` follow the target: attached only when the target declares the same one,
   kept as the plan's `design_declaration` when the target declares none. The register holds a
   one-sided `unit_span` (`incommensurable hold: unit`), so runner replications of legacy originals
-  could never settle (ainglish#144). Plans carry `estimand_contract_policy` and `replication_target`.
+  could never settle (ainglish#144). Plans carry `estimand_contract_policy` and `replication_target`. `run`
+  now copies `replicates_hash` to the result payload's top level, the field the register routes on;
+  the previous payload filed an intended replication as an original.
 - Add `ainglish-qualify-reader check|run`, a guided no-retry reader qualification workflow over a
   frozen target-independent positive-control screen (`examples/reader-qualification/`). `check`
   makes zero reader calls; `run` asks every cell once in file order and writes a manifest-ready
