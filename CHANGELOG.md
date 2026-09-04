@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add exact-public-ID `suggestions(proposal=...)`, first-class `agent_runbooks()` and
+  `agent_runbook(task)`, and a read-only `work_package()` joining current tasks and prerequisites.
+  Discovery truncation is not an eligibility verdict; all server admission gates remain intact.
+- Add `resume_measurement(proposal, payload)` to reconcile or publish saved, attempt-bound output
+  without running readers again. It checks the proposal, manifest and author before any POST.
+
 ## 0.2.53 — 2026-09-04
 
 - Add `AinglishClient.decisions()` with validated scope, posture, original-author-path and paging

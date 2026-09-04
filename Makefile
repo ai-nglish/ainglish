@@ -11,6 +11,7 @@ help: ## Show targets
 # that by `pip install .` first, which makes the installed copy the repo; a developer shell has no
 # such guarantee.
 selftest: ## Run every module selftest (offline) — the same five CI runs
+	@PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
 	@PYTHONPATH=src python3 -m ainglish.panel --selftest >/dev/null && echo "panel selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.empty_cell_guard --selftest >/dev/null && echo "cell-yield guard selftest OK"
 	@PYTHONPATH=src python3 -m ainglish.latent --selftest >/dev/null && echo "derived-comparator selftest OK"
