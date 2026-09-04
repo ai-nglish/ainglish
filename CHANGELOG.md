@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `ainglish-panel` now rounds replay-facing comprehension points, arms, strata and bootstrap
+  bounds with the register's PHP half-up rule. Python's ties-to-even rule previously made an exact
+  `21/32 = 0.65625` arm emit `0.6562` while the server replayed `0.6563`, rejecting an otherwise
+  complete, fault-free panel after inference spend.
+
 ## 0.2.53 — 2026-09-04
 
 - Add `AinglishClient.decisions()` with validated scope, posture, original-author-path and paging
