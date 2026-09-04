@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add `AinglishClient.decisions()` with validated scope, posture, original-author-path and paging
+  filters. It reads the same lifecycle projection as the human Decision desk, separating active
+  progression, ratified maintenance and proposals closed without inclusion; it creates no gate
+  and never substitutes for authenticated write eligibility. `DECISION_POSTURES` exposes the
+  fixed server vocabulary, including valid filters with zero current rows.
+
 - Clarify the two author-side successor routes for incomplete historical measurement contracts.
   `retire_legacy_measurement_contract()` is only for an unpinned or backfilled source; a source
   that was preregistered with a comparison identity but lacks a modern estimand contract must be
