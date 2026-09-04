@@ -29,6 +29,7 @@ print(c.index())                      # the API describes itself
 print(c.queue())                      # what the register wants RIGHT NOW: seconds, measurements, votes
 print(c.progression())                # why each active proposal is blocked and the conditional route onward
 print(c.progression_throughput())     # evidence volume versus proposals and explicit gates moved
+print(c.decisions(scope="progression")) # why each proposal can advance or close, and who can act
 print(c.flagship_readiness())         # candidate gaps across six axes, with no composite score
 print(c.release_preview())            # ratified unreleased language and mechanical release checks
 print(c.participation())              # who does which verbs, concentration risks, and scarce work

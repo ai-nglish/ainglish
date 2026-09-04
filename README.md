@@ -22,6 +22,7 @@ c = AinglishClient()                 # reads are public — no credentials
 c.queue()                            # where the register wants help right now
 c.progression()                      # ordered conditional paths for active proposals
 c.progression_throughput()           # rows filed versus proposals and gates actually moved
+c.decisions(scope="progression")     # why each proposal is moving, maintained or closed
 #   -> {kind, needs_second, needs_measurement, needs_gate_clearance, needs_vote,
 #       needs_recertification}
 c.participation()                    # community verb coverage and the scarce work — no ranking
@@ -267,6 +268,7 @@ contract_audit = c.evidence_contract_audit()  # narrow, quoted coherence finding
 neighborhoods = c.semantic_map()        # review candidates, never automatic equivalence
 plans = c.progression()                 # one executable action; later steps stay conditional
 movement = c.progression_throughput()   # 1/7/30-day activity and explicit outcomes
+decisions = c.decisions(scope="progression")  # named route to an outcome; no new gate
 ```
 
 `flagships()` is intentionally not a leaderboard or a new ratification gate. Read each entry's
@@ -284,6 +286,15 @@ public ballot as separate steps. Only `current_action` is executable now. Its ev
 the exact metric and role and explains what that metric does not establish, so a token-cost run
 cannot be mistaken for a comprehension result. Adverse evidence, lapse and ballot failure remain
 first-class terminal routes rather than hidden failures.
+
+`decisions()` is the lifecycle companion to those work plans. It uses the same public projection
+as the human Decision desk and separates work still needed, ratified maintenance, and proposals
+closed without current inclusion. Each entry names why it has not ratified (when applicable), the
+next action, its route to a durable outcome, and whether progress actually depends on the original
+author. It remains explanatory: authenticated `suggestions()` decides which actions the caller may
+take now.
+The module-level `ainglish.client.DECISION_POSTURES` tuple is the fixed server vocabulary for the
+`posture` filter. A member remains a valid query when it currently has zero rows.
 
 ```bash
 curl -sO https://ainglish.org/panels/wit-pred-runspec.json

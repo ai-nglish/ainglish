@@ -82,6 +82,13 @@ FAILED_GATE_KINDS = (
     "harness_error",
     "no_measurement",
 )
+# Stable server vocabulary for ``decisions(posture=...)``. A posture remains a valid filter when
+# it currently has zero rows; clients must not infer legality from the populated counts envelope.
+DECISION_POSTURES = (
+    "rejected", "declined", "lapsed", "withdrawn", "superseded", "deprecated",
+    "ratified_disputed", "ratified", "disputed", "attention_pending", "evidence_missing",
+    "evidence_incomplete", "ballot_ready", "deterministic_blocked", "inconclusive",
+)
 CONTRIBUTION_TERMS_PATH = "/api/v1/legal/contribution-terms"
 AUTHOR_REASON_MAX = 500
 CUSTODY_REASON_MAX = 4_000
@@ -1205,6 +1212,39 @@ class AinglishClient:
         """
         return self.get("/api/v1/progression/throughput")
 
+    def decisions(self, scope=None, posture=None, author_path=None, page=None, page_size=None):
+        """Decision state for every current proposal head. Envelope:
+        {kind, generated_at, entries, counts, disputes_by_scope, stale_after_days,
+        outcome_routes, interpretation, filters, page}. ``scope`` may be progression,
+        maintenance, history, or all; ``posture`` uses one of the stable
+        ``DECISION_POSTURES`` values, including values with zero current rows;
+        ``author_path`` may be independent_path, author_or_custodian, or diagnose.
+
+        This is a read-only explanation of existing lifecycle, evidence, settlement and ballot
+        state. It creates no gate and grants no write eligibility; start an action with
+        suggestions() and re-read the selected proposal.
+        """
+        if scope is not None and scope not in ("progression", "maintenance", "history", "all"):
+            raise ValueError("scope must be progression, maintenance, history, or all")
+        if posture is not None and posture not in DECISION_POSTURES:
+            raise ValueError("posture must be one of: %s" % ", ".join(DECISION_POSTURES))
+        if author_path is not None and author_path not in (
+                "independent_path", "author_or_custodian", "diagnose"):
+            raise ValueError("author_path must be independent_path, author_or_custodian, or diagnose")
+        if page is not None and (isinstance(page, bool) or not isinstance(page, int) or page < 1):
+            raise ValueError("page must be an integer >= 1")
+        if page_size is not None and (
+                isinstance(page_size, bool) or not isinstance(page_size, int)
+                or page_size < 1 or page_size > 200):
+            raise ValueError("page_size must be an integer from 1 to 200")
+        params = {
+            key: value for key, value in {
+                "scope": scope, "posture": posture, "author_path": author_path,
+                "page": page, "page_size": page_size,
+            }.items() if value is not None
+        }
+        return self.get("/api/v1/decisions", params=params or None)
+
     def observatory(self):
         """Corpus attestations and machinery liveness. Envelope: {kind, deterministic_gate:
         {last_fired, events}, adoption_scanner: {...}, novel: [...], ...}."""
@@ -2002,6 +2042,8 @@ _DOCUMENTED = {
               "needs_recertification"),
     "progression": ("kind", "generated_at", "total", "section_population", "plans", "interpretation"),
     "progression_throughput": ("kind", "generated_at", "windows", "interpretation"),
+    "decisions": ("kind", "generated_at", "entries", "counts", "disputes_by_scope",
+                  "stale_after_days", "outcome_routes", "interpretation", "filters", "page"),
     "observatory": ("kind", "deterministic_gate", "adoption_scanner", "novel"),
     "flagships": ("kind", "selection", "entries", "content_sha256"),
     "flagship_evidence_map": ("kind", "source_catalog_sha256", "entry_count", "axes",
@@ -2601,12 +2643,33 @@ def selftest():
             (probe.release_preview, "/api/v1/releases/preview"),
             (probe.progression, "/api/v1/progression"),
             (probe.progression_throughput, "/api/v1/progression/throughput"),
+            (probe.decisions, "/api/v1/decisions"),
             (probe.evidence_contract_audit, "/api/v1/audits/evidence-contracts"),
             (probe.semantic_map, "/api/v1/semantic-map"),
     ):
         method()
         assert sent == {"path": expected_path, "params": None, "auth": False}, sent
         sent.clear()
+    probe.decisions(scope="history", posture="declined", author_path="diagnose", page=2,
+                    page_size=20)
+    assert sent == {"path": "/api/v1/decisions", "params": {
+        "scope": "history", "posture": "declined", "author_path": "diagnose",
+        "page": 2, "page_size": 20,
+    }, "auth": False}, sent
+    sent.clear()
+    for kwargs in ({"scope": "finished"}, {"posture": "missing"},
+                   {"author_path": "owner"}, {"page": 0},
+                   {"page_size": 201}, {"page_size": True}):
+        try:
+            probe.decisions(**kwargs)
+            raise AssertionError("invalid decision filter must refuse locally: %r" % kwargs)
+        except ValueError:
+            pass
+        assert sent == {}, sent
+    probe.decisions(posture="lapsed")
+    assert sent == {"path": "/api/v1/decisions", "params": {"posture": "lapsed"},
+                    "auth": False}, sent
+    sent.clear()
     terms = probe.contribution_terms()
     assert terms["version"] == "1.1" and sent["path"] == CONTRIBUTION_TERMS_PATH, sent
     sent.clear()
