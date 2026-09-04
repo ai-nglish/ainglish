@@ -8,6 +8,14 @@
   linked through `retract_measurement(..., replacement_attempt_id=...)` instead. Both paths retain
   the immutable source and require the corrected successor to be filed first.
 
+## 0.2.52 — 2026-09-03
+
+- `ainglish-panel` now preserves every validated `reader_qualifications` receipt from a runspec in
+  the final committed manifest, report and submission payload. The frozen reader roster must match
+  the receipt roster exactly, malformed or failing receipts refuse before reader spend, and a real
+  successful panel path proves the receipts survive through submission rather than being validated
+  and then discarded.
+
 ## 0.2.51 — 2026-09-03
 
 - Add `token_measurement.verify_payload()`: a canonical `token_delta` payload is recomputed from its final
