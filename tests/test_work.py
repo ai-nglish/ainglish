@@ -31,7 +31,11 @@ class Probe(AinglishClient):
         self.calls.append(("GET", path, auth))
         if path.startswith("/api/v1/me/suggestions"):
             return copy.deepcopy(self.snapshot)
-        if path.startswith("/api/v1/proposals/"):
+        if path.endswith('/slug-history'):
+            return {'proposal_public_id': ID, 'current_slug': 'current-slug'}
+        if path == '/api/v1/proposals/' + ID:
+            raise AssertionError('detail API is slug-only; resolve the namespace first')
+        if path == '/api/v1/proposals/current-slug':
             return {"public_id": ID, "slug": "current-slug", "stage": "seconded"}
         if path.startswith("/api/v1/attempts/"):
             return copy.deepcopy(self.state)
@@ -68,6 +72,8 @@ class WorkTests(unittest.TestCase):
         p = c.work_package(ID, metric="token_delta")
         self.assertEqual(p["status"], "offered")
         self.assertTrue(all(row[0] == "GET" for row in c.calls))
+        self.assertIn(('GET', '/api/v1/proposals/' + ID + '/slug-history', False), c.calls)
+        self.assertIn(('GET', '/api/v1/proposals/current-slug', True), c.calls)
         p["suggestions"][0]["metric"] = "changed"
         self.assertEqual(c.card["metric"], "token_delta")
         self.assertEqual(c.work_package(ID, metric="comprehension_accuracy_delta")["status"], "not_offered")

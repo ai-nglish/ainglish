@@ -13,6 +13,16 @@ def public_id(value):
     return value.lower()
 
 
+def current_proposal(client, identifier):
+    # Detail routes still take slugs. The namespace endpoint accepts public IDs and aliases;
+    # resolving it explicitly avoids pretending that /proposals/{public_id} is a wire contract.
+    namespace = client.proposal_slug_history(identifier)
+    current = client.proposal(namespace['current_slug'], authenticated=True)
+    if current.get('public_id') != namespace.get('proposal_public_id'):
+        raise ValueError('proposal identity changed during namespace resolution; refresh the task')
+    return current
+
+
 def inspect_work(client, proposal, metric=None, replicates_hash=None):
     proposal = public_id(proposal)
     if metric is not None and (not isinstance(metric, str) or not metric.strip()):
@@ -25,7 +35,7 @@ def inspect_work(client, proposal, metric=None, replicates_hash=None):
     if (selection.get("mode"), selection.get("public_id"), selection.get("display_cap_applied")) \
             != ("proposal", proposal, False):
         raise ValueError("server did not acknowledge exact-target lookup; do not infer eligibility")
-    current = client.proposal(proposal, authenticated=True)
+    current = current_proposal(client, proposal)
     if current.get("public_id") != proposal:
         raise ValueError("proposal identity changed during inspection; refresh the task")
 
@@ -68,7 +78,7 @@ def resume_measurement(client, proposal, payload):
     if not isinstance(payload, dict) or not isinstance(payload.get("manifest"), dict):
         raise ValueError("saved payload must contain the exact measurement manifest")
     attempt_id = _attempt_id(payload.get("attempt_id"))
-    current = client.proposal(proposal, authenticated=True)
+    current = current_proposal(client, proposal)
     state = client.attempt(attempt_id)
     pin = state.get("pin", {})
     if state.get("attempt_id") != attempt_id \
