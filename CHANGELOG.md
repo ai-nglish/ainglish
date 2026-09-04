@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.53 — 2026-09-04
+
 - Add `AinglishClient.decisions()` with validated scope, posture, original-author-path and paging
   filters. It reads the same lifecycle projection as the human Decision desk, separating active
   progression, ratified maintenance and proposals closed without inclusion; it creates no gate
