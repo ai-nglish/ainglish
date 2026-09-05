@@ -72,8 +72,22 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 
 NEUTRAL_EPS = 1e-9
+
+
+def _register_round(value, digits):
+    """Round a replay-facing number with the register's PHP half-up rule.
+
+    Python's built-in ``round`` uses ties-to-even, while PHP's ``round`` (the authoritative
+    interval-provenance replay) uses half-away-from-zero. An exact arm accuracy such as 21/32 =
+    0.65625 therefore became 0.6562 in the harness and 0.6563 in the register, making a complete
+    fault-free panel unfileable after spend. Decimal ROUND_HALF_UP is half-away-from-zero for both
+    signs and keeps the wire result identical to the server verifier.
+    """
+    quantum = Decimal(1).scaleb(-digits)
+    return float(Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP))
 # Statuses that mean "the far side is busy or broken", as opposed to "you asked wrongly".
 # 520-524 are Cloudflare's origin-side family (unknown error, origin down, connection timed out,
 # origin unreachable, origin timeout). Nous Portal sits behind Cloudflare, and a reasoning reader
@@ -1583,23 +1597,23 @@ def _stratified_accuracy(rows, items, contract):
         if acc["english"] is None or acc["ainglish"] is None:
             raise ValueError(f"settlement stratum {ident!r} lost every live cell in one arm")
         arms = {
-            "english": round(acc["english"], 4),
-            "ainglish": round(acc["ainglish"], 4),
-            "chance": round(sum(1 / len(item["options"]) for item in subset) / len(subset), 4),
+            "english": _register_round(acc["english"], 4),
+            "ainglish": _register_round(acc["ainglish"], 4),
+            "chance": _register_round(sum(1 / len(item["options"]) for item in subset) / len(subset), 4),
         }
         result_rows.append({
             "id": ident,
-            "value": round(100 * (arms["ainglish"] - arms["english"]), 4),
+            "value": _register_round(100 * (arms["ainglish"] - arms["english"]), 4),
             "arms": arms,
         })
     by_id = {row["id"]: row for row in result_rows}
     top_arms = {
-        arm: round(sum(row["share"] * by_id[row["id"]]["arms"][arm]
-                       for row in contract), 4)
+        arm: _register_round(sum(row["share"] * by_id[row["id"]]["arms"][arm]
+                                 for row in contract), 4)
         for arm in ("english", "ainglish", "chance")
     }
-    value = round(sum(row["share"] * by_id[row["id"]]["value"]
-                      for row in contract), 4)
+    value = _register_round(sum(row["share"] * by_id[row["id"]]["value"]
+                                for row in contract), 4)
     return value, top_arms, result_rows
 
 
@@ -3163,7 +3177,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     acc, ent = score(real_rows, real)
     metric = manifest["metric"]
     if metric == "comprehension_accuracy_delta":
-        value = round(100 * (acc["ainglish"] - acc["english"]), 2)
+        value = _register_round(100 * (acc["ainglish"] - acc["english"]), 2)
     elif metric == "interpretation_entropy_delta":
         value = round(ent["ainglish"] - ent["english"], 4)
     elif metric == "learnability":
@@ -3266,7 +3280,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             except ValueError:
                 continue
         elif metric == "comprehension_accuracy_delta" and p_acc["ainglish"] is not None and p_acc["english"] is not None:
-            p_val = round(100 * (p_acc["ainglish"] - p_acc["english"]), 2)
+            p_val = _register_round(100 * (p_acc["ainglish"] - p_acc["english"]), 2)
         elif metric == "interpretation_entropy_delta" and p_ent["ainglish"] is not None and p_ent["english"] is not None:
             p_val = round(p_ent["ainglish"] - p_ent["english"], 4)
         elif metric == "learnability" and p_acc["ainglish"] is not None:
@@ -3284,9 +3298,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # Protocol v2: report the arms' ABSOLUTE accuracies beside the delta — two arms at 0.93-0.98
     # cannot resolve a small advantage, and only the arms let the server say so (resolution_bound).
     # chance = mean over real items of 1/len(options): the floor a guessing reader converges to.
-    arms = {"english": round(acc["english"], 4) if acc["english"] is not None else None,
-            "ainglish": round(acc["ainglish"], 4) if acc["ainglish"] is not None else None,
-            "chance": round(sum(1 / len(i["options"]) for i in real) / len(real), 4) if real else None}
+    arms = {"english": _register_round(acc["english"], 4) if acc["english"] is not None else None,
+            "ainglish": _register_round(acc["ainglish"], 4) if acc["ainglish"] is not None else None,
+            "chance": _register_round(sum(1 / len(i["options"]) for i in real) / len(real), 4) if real else None}
     if metric == "interpretation_entropy_delta":
         # The arms of an ENTROPY row are the per-arm mean entropies in bits, not accuracies — the
         # server's resolution bound reads arms in the metric's own unit. max_bits is the panel's
@@ -3444,8 +3458,10 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         "resample_down": resample,
         "yield_report": yield_report,
         "calibration": calibration_receipt(verdict, planted_arm),
-        "value_lo": round(lo, 4) if lo is not None else None,
-        "value_hi": round(hi, 4) if hi is not None else None,
+        "value_lo": ((_register_round(lo, 4) if metric == "comprehension_accuracy_delta"
+                      else round(lo, 4)) if lo is not None else None),
+        "value_hi": ((_register_round(hi, 4) if metric == "comprehension_accuracy_delta"
+                      else round(hi, 4)) if hi is not None else None),
         "arms": arms,
         "panel_models": [labelled(p_) for p_ in panel],
         # The ROSTER COUNT, named as what it is. It used to be emitted as `panel_neff`, which is a
@@ -4407,6 +4423,26 @@ def selftest():
         "manifest_weighted_stratum_accuracy_delta_pp"
     assert {row["stratum"] for row in stratified["interval_provenance"]["items"]} == \
         {"repeat", "restore"}
+    # Replay parity at an exact halfway digit. Python round(0.65625, 4) is 0.6562 (ties-to-even),
+    # while the PHP register verifier derives 0.6563. Before _register_round this made the real
+    # 2026-09-04 in-parallel/in-sequence panel unfileable after all 464 cells completed.
+    tie_items = [
+        {"id": f"tie-{index:02d}", "settlement_stratum": "tie",
+         "options": ["yes", "no"], "answer": "yes"}
+        for index in range(64)
+    ]
+    tie_rows = [
+        (item["id"], "english" if index < 32 else "ainglish", "reader-a",
+         "yes" if index < 32 or index - 32 < 21 else "no")
+        for index, item in enumerate(tie_items)
+    ]
+    tie_value, tie_arms, tie_strata = _stratified_accuracy(
+        tie_rows, tie_items, [{"id": "tie", "weight": 1.0, "share": 1.0}],
+    )
+    assert tie_arms == {"english": 1.0, "ainglish": 0.6563, "chance": 0.5}, tie_arms
+    assert tie_value == -34.37 and tie_strata[0]["value"] == -34.37, tie_strata
+    assert _register_round(-18.515, 2) == -18.52, \
+        "negative halfway values must match PHP's half-away-from-zero rule"
     unbalanced_items = [
         ({**item, "settlement_stratum": ("repeat" if item["id"] == "r1" else "restore")}
          if not item.get("calibration") else dict(item))
