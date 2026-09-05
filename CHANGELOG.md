@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add optional prospective `admissibility` policies to comprehension, entropy and learnability
+  panels: explicit off-option/absence/truncation/transport cell budgets and each-reader calibration.
+  Policies bind the manifest and attempt; failures retain partial cells and abort before filing.
+  Existing gates remain in force; old experiments and unsupported robustness quartets are not
+  silently reinterpreted. See `docs/experiment-admissibility.md`.
+
 - `ainglish.measure.token_delta` now normalises each pair to two strings and refuses anything else.
   Dict-shaped rows previously unpacked their two KEYS, so every pair scored +2 on cl100k regardless of
   its text; that number reached the register as a filed result on several rows in 2026-09.
