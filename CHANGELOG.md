@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add optional prospective `admissibility` policies to comprehension, entropy and learnability
+  panels: explicit off-option/absence/truncation/transport cell budgets and each-reader calibration.
+  Policies bind the manifest and attempt; failures retain partial cells and abort before filing.
+  Existing gates remain in force; old experiments and unsupported robustness quartets are not
+  silently reinterpreted. See `docs/experiment-admissibility.md`.
+
 - Add read-only `ballots()` discovery for all formally open ballots, preserving the distinction
   from recommended voting work and unresolved evidence. Requires the corresponding server
   endpoint; unsupported deployments raise normally instead of returning a misleading subset.

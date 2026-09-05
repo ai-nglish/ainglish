@@ -2651,9 +2651,52 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
     return measurement
 
 
+_ADMISSIBILITY_LIMITS = (
+    "max_off_option_cells", "max_absent_cells", "max_truncated_cells",
+    "max_transport_fault_cells",
+)
+
+
+def admissibility_policy(manifest):
+    """Validate an optional prospective policy; omission preserves historical behavior.
+
+    These are absolute cell budgets across calibration AND real exposure. They can only add
+    refusals: the existing yield, calibration and clean-preregistration gates still apply.
+    In particular a nonzero transport budget cannot relax the clean-manifest commitment.
+    """
+    if "admissibility" not in manifest:
+        return None
+    raw = manifest["admissibility"]
+    keys = {"kind", "per_reader_calibration", *_ADMISSIBILITY_LIMITS}
+    if not isinstance(raw, dict) or set(raw) != keys:
+        raise ValueError("admissibility requires exactly: " + ", ".join(sorted(keys)))
+    if raw["kind"] != "ainglish.panel.admissibility.v1":
+        raise ValueError("unsupported admissibility kind")
+    if type(raw["per_reader_calibration"]) is not bool:
+        raise ValueError("per_reader_calibration must be a boolean")
+    for name in _ADMISSIBILITY_LIMITS:
+        if type(raw[name]) is not int or raw[name] < 0:
+            raise ValueError(name + " must be a non-negative integer cell count")
+    if manifest.get("metric") == "robustness_delta":
+        raise ValueError("admissibility v1 does not cover robustness quartets; no silent fallback")
+    return dict(raw)
+
+
+def admissibility_gate_statement(manifest):
+    policy = admissibility_policy(manifest)
+    return ("executable panel admissibility: " + json.dumps(policy, sort_keys=True,
+                                                          separators=(",", ":"))
+            if policy is not None else None)
+
+
 def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None):
     if not isinstance(manifest, dict):
         print("REFUSING to run: the panel manifest must be one JSON object.")
+        return None
+    try:
+        policy = admissibility_policy(manifest)
+    except ValueError as exc:
+        print(f"REFUSING before reader spend: invalid admissibility policy ({exc}).")
         return None
     items = manifest.get("items")
     panel = manifest.get("panel")
@@ -2872,6 +2915,14 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     truncations = {}
 
     attempted_cells = {"calibration": 0, "real": 0}
+    admission_counts = {key: 0 for key in _ADMISSIBILITY_LIMITS}
+    admission_by_stage = {stage: dict(admission_counts) for stage in attempted_cells}
+
+    def admission_receipt():
+        return {"kind": "ainglish.panel.admissibility-observation.v1",
+                "scope": "all started calibration and real cells; no retries",
+                "counts": dict(admission_counts),
+                "by_stage": {stage: dict(counts) for stage, counts in admission_by_stage.items()}}
 
     def record_result(result_sink, item, arm, reader, answer, plan_index=None,
                       execution_state=None, absence_reason=None):
@@ -2979,10 +3030,30 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
                 execution_state=execution_state,
                 absence_reason=absence_reason,
             )
+            if policy is not None:
+                # Count drained concurrent calls too, but never re-enter them into scoring.
+                one_truncation = {}
+                note_truncation(one_truncation, plan["reader"], plan["arm"], answer)
+                increments = {
+                    "max_off_option_cells": int(not is_absent(answer)
+                                                and str(answer) not in plan["item"]["options"]),
+                    "max_absent_cells": int(is_absent(answer)),
+                    "max_truncated_cells": truncation_receipt(
+                        one_truncation, ("english", "ainglish"))["total"],
+                    "max_transport_fault_cells": int(bool(fault_reason)),
+                }
+                for name, count in increments.items():
+                    admission_counts[name] += count
+                    admission_by_stage[stage][name] += count
             if not enter_estimator:
                 return None
             if fatal is not None:
                 return ("exception", fatal)
+            if policy is not None:
+                exceeded = [name for name in _ADMISSIBILITY_LIMITS
+                            if admission_counts[name] > policy[name]]
+                if exceeded:
+                    return ("admissibility", exceeded)
             try:
                 guard.observe(plan["reader"], plan["arm"],
                               None if is_absent(answer) else str(answer), answer)
@@ -3000,6 +3071,18 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
                 except Exception:
                     pass
                 raise stop_value
+            if stop_kind == "admissibility":
+                return _panel_refusal(
+                    stage, "transport_or_yield" if faults else "admissibility",
+                    "REFUSING: prospective admissibility budget exceeded: "
+                    + ", ".join(stop_value) + ". No measurement emitted; no cell retried.",
+                    attempted_cells["calibration"], attempted_cells["real"],
+                    {"admissibility": admission_receipt(), "policy": policy,
+                     "exceeded": stop_value, "transport_faults": faults,
+                     "concurrency_execution": execution},
+                    instrument_preparation=instrument_preparation_receipt(
+                        panel, _manifest_unbound_entry_point(manifest)),
+                )
             abort = stop_value
             message = (f"\n{abort}\nNo measurement emitted — a fault-produced delta is "
                        "worse than no delta, because it looks like a result.")
@@ -3084,6 +3167,20 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         }
     verdict = calibration_verdict(detectable, undetectable, calibration_min_gap,
                                   calibration_min_recovered, calibration_rule)
+    if policy is not None and policy["per_reader_calibration"]:
+        failed_readers = [name for name, result in calibration_by_reader.items()
+                          if not result["passed"]]
+        if failed_readers:
+            return _panel_refusal(
+                "calibration", "admissibility",
+                "REFUSING: each-reader calibration failed for " + ", ".join(failed_readers)
+                + ". Pooled calibration cannot rescue a failed reader; no real cell bought.",
+                attempted_cells["calibration"], 0,
+                {"policy": policy, "admissibility": admission_receipt(),
+                 "by_reader": calibration_by_reader, "failed_readers": failed_readers},
+                instrument_preparation=instrument_preparation_receipt(
+                    panel, _manifest_unbound_entry_point(manifest)),
+            )
     if not verdict["passed"]:
         # A no-headroom refusal is a control-SET failure, so it must not be filed under the
         # reason that means "these readers cannot detect a known difference".
@@ -3375,6 +3472,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         # keep the exact items in the spec; bulky sets should be published and digest-pinned by URL.
         spec["items"] = items
     spec["models"] = [labelled(p_) for p_ in panel]
+    if policy is not None:
+        spec["admissibility"] = policy
     if qualified_receipts is not None:
         # `reader_qualification.attach()` validates a receipt on the caller's input manifest,
         # but the panel deliberately derives a smaller, immutable filed manifest here. Dropping
@@ -3482,6 +3581,10 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         "per_member": per_member,
         "manifest": spec,
     }
+    if policy is not None:
+        # Observations are result-side, never outcome-dependent manifest identity.
+        measurement["calibration"]["admissibility"] = admission_receipt()
+        measurement["calibration"]["by_reader"] = calibration_by_reader
     if interval_provenance is not None:
         measurement["interval_provenance"] = interval_provenance
     if accuracy_resolution is not None:
@@ -6634,7 +6737,14 @@ def _run_preregistered_panel(manifest, spec, ask_fn, client, receipt_dir=None,
     import contextlib
     from ainglish.client import AinglishError, manifest_commitment
 
-    settings = _attempt_settings(spec["attempt"], (calibration_gate_statement(manifest),))
+    effective_gates = [calibration_gate_statement(manifest)]
+    try:
+        policy_gate = admissibility_gate_statement(manifest)
+    except ValueError as exc:
+        raise SystemExit(f"REFUSING before attempt mint: {exc}") from None
+    if policy_gate is not None:
+        effective_gates.append(policy_gate)
+    settings = _attempt_settings(spec["attempt"], effective_gates)
     _validate_real_reader_configuration(manifest, ask_fn)
     if ask_fn is ask:
         prepare_reader_instruments(manifest)

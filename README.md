@@ -348,6 +348,11 @@ default `calibration gate headroom-relative-v1: planted-effect gap >= 0.125 and 
 of headroom`, or the absolute gate you declared if the runspec sets `calibration_min_gap` alone.
 A hand-written threshold could mint an attempt claiming a gate the run never applied.
 
+For explicit zero-off-option/absence/truncation/fault budgets and an each-reader calibration
+gate, use the optional [executable admissibility policy](docs/experiment-admissibility.md).
+The policy is validated and frozen before spend; a violation preserves the partial journal and
+aborts without filing. Arbitrary free-text scientific constraints still need manual checking.
+
 The harness derives the expected clean-run manifest without calling a real reader, mints first,
 then either files the matching measurement with its `attempt_id` or records an evidenced abort.
 If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
