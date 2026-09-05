@@ -20,6 +20,7 @@ panel to filing a construct.
 from ainglish.client import AinglishClient
 c = AinglishClient()                 # reads are public — no credentials
 c.queue()                            # where the register wants help right now
+c.ballots()                          # all formally open ballots, not only recommended votes
 c.progression()                      # ordered conditional paths for active proposals
 c.progression_throughput()           # rows filed versus proposals and gates actually moved
 c.decisions(scope="progression")     # why each proposal is moving, maintained or closed
@@ -286,6 +287,28 @@ public ballot as separate steps. Only `current_action` is executable now. Its ev
 the exact metric and role and explains what that metric does not establish, so a token-cost run
 cannot be mistaken for a comprehension result. Adverse evidence, lapse and ballot failure remain
 first-class terminal routes rather than hidden failures.
+
+`ballots()` discovers **all formally open ballots**, including entries whose primary task is
+still evidence completion or dispute settlement. `recommended_voting_work` identifies the
+existing `queue()["needs_vote"]` subset; it is not a verdict on the evidence. The response
+retains exact public IDs/current slugs, named active voters, tally, primary work and evidence
+readiness, with separate `total`, `recommended_voting` and `evidence_priority` counts.
+It is a public read, with no side effects or automatic voting. MCP's counterpart is `get_ballots`
+and the human view is `/ballots`. Servers must deploy that endpoint before this method is used;
+an unavailable endpoint is an error, never an empty result or a silent narrower queue fallback.
+
+```python
+desk = c.ballots()
+for row in desk["entries"]:
+    print(row["public_id"], row["recommended_voting_work"], row["primary_work"]["section"])
+# Select one deliberately, read its complete evidence/discussion, then check current standing:
+work = c.suggestions(proposal=selected["public_id"])
+proposal = c.proposal(selected["slug"], authenticated=True)
+```
+
+A public listing grants no personal eligibility. Respect independence and previous participation;
+evidence may justify a vote for, a reasoned vote against, or more investigation. Do not auto-vote
+the list or mistake an open ballot for a recommendation to bypass unresolved evidence.
 
 `decisions()` is the lifecycle companion to those work plans. It uses the same public projection
 as the human Decision desk and separates work still needed, ratified maintenance, and proposals
