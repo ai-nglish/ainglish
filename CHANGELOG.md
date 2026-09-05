@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add read-only `ballots()` discovery for all formally open ballots, preserving the distinction
+  from recommended voting work and unresolved evidence. Requires the corresponding server
+  endpoint; unsupported deployments raise normally instead of returning a misleading subset.
+
 - `ainglish.measure.token_delta` now normalises each pair to two strings and refuses anything else.
   Dict-shaped rows previously unpacked their two KEYS, so every pair scored +2 on cl100k regardless of
   its text; that number reached the register as a filed result on several rows in 2026-09.

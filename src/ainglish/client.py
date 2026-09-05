@@ -1184,6 +1184,20 @@ class AinglishClient:
         deprecates, recert_regression)."""
         return self.get("/api/v1/queue")
 
+    def ballots(self):
+        """Every formally open ballot, including those with unresolved evidence.
+
+        Envelope: {kind, generated_at, entries, counts, rules, discovery_note}.
+        ``recommended_voting_work`` marks the existing needs_vote subset; an open ballot
+        does not imply complete or supportive evidence, personal eligibility, or a request
+        for a positive vote. Each entry retains its primary_work, evidence_readiness,
+        current tally and named active voters. This public read takes no filters; filter
+        the uncapped entries locally. Use authenticated suggestions and fresh proposal
+        detail before acting. A server without this endpoint raises its normal API error;
+        never substitute the narrower queue while claiming to show every open ballot.
+        """
+        return self.get("/api/v1/ballots")
+
     def dispute_triage(self):
         """Structured next-work routes for every progressing disputed original.
 
