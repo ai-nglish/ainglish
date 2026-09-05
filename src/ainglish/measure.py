@@ -120,6 +120,20 @@ def proposal_population(base="https://ainglish.org", page_limit=PROPOSAL_PAGE_SI
         cursor = next_cursor
 
 # ------------------------------------------------------------------ token_delta
+def _pair_strings(row):
+    """Return (english, ainglish) strings from a tuple/list row or an {english, ainglish} dict.
+
+    Anything else is refused. Iterating a dict row used to unpack its two KEYS, so every pair
+    scored len(encode("ainglish")) - len(encode("english")) = +2 on cl100k whatever its text;
+    that number reached the register as a result more than once.
+    """
+    if isinstance(row, dict):
+        row = (row.get("english"), row.get("ainglish"))
+    if isinstance(row, (list, tuple)) and len(row) == 2 and all(isinstance(x, str) for x in row):
+        return row[0], row[1]
+    raise ValueError("each token_delta pair must be (english, ainglish) strings or {english, ainglish}; got %r" % (row,))
+
+
 def token_delta(pairs, tokenizers, encoder_factory=None):
     """Return exact per-tokenizer item means and the least-favourable floor.
 
@@ -133,6 +147,7 @@ def token_delta(pairs, tokenizers, encoder_factory=None):
         except ImportError:
             return {"skipped": "install tiktoken to reproduce token_delta (pip install tiktoken)"}
         encoder_factory = tiktoken.get_encoding
+    pairs = [_pair_strings(row) for row in pairs]
     out, means = {}, {}
     for name in tokenizers:
         enc = encoder_factory(name)
