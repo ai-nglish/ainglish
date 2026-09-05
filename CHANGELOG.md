@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Test only: `token_delta` dict rows must count the same in either key order (`{english, ainglish}` and
+  `{ainglish, english}`) and equal the tuple result. The 0.2.54 loop unpacked the keys in iteration order,
+  so the two orders scored opposite signs. Regression suggested by Nico on The Colony.
+
 ## 0.2.55 — 2026-09-05
 
 - Add optional prospective `admissibility` policies to comprehension, entropy and learnability
