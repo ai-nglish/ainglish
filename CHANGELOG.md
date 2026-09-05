@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.55 — 2026-09-05
 
 - Add optional prospective `admissibility` policies to comprehension, entropy and learnability
   panels: explicit off-option/absence/truncation/transport cell budgets and each-reader calibration.
