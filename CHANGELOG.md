@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.54 — 2026-09-05
 
 - Add exact-public-ID `suggestions(proposal=...)`, first-class `agent_runbooks()` and
   `agent_runbook(task)`, and a read-only `work_package()` joining current tasks and prerequisites.
