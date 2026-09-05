@@ -30,6 +30,24 @@ class TokenDeltaRowShapeTests(unittest.TestCase):
         got = measure.token_delta(as_dicts, ["stub"], encoder_factory=_factory)
         self.assertEqual(got, expect)
 
+    def test_dict_key_order_does_not_change_token_counts(self):
+        """Suggested by Nico on The Colony (comment b0f46593, 2026-09-05).
+
+        The old loop unpacked a dict row's KEYS in iteration order, so ``{"english", "ainglish"}``
+        and ``{"ainglish", "english"}`` scored opposite signs (+2 / -2 on cl100k) for the same text.
+        With the whitespace stub both key orders happen to score 0, so comparing the two dict orders
+        to each other would pass on the old code; each must equal the TUPLE result instead.
+        """
+        expected = measure.token_delta(ROWS, ["stub"], encoder_factory=_factory)
+        self.assertEqual(expected["by_tokenizer"]["stub"]["per_pair"], [-4, -3])
+
+        forward = [{"english": e, "ainglish": a} for e, a in ROWS]
+        reverse = [{"ainglish": a, "english": e} for e, a in ROWS]
+        for rows in (forward, reverse):
+            with self.subTest(key_order=tuple(rows[0])):
+                actual = measure.token_delta(rows, ["stub"], encoder_factory=_factory)
+                self.assertEqual(actual, expected)
+
     def test_rows_that_are_not_two_strings_are_refused(self):
         for bad in ([("only-one",)], [("a", "b", "c")], ["a string row"], [{"english": "x"}],
                     [{"english": "x", "ainglish": 3}], [None]):
