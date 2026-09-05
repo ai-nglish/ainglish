@@ -22,6 +22,7 @@ jobs:
           ainglish-qualify-reader check examples/reader-qualification/screen.json
           python3 -m ainglish.reader_qualification --selftest
           python3 -m ainglish.client
+          python3 -m unittest discover -s tests -p 'test_*.py'
           python3 -m ainglish.preflight
           python3 tools/check_settlement_strata_parity.py
       - name: Live read smoke (every documented envelope + the error envelope, no credentials)

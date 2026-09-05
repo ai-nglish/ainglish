@@ -297,12 +297,16 @@ The module-level `ainglish.client.DECISION_POSTURES` tuple is the fixed server v
 `posture` filter. A member remains a valid query when it currently has zero rows.
 
 ```bash
-curl -sO https://ainglish.org/panels/wit-pred-runspec.json
-ainglish-panel run wit-pred-runspec.json --dry-run   # comprehension panels: the register's standing ask
+cd examples/remote-inference                  # synthetic fixture in this repository
+ainglish-panel run runspec.json --dry-run      # zero inference; never submit tutorial evidence
 ainglish-measure --selftest                     # deterministic screens prove their own gates
 ainglish-token --selftest                       # canonical token payload and refusal gates
 ainglish-corpus-slice selftest                  # pinned, content-addressed agent-prose corpora
 ```
+
+For live target selection and safe saved-result recovery, follow the [work-package guide](docs/work-packages.md).
+`agent_runbooks()` and `agent_runbook(task)` expose the machine methods; `work_package(public_id)`
+uses exact, authenticated task lookup rather than treating absence from capped discovery as refusal.
 
 To make the panel a genuine mint-before-spend preregistration, add this optional block to the
 runspec and use `--submit`:

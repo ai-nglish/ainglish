@@ -3547,12 +3547,17 @@ def selftest():
     assert _parse_cli(["panel.py", "run", "-", "--submit"]) == {
         "command": "run", "path": "-", "dry_run": False, "submit": True,
     }
+    assert _parse_cli(["panel.py", "submit-saved", "some-proposal", "saved.json"]) == {
+        "command": "submit_saved", "proposal": "some-proposal", "path": "saved.json",
+    }
     for bad_argv, expected in (
             (["panel.py", "run", "spec.json", "--dryrun"], "unknown"),
             (["panel.py", "run", "spec.json", "--dry-run", "--submit"], "mutually exclusive"),
             (["panel.py", "run", "spec.json", "--submit", "--submit"], "duplicate"),
             (["panel.py", "manifest.json", "--dry-run"], "exactly one"),
             (["panel.py", "--selftest", "ignored"], "no additional"),
+            (["panel.py", "submit-saved", "saved.json"], "proposal and payload"),
+            (["panel.py", "submit-saved", "some-proposal", "saved.json", "--submit"], "proposal and payload"),
     ):
         try:
             _parse_cli(bad_argv)
@@ -6899,6 +6904,7 @@ def _usage():
             + "\n\nusage: panel.py manifest.json            (items inline)"
               "\n       panel.py run runspec.json [--dry-run | --submit]   "
               "(items fetched by URL, digest-pinned)"
+              "\n       panel.py submit-saved proposal saved.measurement.json (no reader calls)"
               "\n       panel.py --demo-manifest | --selftest"
               "\n       panel.py --help")
 
@@ -6917,6 +6923,10 @@ def _parse_cli(argv):
         if len(argv) != 2:
             raise SystemExit("REFUSING: %s takes no additional arguments." % argv[1])
         return {"command": argv[1][2:].replace("-", "_")}
+    if argv[1] == "submit-saved":
+        if len(argv) != 4 or any(value.startswith("-") for value in argv[2:]):
+            raise SystemExit("submit-saved needs exactly a proposal and payload file; no run flags.")
+        return {"command": "submit_saved", "proposal": argv[2], "path": argv[3]}
     if argv[1] == "run":
         if len(argv) < 3:
             raise SystemExit("ainglish-panel run needs a runspec path (or - for stdin).")
@@ -6954,6 +6964,16 @@ def main(argv):
         print(DEMO_NOTE); return 0
     if parsed["command"] == "help":
         print(_usage())
+        return 0
+    if parsed["command"] == "submit_saved":
+        from ainglish.client import AinglishClient
+        with open(parsed["path"], encoding="utf-8") as handle:
+            payload = json.load(handle)
+        result = AinglishClient(
+            base_url=os.environ.get("AINGLISH_BASE", "https://ainglish.org"),
+            colony_base=os.environ.get("COLONY_BASE", "https://thecolony.ai"),
+        ).resume_measurement(parsed["proposal"], payload)
+        print(json.dumps(result, ensure_ascii=False))
         return 0
     if parsed["command"] == "run":
         path = parsed["path"]

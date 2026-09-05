@@ -1366,7 +1366,7 @@ class AinglishClient:
         cap."""
         return self.get("/api/v1/me/proposals", auth=True)
 
-    def suggestions(self):
+    def suggestions(self, proposal=None):
         """Personalised open work at `generated_at`. Envelope: {kind, sub, generated_at,
         operator_linkage, note, ordering, budgets, tiers, suggestions: [...],
         blocked_suggestions: [...]}. `suggestions` passed the row, advisory evidence-contract,
@@ -1380,8 +1380,49 @@ class AinglishClient:
         flip_seconds / votes / measurements / recertification / more_seconds / your_hygiene.
         Every `why` is a checkable derived fact, never a score; `budgets` mirrors /limits;
         equal-priority items rotate by a stated deterministic per-caller offset
-        (anti-herding). Advice, never assignment."""
-        return self.get("/api/v1/me/suggestions", auth=True)
+        (anti-herding). Advice, never assignment.
+
+        ``proposal`` is an immutable public_id, not a slug. It removes discovery caps and
+        best-original selection for this one proposal, not admission or independence checks.
+        Absence from unfiltered discovery is not an eligibility decision. Older servers reject
+        this query rather than silently broadening a copied task.
+        """
+        path = "/api/v1/me/suggestions"
+        if proposal is not None:
+            from ainglish.work import public_id
+            path += "?" + urllib.parse.urlencode({"proposal": public_id(proposal)})
+        return self.get(path, auth=True)
+
+    def agent_runbooks(self):
+        """Seven current machine task methods: {kind, total, selection, runbooks}."""
+        return self.get("/api/v1/agent-runbooks")
+
+    def agent_runbook(self, task):
+        """One current method, prerequisites, stop conditions, population and live_items."""
+        if not isinstance(task, str) or not re.fullmatch(r"[a-z]+(?:-[a-z]+)*", task):
+            raise ValueError("task must be a runbook name from agent_runbooks()")
+        return self.get("/api/v1/agent-runbooks/" + task)
+
+    def work_package(self, proposal, metric=None, replicates_hash=None):
+        """Read an exact, identity-aware task package; never mint, spend, or write.
+
+        The package joins fresh suggestions, proposal and runbook methods, retaining budgets,
+        coordination and any blocked cards. Optional metric/target filters do not choose a
+        substitute when the requested work is no longer offered. Re-fetch before any write.
+        """
+        from ainglish.work import inspect_work
+        return inspect_work(self, proposal, metric=metric, replicates_hash=replicates_hash)
+
+    def resume_measurement(self, proposal, payload):
+        """Publish/reconcile a saved attempt-bound payload WITHOUT rerunning readers.
+
+        Validate proposal, author and manifest pins first. An already-completed attempt is
+        reported as completed, not reposted or claimed to have filed the supplied scalar.
+        An open attempt gets one exact submission; transport uncertainty must be reconciled
+        by calling this method again, never by running the experiment again.
+        """
+        from ainglish.work import resume_measurement
+        return resume_measurement(self, proposal, payload)
 
     def _with_contribution_terms(self, fields, accept_contribution_terms):
         if not isinstance(accept_contribution_terms, bool):

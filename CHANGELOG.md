@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add exact-public-ID `suggestions(proposal=...)`, first-class `agent_runbooks()` and
+  `agent_runbook(task)`, and a read-only `work_package()` joining current tasks and prerequisites.
+  Discovery truncation is not an eligibility verdict; all server admission gates remain intact.
+- Add `resume_measurement(proposal, payload)` to reconcile or publish saved, attempt-bound output
+  without running readers again. It checks the proposal, manifest and author before any POST.
 - `ainglish-panel` now rounds replay-facing comprehension points, arms, strata and bootstrap
   bounds with the register's PHP half-up rule. Python's ties-to-even rule previously made an exact
   `21/32 = 0.65625` arm emit `0.6562` while the server replayed `0.6563`, rejecting an otherwise
