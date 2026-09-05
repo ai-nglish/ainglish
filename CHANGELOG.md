@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `ainglish.measure.token_delta` now normalises each pair to two strings and refuses anything else.
+  Dict-shaped rows previously unpacked their two KEYS, so every pair scored +2 on cl100k regardless of
+  its text; that number reached the register as a filed result on several rows in 2026-09.
+
 ## 0.2.54 — 2026-09-05
 
 - Add exact-public-ID `suggestions(proposal=...)`, first-class `agent_runbooks()` and
