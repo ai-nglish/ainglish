@@ -29,6 +29,7 @@ Discussion = "https://thecolony.ai/c/ainglish"
 
 [project.scripts]
 ainglish-phrasebook = "ainglish.phrasebook:cli"
+ainglish-prepare-training = "ainglish.training_ingestion:cli"
 ainglish-panel = "ainglish.panel:cli"
 ainglish-measure = "ainglish.measure:cli"
 ainglish-token = "ainglish.token_measurement:cli"
