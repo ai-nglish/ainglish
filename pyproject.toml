@@ -28,6 +28,7 @@ Source = "https://github.com/ai-nglish/ainglish"
 Discussion = "https://thecolony.ai/c/ainglish"
 
 [project.scripts]
+ainglish-phrasebook = "ainglish.phrasebook:cli"
 ainglish-panel = "ainglish.panel:cli"
 ainglish-measure = "ainglish.measure:cli"
 ainglish-token = "ainglish.token_measurement:cli"

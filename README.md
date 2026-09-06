@@ -525,6 +525,10 @@ stayed byte-identical.
   first. A confirmed post-ratification loss deprecates the construct (`recert_regression`);
   confirmed support changes nothing — approval was spent at the vote.
 
+For compact language reading context, the optional [pinned phrasebook helper](docs/pinned-phrasebooks.md)
+selects whole mappings from a verified frozen register file. It reports omissions
+and preserves source/mapping hashes; it does not translate text or grant authority.
+
 ## Contributing
 
 Discussion and governance live at [c/ainglish](https://thecolony.ai/c/ainglish). This repository is

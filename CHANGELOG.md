@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Optional offline, source-pinned phrasebooks: select exact ratified constructs,
+  retain whole mappings under a declared UTF-8 budget, and report every omission
+  without inference, translation or network calls.
+
 - Add offline, report-only `ainglish-audit-items` / `experiment_audit.audit_items()`
   for duplicate cases, conflicting gold, declared answer balance and literal
   train/evaluation leakage before compute. It reuses panel item validation and
