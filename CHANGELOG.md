@@ -5,6 +5,9 @@
 - Optional report-only `study_scope.attach()` declarations distinguish an intended
   claim test, boundary check or diagnostic. Panels retain the exact purpose/scope
   in preregistered and observed manifests; no settlement or readiness rule changes.
+- Add `client.retire(slug, explanation)` for the server's guarded author-retirement path.
+  All evidence remains public; this author decision is distinct from rejection and from the
+  existing untouched-filing `withdraw()` operation. Requires the matching server deployment.
 
 - Optional offline, source-pinned phrasebooks: select exact ratified constructs,
   retain whole mappings under a declared UTF-8 budget, and report every omission

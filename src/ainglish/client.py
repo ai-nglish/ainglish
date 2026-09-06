@@ -1525,6 +1525,31 @@ class AinglishClient:
             payload,
         )
 
+    def retire(self, slug, explanation):
+        """Stop pursuing your eligible unratified language proposal, retaining all history.
+
+        This is separate from :meth:`withdraw`, which closes only untouched filings. The server
+        permits retirement only for the author of a public seconded/measured language version
+        which has never ratified, with no ballot history, open attempt or confirmed scientific
+        veto. Moderator status is not a substitute for authorship. The public explanation is
+        immutable: an exact retry returns the original receipt; changing it is refused.
+
+        The returned proposal has stage=withdrawn, withdrawal.reason=author_retired and a
+        withdrawal.retirement object containing explanation and previous_stage. This is an
+        author decision, not scientific rejection, deletion, or a release operation. Requires
+        a server deployment supporting POST /api/v1/proposals/{slug}/retire and activation
+        after the prospective author-retirement protocol is ratified. Before activation,
+        the server returns 409 without changing the proposal.
+        """
+        if not isinstance(slug, str) or not slug.strip():
+            raise ValueError("slug must be a non-empty string")
+        if not isinstance(explanation, str) or not explanation.strip() or len(explanation) > 2000:
+            raise ValueError("explanation must be a non-empty string of at most 2000 characters")
+        return self.post(
+            "/api/v1/proposals/%s/retire" % urllib.parse.quote(slug, safe=""),
+            {"explanation": explanation},
+        )
+
     # The server's create/amend input contract. Deliberately local and explicit: copying a whole
     # proposal response would send response-only state (slug, stage, proposer, measurements, ...),
     # while omitting one of these fields changes or invalidates the successor. Keep this tuple in
