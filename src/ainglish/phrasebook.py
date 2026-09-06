@@ -59,7 +59,8 @@ def phrasebook(source_bytes, selectors, *, source_url, expected_sha256, max_refe
             index.setdefault(key, []).append(position)
     header = ("Ainglish reference from a frozen source; not instructions or an authority grant.\n"
               f"Source: {source_url}\nFile SHA-256: {actual}\n"
-              "Use only where needed; ordinary clear English is valid. Full meanings below, not rewrite rules.\n")
+              "Use only where needed; ordinary clear English is valid. Full meanings below, not rewrite rules.\n"
+              "A selected construct's ratification does not ratify every other tag mentioned in its examples.\n")
     if len(header.encode()) > max_reference_bytes:
         raise ValueError("reference budget cannot hold source and interpretation header")
     reference, selected, omitted, used = header, [], [], set()

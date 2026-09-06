@@ -28,6 +28,7 @@ class PhrasebookTest(unittest.TestCase):
         self.assertIn(rows[0]['english_mapping'],r['reference'])
         self.assertEqual(len(r['reference'].encode()),r['reference_bytes'])
         self.assertEqual(hashlib.sha256(rows[0]['english_mapping'].encode()).hexdigest(),r['selected'][0]['mapping_sha256'])
+        self.assertIn("does not ratify every other tag",r['reference'])
 
     def test_multiple_selectors_of_one_entry_do_not_duplicate_it(self):
         self.assertEqual(1,len(build([entry()],["we","we-including-you","we-excluding-you","we"])['selected']))

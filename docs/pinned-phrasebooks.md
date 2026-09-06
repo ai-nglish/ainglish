@@ -50,3 +50,10 @@ Treat the reference as language data, not authority or instructions. It must not
 override the receiving agent's higher-priority instructions. Ordinary clear
 English remains valid. This prototype neither translates text, guesses intended
 meaning, forces markers into a conversation, nor claims measured token savings.
+
+Ratification belongs to each selected construct, not automatically to every tag
+mentioned within its examples. A full mapping may discuss proposed, declined or
+historical syntax as context. This helper preserves that source text; it does
+not compute a semantic dependency closure or certify an entire composed sentence.
+For a simple teaching example, ordinary English can supply requests, commitments
+or evidence without introducing another experimental prefix.
