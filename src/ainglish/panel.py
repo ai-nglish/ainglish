@@ -2307,6 +2307,11 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
     survives the floor there is no censored estimator and the run REFUSES rather than letting the
     uncensored number masquerade as the veto-bearing value.
     """
+    try:
+        study_scope_fields(manifest)
+    except ValueError as exc:
+        print(f"REFUSING before reader spend: invalid study scope ({exc}).")
+        return None
     panel = manifest["panel"]
     items = manifest["items"]
     calib = manifest.get("calibration_items", [])
@@ -2551,6 +2556,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
                          "outside_interval": sval < lo or sval > hi})
 
     spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
+    spec.update(study_scope_fields(manifest))
     spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
         json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
     if manifest.get("items_url"):
@@ -2689,14 +2695,38 @@ def admissibility_gate_statement(manifest):
             if policy is not None else None)
 
 
+def study_scope_fields(manifest):
+    """Validate optional author-declared reading context, not evidence eligibility.
+
+    Kept in this standalone instrument so the served harness and installed SDK
+    preserve identical declarations without a new runtime dependency.
+    """
+    keys = {"study_purpose", "study_scope"}
+    if not isinstance(manifest, dict):
+        raise ValueError("manifest must be an object")
+    present = keys & set(manifest)
+    if not present:
+        return {}
+    if present != keys:
+        raise ValueError("study_purpose and study_scope must be declared together")
+    purpose = manifest["study_purpose"]
+    if not isinstance(purpose, str) or purpose not in ("claim_test", "boundary_check", "diagnostic"):
+        raise ValueError("study_purpose must be claim_test, boundary_check or diagnostic")
+    scope = manifest["study_scope"]
+    if not isinstance(scope, str) or not scope.strip() or len(scope) > 1000:
+        raise ValueError("study_scope must be non-empty text of at most 1000 characters")
+    return {"study_purpose": purpose, "study_scope": scope}
+
+
 def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None):
     if not isinstance(manifest, dict):
         print("REFUSING to run: the panel manifest must be one JSON object.")
         return None
     try:
+        study_scope_fields(manifest)
         policy = admissibility_policy(manifest)
     except ValueError as exc:
-        print(f"REFUSING before reader spend: invalid admissibility policy ({exc}).")
+        print(f"REFUSING before reader spend: invalid prospective declarations ({exc}).")
         return None
     items = manifest.get("items")
     panel = manifest.get("panel")
@@ -3454,6 +3484,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         }
 
     spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
+    spec.update(study_scope_fields(manifest))
     if metric == "learnability":
         spec["form"] = manifest["form"]
         spec["entry"] = dict(manifest["entry"])

@@ -14,6 +14,9 @@ pip install ainglish[tokens]     # + tiktoken for canonical token_delta runs
 the website or API: orientation reads, credentials, and the contribution ladder from running a
 panel to filing a construct.
 
+Preparing a training corpus? See [offline training-pack ingestion](docs/training-ingestion.md)
+for pinned source checks, exact deduplication, evaluation exclusions and retained provenance.
+
 ## The sixty-second tour
 
 ```python
@@ -533,6 +536,10 @@ stayed byte-identical.
 For compact language reading context, the optional [pinned phrasebook helper](docs/pinned-phrasebooks.md)
 selects whole mappings from a verified frozen register file. It reports omissions
 and preserves source/mapping hashes; it does not translate text or grant authority.
+
+For experiments, an optional [study-purpose and scope note](docs/study-scope.md)
+distinguishes an intended claim test from a boundary check or diagnostic. It is
+retained in the manifest and changes no evidence or settlement gate.
 
 ## Contributing
 
