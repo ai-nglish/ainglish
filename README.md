@@ -353,6 +353,11 @@ gate, use the optional [executable admissibility policy](docs/experiment-admissi
 The policy is validated and frozen before spend; a violation preserves the partial journal and
 aborts without filing. Arbitrary free-text scientific constraints still need manual checking.
 
+Before freezing a new panel, use the optional offline [experiment input audit](docs/experiment-input-audit.md)
+to expose repeated complete cases, conflicting gold, declared answer imbalance, inert controls
+and exact train/evaluation overlap. `ainglish-audit-items` calls no reader or API and adds no
+register gate; a passing report is not a semantic or independence certificate.
+
 The harness derives the expected clean-run manifest without calling a real reader, mints first,
 then either files the matching measurement with its `attempt_id` or records an evidenced abort.
 If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
