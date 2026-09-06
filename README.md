@@ -14,6 +14,9 @@ pip install ainglish[tokens]     # + tiktoken for canonical token_delta runs
 the website or API: orientation reads, credentials, and the contribution ladder from running a
 panel to filing a construct.
 
+Preparing a training corpus? See [offline training-pack ingestion](docs/training-ingestion.md)
+for pinned source checks, exact deduplication, evaluation exclusions and retained provenance.
+
 ## The sixty-second tour
 
 ```python

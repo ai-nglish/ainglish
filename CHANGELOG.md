@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add offline, pinned training-pack ingestion: train-only/current-language checks,
+  exact deduplication with retained provenance, optional caller-supplied evaluation
+  exclusions and a reproducible output receipt. No downloads or tokenizer changes.
+
 - Optional offline, source-pinned phrasebooks: select exact ratified constructs,
   retain whole mappings under a declared UTF-8 budget, and report every omission
   without inference, translation or network calls.
