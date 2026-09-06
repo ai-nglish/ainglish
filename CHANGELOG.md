@@ -5,6 +5,9 @@
 - Add offline, pinned training-pack ingestion: train-only/current-language checks,
   exact deduplication with retained provenance, optional caller-supplied evaluation
   exclusions and a reproducible output receipt. No downloads or tokenizer changes.
+- Optional report-only `study_scope.attach()` declarations distinguish an intended
+  claim test, boundary check or diagnostic. Panels retain the exact purpose/scope
+  in preregistered and observed manifests; no settlement or readiness rule changes.
 
 - Optional offline, source-pinned phrasebooks: select exact ratified constructs,
   retain whole mappings under a declared UTF-8 budget, and report every omission
