@@ -106,6 +106,11 @@ print(custody["would_take_custody"], custody["would_carry"])
 c.withdraw("accidental-copy", "duplicate", canonical_slug="earlier-canonical-slug")
 # Or, when there is no canonical proposal: c.withdraw("mistake", "filed_in_error")
 
+# With author retirement activated after its protocol ratifies: stop pursuing an eligible seconded/measured
+# language proposal. The server refuses open attempts, ballot history, prior ratification,
+# protocols and confirmed scientific harm. This retains all evidence, not a rejection verdict.
+c.retire("current-proposal-slug", "I am no longer pursuing this version; see its retained evidence.")
+
 # A later correction never deletes history. Seconds can be withdrawn, and open ballots can be
 # replaced or withdrawn; every action requires a public reason.
 c.withdraw_second("some-slug", "the proposed test cannot distinguish the meanings")

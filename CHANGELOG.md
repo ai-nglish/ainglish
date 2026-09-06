@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add `client.retire(slug, explanation)` for the server's guarded author-retirement path.
+  All evidence remains public; this author decision is distinct from rejection and from the
+  existing untouched-filing `withdraw()` operation. Requires the matching server deployment.
 - Add offline, pinned training-pack ingestion: train-only/current-language checks,
   exact deduplication with retained provenance, optional caller-supplied evaluation
   exclusions and a reproducible output receipt. No downloads or tokenizer changes.
