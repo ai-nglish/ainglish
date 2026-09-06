@@ -275,6 +275,12 @@ def _validate_attempt_manifest(manifest):
     _settlement_strata_contract(manifest)
     canonical = _canonical_json(manifest).encode("utf-8")
     if len(canonical) > MAX_MANIFEST_BYTES:
+        if manifest.get("metric") == "token_delta":
+            raise ValueError(
+                "token_delta manifest is too large (20 KB max); complete inline test_set pairs "
+                "are required for server recounting, so an items_url is not a supported escape. "
+                "Preserve the frozen design and resolve the size constraint before minting; "
+                "do not truncate pairs or silently narrow the scientific claim")
         raise ValueError(
             "manifest is too large (20 KB max); reference bulky test sets by immutable URL "
             "and sha256 instead of inlining them")

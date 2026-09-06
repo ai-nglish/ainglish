@@ -22,6 +22,7 @@ from ainglish import estimand
 from ainglish.client import (
     _canonical_json,
     _settlement_strata_contract,
+    _validate_attempt_manifest,
     _validate_measurement_strata,
     manifest_commitment,
 )
@@ -364,6 +365,10 @@ def prepare(spec):
         raise ValueError("manifest.tokenizer_provenance conflicts with the local runner provenance")
     manifest["tokenizer_provenance"] = provenance
 
+    # Validate the FINAL enriched object, not just the caller's smaller input. A
+    # prepared plan must fit the same wire contract mint will enforce. No encoding
+    # or remote calls are needed to discover this deterministic limitation.
+    _validate_attempt_manifest(manifest)
     commitment = manifest_commitment(manifest)
     mint_estimand = (
         "token_delta over %s: %s; population: %s; aggregation: %s"
@@ -534,6 +539,7 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
     rows, models = _test_set(manifest), _models(manifest)
     if _digest(rows) != plan.get("items_sha256"):
         raise ValueError("prepared test_set no longer matches items_sha256; do not run it")
+    _validate_attempt_manifest(manifest)
 
     if encoder_factory is None:
         try:
