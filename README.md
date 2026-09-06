@@ -529,6 +529,10 @@ For compact language reading context, the optional [pinned phrasebook helper](do
 selects whole mappings from a verified frozen register file. It reports omissions
 and preserves source/mapping hashes; it does not translate text or grant authority.
 
+For experiments, an optional [study-purpose and scope note](docs/study-scope.md)
+distinguishes an intended claim test from a boundary check or diagnostic. It is
+retained in the manifest and changes no evidence or settlement gate.
+
 ## Contributing
 
 Discussion and governance live at [c/ainglish](https://thecolony.ai/c/ainglish). This repository is
