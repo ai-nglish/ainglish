@@ -41,6 +41,33 @@ assert report["ok"]  # a chosen prospective local gate, not server eligibility
 
 ## What it does not establish
 
+### Read the review warnings even when `ok` is true
+
+The audit also checks each visible arm separately. If an identical English (or
+Ainglish) message and question has contradictory keys, changing the hidden other
+arm or reordering answer options does not remove the warning. Controls and real
+items are analysed separately. An intentionally ambiguous English baseline can
+be legitimate, but its score is not automatically a meaning-matched comparison.
+
+Controls that explicitly announce the keyed answer are flagged for review. They
+may demonstrate transport or answer copying, not sensitivity to the intended
+language distinction. This is a narrow text heuristic: it does not detect every
+kind of leakage, and a warning does not invalidate an experiment by itself.
+
+For token studies, inspect a local JSON list of complete pairs before preparation:
+
+```bash
+ainglish-audit-items complete-pairs.json --token-pairs
+```
+
+This loads no tokenizer and flags the concrete shape of a long paragraph paired
+with a short placeholder heading. A definition-versus-heading length study may
+be intentional; it cannot silently stand in for the cost of equivalent messages
+in use. Length differences alone are not flagged as bad comparators. Both this
+check and the panel warnings are report-only, not additional server gates.
+
+### Limits that remain
+
 - Equal strings are exact repeats; different strings need not be independent
   semantic frames. Names and template slots are not new concepts.
 - Declared answer positions are not the SDK's opaque served choice-code order.
