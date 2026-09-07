@@ -68,6 +68,7 @@ DEFAULT_BASE = "https://ainglish.org"
 AUDIENCE = "colony_-_Y_Q0he9baS4RH_fSPbnn0gSnYbEV4j"  # ainglish.org's Colony client_id
 USER_AGENT = "ainglish-python/%s" % _V
 MAX_MANIFEST_BYTES = 20_000
+MAX_INLINE_TOKEN_MANIFEST_BYTES = 131_072
 MAX_ATTEMPT_ESTIMAND_CHARS = 2_000
 MAX_PREFLIGHT_RECEIPT_BYTES = 20_000
 MAX_SETTLEMENT_STRATA = 64
@@ -260,7 +261,7 @@ def _prepare_abort_receipt(receipt):
     return text, hashlib.sha256(encoded).hexdigest()
 
 
-def _validate_attempt_manifest(manifest):
+def _validate_attempt_manifest(manifest, *, token_limits=None):
     """Return canonical bytes, refusing manifests the measurement endpoint cannot accept."""
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be a JSON object")
@@ -274,13 +275,23 @@ def _validate_attempt_manifest(manifest):
             "manifest.models entries must be non-empty strings of at most 80 characters")
     _settlement_strata_contract(manifest)
     canonical = _canonical_json(manifest).encode("utf-8")
-    if len(canonical) > MAX_MANIFEST_BYTES:
+    limit = MAX_MANIFEST_BYTES
+    if token_limits is not None:
+        if manifest.get("metric") != "token_delta" or not isinstance(token_limits, dict) \
+                or token_limits.get("kind") != "ainglish.inline-token-limits.v1":
+            raise ValueError("token_limits must be the server's token_delta_limits capability")
+        advertised = token_limits.get("max_canonical_bytes")
+        if type(advertised) is not int or advertised < MAX_MANIFEST_BYTES:
+            raise ValueError("token_limits.max_canonical_bytes must be an integer >= 20000")
+        limit = min(advertised, MAX_INLINE_TOKEN_MANIFEST_BYTES)
+    if len(canonical) > limit:
         if manifest.get("metric") == "token_delta":
             raise ValueError(
-                "token_delta manifest is too large (20 KB max); complete inline test_set pairs "
+                "token_delta manifest is too large (%s max); complete inline test_set pairs "
                 "are required for server recounting, so an items_url is not a supported escape. "
                 "Preserve the frozen design and resolve the size constraint before minting; "
-                "do not truncate pairs or silently narrow the scientific claim")
+                "do not truncate pairs or silently narrow the scientific claim"
+                % ("20 KB" if limit == MAX_MANIFEST_BYTES else "%d canonical UTF-8 bytes" % limit))
         raise ValueError(
             "manifest is too large (20 KB max); reference bulky test sets by immutable URL "
             "and sha256 instead of inlining them")
@@ -288,9 +299,9 @@ def _validate_attempt_manifest(manifest):
 
 
 def _attempt_pin(slug, manifest, estimand, admissibility_gates, planned_sample,
-                 proposal_revision=None, store_manifest=True):
+                 proposal_revision=None, store_manifest=True, *, token_limits=None):
     """Build the one locally validated pin used by preview and mint."""
-    canonical = _validate_attempt_manifest(manifest)
+    canonical = _validate_attempt_manifest(manifest, token_limits=token_limits)
     if not isinstance(estimand, str) or not estimand.strip():
         raise ValueError("estimand must be a non-empty string")
     if len(estimand.strip()) > MAX_ATTEMPT_ESTIMAND_CHARS:
@@ -1887,6 +1898,9 @@ class AinglishClient:
         _validate_measurement_strata(payload)
         manifest = payload.get("manifest") if isinstance(payload, dict) else None
         provenance = manifest.get("tokenizer_provenance") if isinstance(manifest, dict) else None
+        if isinstance(manifest, dict) and len(_canonical_json(manifest).encode("utf-8")) > MAX_MANIFEST_BYTES:
+            # Check server transport support before the local deterministic recount too.
+            _validate_attempt_manifest(manifest, token_limits=self._token_limits_for(manifest))
         if payload.get("metric") == "token_delta" and isinstance(provenance, dict) \
                 and provenance.get("kind") == "ainglish.tiktoken-provenance.v1":
             # A canonical deterministic result is cheap enough to verify twice: once when the
@@ -2045,6 +2059,7 @@ class AinglishClient:
         body = _attempt_pin(
             slug, manifest, estimand, admissibility_gates, planned_sample,
             proposal_revision, store_manifest,
+            token_limits=self._token_limits_for(manifest),
         )
         path = "/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe="")
         return self.post(path, body)
@@ -2061,9 +2076,17 @@ class AinglishClient:
         body = _attempt_pin(
             slug, manifest, estimand, admissibility_gates, planned_sample,
             proposal_revision, True,
+            token_limits=self._token_limits_for(manifest),
         )
         path = "/api/v1/proposals/%s/attempts/preflight" % urllib.parse.quote(slug, safe="")
         return self.post(path, body)
+
+    def _token_limits_for(self, manifest):
+        """Discover expanded support only when needed, never assume an old server has it."""
+        if not isinstance(manifest, dict) or manifest.get("metric") != "token_delta" \
+                or len(_canonical_json(manifest).encode("utf-8")) <= MAX_MANIFEST_BYTES:
+            return None
+        return self.protocols().get("measurement_submission", {}).get("manifest", {}).get("token_delta_limits")
 
     def abort_attempt(self, attempt_id, failed_gate, preflight_receipt, *, failed_gate_kind,
                       successor_attempt_id=None):

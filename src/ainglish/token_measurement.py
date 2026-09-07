@@ -251,7 +251,7 @@ def _contract_policy(target, declaration):
     }
 
 
-def prepare(spec):
+def prepare(spec, *, token_limits=None):
     """Return a frozen, mint-ready plan without importing or loading a tokenizer."""
     if not isinstance(spec, dict):
         raise ValueError("the run specification must be a JSON object")
@@ -368,7 +368,7 @@ def prepare(spec):
     # Validate the FINAL enriched object, not just the caller's smaller input. A
     # prepared plan must fit the same wire contract mint will enforce. No encoding
     # or remote calls are needed to discover this deterministic limitation.
-    _validate_attempt_manifest(manifest)
+    _validate_attempt_manifest(manifest, token_limits=token_limits)
     commitment = manifest_commitment(manifest)
     mint_estimand = (
         "token_delta over %s: %s; population: %s; aggregation: %s"
@@ -390,6 +390,7 @@ def prepare(spec):
         },
         "items_sha256": items_sha256,
         "pair_count": len(rows),
+        **({"transport_limits": copy.deepcopy(token_limits)} if token_limits is not None else {}),
         **({"settlement_strata": strata} if strata is not None else {}),
         "sample_size_rule": sample_exception or {
             "kind": "power-of-two-v1", "item_count": len(rows), "passed": True,
@@ -526,7 +527,7 @@ def verify_payload(payload, encoder_factory=None):
     }
 
 
-def run_prepared(plan, attempt_id, encoder_factory=None):
+def run_prepared(plan, attempt_id, encoder_factory=None, *, token_limits=None):
     """Count a previously prepared plan and return a complete measurement payload plus audit."""
     if not isinstance(plan, dict) or plan.get("kind") != PLAN_KIND \
             or plan.get("state") != "prepared_not_run":
@@ -539,7 +540,7 @@ def run_prepared(plan, attempt_id, encoder_factory=None):
     rows, models = _test_set(manifest), _models(manifest)
     if _digest(rows) != plan.get("items_sha256"):
         raise ValueError("prepared test_set no longer matches items_sha256; do not run it")
-    _validate_attempt_manifest(manifest)
+    _validate_attempt_manifest(manifest, token_limits=token_limits)
 
     if encoder_factory is None:
         try:
@@ -894,20 +895,23 @@ def cli(argv=None):
     prepare_parser = sub.add_parser("prepare", help="freeze a mint-ready manifest without loading a tokenizer")
     prepare_parser.add_argument("spec")
     prepare_parser.add_argument("-o", "--output", default="-")
+    prepare_parser.add_argument("--token-limits", help="JSON capability from current protocols.measurement_submission.manifest.token_delta_limits")
     run_parser = sub.add_parser("run", help="run an already-minted prepared plan")
     run_parser.add_argument("plan")
     run_parser.add_argument("--attempt-id", required=True)
     run_parser.add_argument("-o", "--output", default="-")
+    run_parser.add_argument("--token-limits", help="Explicit current server capability for a manifest over the legacy 20 KB limit")
     args = parser.parse_args(argv)
     try:
         if args.selftest:
             selftest()
             return 0
         if args.command == "prepare":
-            _write(prepare(_read(args.spec)), args.output)
+            _write(prepare(_read(args.spec), token_limits=_read(args.token_limits) if args.token_limits else None), args.output)
             return 0
         if args.command == "run":
-            _write(run_prepared(_read(args.plan), args.attempt_id), args.output)
+            _write(run_prepared(_read(args.plan), args.attempt_id,
+                                token_limits=_read(args.token_limits) if args.token_limits else None), args.output)
             return 0
         parser.error("choose prepare, run, or --selftest")
     except (ValueError, OSError, json.JSONDecodeError) as exc:
