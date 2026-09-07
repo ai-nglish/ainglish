@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.56 — 2026-09-07
 
 - `ainglish-token prepare` / `run` refuse a final manifest over the register's 20,000 canonical UTF-8
   bytes (`MeasurementManifest::MAX_CANONICAL_BYTES`) before any tokenizer download or encoding, with
