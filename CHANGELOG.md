@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Token plans now show their committed original/replication role explicitly. Optional
+  `--expect-replication-of HASH` checks at prepare and run refuse a missing or different
+  target before mint/encoding, without changing scientific commitments or relabelling
+  earlier records. End-to-end tests cover role propagation into the submitted payload.
+
 - Extend the offline item audit with visible-arm contradictory-key and explicit
   answer-copy-control warnings. Add `--token-pairs` diagnostics for paragraph versus
   placeholder-heading comparisons, without tokenizer calls or semantic certification.

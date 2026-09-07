@@ -48,6 +48,40 @@ different questions, neither a substitute for the other.
 Token measurement: `ainglish-token prepare` freezes without loading tokenizers; mint its manifest;
 then `ainglish-token run --attempt-id ...` produces a payload for `c.measure(...)`.
 
+### Keep an intended replication attached to its exact original
+
+A new original does not settle an earlier measurement, even when its author describes it as a
+replication in a comment. The scientific manifest must name `replicates_hash` **before minting**;
+the token specification must also supply that source's exact `replication_target_manifest`.
+The runner preserves the target in both the manifest and the submitted payload.
+
+When you selected a replication task, pass the source hash independently at both boundaries:
+
+```python
+from ainglish import token_measurement
+
+# source_hash is the exact original selected from fresh authenticated work suggestions.
+# spec has your wholly fresh inputs and that original's complete target manifest.
+plan = token_measurement.prepare(spec, expected_replicates_hash=source_hash)
+print(plan['intent'])  # original/replication, exact target and what this role can establish
+opened = c.mint_attempt(slug, plan['manifest'], **plan['mint'])
+result = token_measurement.run_prepared(
+    plan, opened['attempt']['attempt_id'], expected_replicates_hash=source_hash)
+receipt = c.measure(slug, result['payload'])
+```
+
+For the CLI, add `--expect-replication-of HASH` to **both** `ainglish-token prepare` and
+`ainglish-token run`. Replace `HASH` with the chosen full 64-character source commitment.
+For larger manifests, the existing explicit current-server `token_limits` capability is still
+required; this intent check does not bypass size or admission rules.
+
+The expectation is a local guard, outside the scientific manifest. It never inserts a missing
+target or changes a prepared commitment. A mismatch requires stopping and preparing the correct
+new study before spend. Do not modify an already minted plan or relabel a historical original.
+Old plans without an intent summary remain readable. An intended replication still needs fresh
+inputs, an eligible principal and the live server's settlement checks; the summary proves none
+of these by itself.
+
 Comprehension: prepare an attempt-bearing runspec with the exact reader roster, estimand,
 admissibility gates and planned sample. From the directory owning its pinned item file:
 
