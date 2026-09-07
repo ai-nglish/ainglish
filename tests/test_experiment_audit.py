@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from ainglish.experiment_audit import audit_items, cli
+from ainglish.experiment_audit import audit_items, audit_token_pairs, cli
 
 
 def case(index, answer=None):
@@ -72,6 +72,69 @@ class ExperimentAuditTest(unittest.TestCase):
 
     def test_duplicate_ids_do_not_pass(self):
         self.assertFalse(audit_items([case(0), dict(case(1), id="row-0")])["ok"])
+
+    def test_visible_arm_conflicts_survive_changed_hidden_arm_and_option_order(self):
+        first = case(0)
+        second = dict(case(1), english=first['english'], options=['C', 'A', 'B'])
+        rows = [first, second]
+        before = copy.deepcopy(rows)
+        report = audit_items(rows)
+        self.assertTrue(report['ok'], 'Ambiguous baseline is a review warning, not automatic rejection')
+        conflict = report['evaluation']['visible_arm_conflicts']
+        self.assertEqual(1, conflict['count'])
+        self.assertEqual('english', conflict['shown'][0]['arm'])
+        self.assertEqual(rows, before)
+        self.assertNotIn(first['english'], json.dumps(report))
+
+    def test_different_questions_and_separate_phases_do_not_conflict(self):
+        first = case(0)
+        for second in [dict(case(1), english=first['english'], question='A different question?'),
+                       dict(case(1), english=first['english'], calibration=True)]:
+            self.assertEqual(0, audit_items([first, second])['evaluation']['visible_arm_conflicts']['count'])
+
+    def test_copy_controls_are_explicit_bounded_warnings(self):
+        rows = [case(0), dict(case(1), calibration=True, ainglish='The correct answer is B.')]
+        report = audit_items(rows)
+        self.assertTrue(report['ok'])
+        self.assertEqual(1, report['evaluation']['answer_copy_controls']['count'])
+        rows[-1]['ainglish'] = "Control instruction: select exactly 'B'."
+        self.assertEqual(1, audit_items(rows)['evaluation']['answer_copy_controls']['count'])
+        rows[-1]['ainglish'] = 'B is one possible outcome. The message does not settle it.'
+        self.assertEqual(0, audit_items(rows)['evaluation']['answer_copy_controls']['count'])
+
+    def test_warning_diagnostics_are_bounded(self):
+        rows = [dict(case(i), english='same visible input') for i in range(80)]
+        finding = audit_items(rows)['evaluation']['visible_arm_conflicts']['shown'][0]
+        self.assertEqual(20, len(finding['ids']))
+        self.assertTrue(finding['ids_truncated'])
+
+    def test_token_heading_audit_does_not_count_or_certify(self):
+        pairs = [{'english': 'A definition paragraph. ' * 20, 'ainglish': '<ACTION>, no-undo'}]
+        before = copy.deepcopy(pairs)
+        with patch('ainglish.measure.token_delta', side_effect=AssertionError('no counting')):
+            report = audit_token_pairs(pairs)
+        self.assertTrue(report['ok'])
+        self.assertEqual('paragraph_vs_placeholder_heading', report['warnings'][0]['code'])
+        self.assertEqual(0, report['tokenizer_calls'])
+        self.assertEqual(pairs, before)
+        self.assertNotIn('definition paragraph', json.dumps(report))
+
+    def test_length_alone_and_instantiated_pairs_do_not_trigger_heading_warning(self):
+        for pairs in [[['Long ' * 100, 'A short complete message.']],
+                      [{'english': 'This action cannot be undone.', 'ainglish': 'Send it, no-undo.'}]]:
+            self.assertEqual([], audit_token_pairs(pairs)['warnings'])
+        for pairs in [None, [], ['not a pair'], [['one', 'two', 'three']],
+                      [{'english': 'one', 'baseline': 'different', 'ainglish': 'marked'}]]:
+            self.assertFalse(audit_token_pairs(pairs)['ok'])
+
+    def test_token_cli_is_report_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'pairs.json'
+            path.write_text(json.dumps([['Careful English', 'Marked message']]))
+            out=io.StringIO()
+            with redirect_stdout(out):
+                self.assertEqual(0, cli([str(path), '--token-pairs']))
+            self.assertEqual('ainglish.token-input-audit.v1', json.loads(out.getvalue())['kind'])
 
     def test_cli_preserves_exit_status_and_emits_only_report(self):
         with tempfile.TemporaryDirectory() as tmp:

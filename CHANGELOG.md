@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Extend the offline item audit with visible-arm contradictory-key and explicit
+  answer-copy-control warnings. Add `--token-pairs` diagnostics for paragraph versus
+  placeholder-heading comparisons, without tokenizer calls or semantic certification.
+
 - Negotiate bounded larger inline token manifests on supporting servers, with an
   explicit capability for offline prepare/run and a safe 20,000-byte fallback.
   Transport limits stay outside scientific commitments; no pair truncation or
