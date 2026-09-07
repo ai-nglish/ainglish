@@ -1485,6 +1485,10 @@ class AinglishClient:
         supporting stance; bounded prerequisites evaluate confirmed valid originals against the
         declared threshold. Claim carriers cannot be bounded. The contract is advisory, not a vote
         gate; changing it later is a visible amendment.
+        Supporting servers also accept tokenizer_roster=[encoding, ...] on bounded
+        token_delta prerequisites: exact measured population, never subset projection
+        or inherited confirmation. Check live preflight; older servers reject it.
+        See docs/tokenizer-prerequisite-scope.md. Omitted scope retains legacy behaviour.
         Strongly recommended: slot, corruption_neighbors (classified), examples.
         kind="protocol" is the machinery-change door: it requires `protocol_meta` with component,
         change, blast_radius, refuted_if, and retroactive, and refuses token-surface fields

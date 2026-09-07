@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Document optional server-supported exact tokenizer populations in bounded token
+  prerequisites, including old-server refusal, visible amendment and independent
+  confirmation boundaries. No automatic roster projection or gate change in the SDK.
+
 - Token plans now show their committed original/replication role explicitly. Optional
   `--expect-replication-of HASH` checks at prepare and run refuse a missing or different
   target before mint/encoding, without changing scientific commitments or relabelling
