@@ -251,7 +251,35 @@ def _contract_policy(target, declaration):
     }
 
 
-def prepare(spec, *, token_limits=None):
+def _check_expected_replication(manifest, expected_replicates_hash):
+    """Check a caller's independently supplied task intent, never infer or repair it."""
+    if expected_replicates_hash is None:
+        return
+    if not isinstance(expected_replicates_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_replicates_hash):
+        raise ValueError("expected_replicates_hash must be the exact 64-hex original manifest hash")
+    if manifest.get("replicates_hash") != expected_replicates_hash:
+        raise ValueError(
+            "replication intent mismatch: manifest.replicates_hash does not name the expected original; "
+            "stop before mint or encoding, and prepare a new plan with the exact target manifest. "
+            "Do not relabel an existing original or alter an already minted plan"
+        )
+
+
+def intent_summary(manifest):
+    """Describe the committed role without claiming independence or settlement eligibility."""
+    target = manifest.get("replicates_hash")
+    return {
+        "role": "original" if target is None else "replication",
+        "replicates_hash": target,
+        "meaning": (
+            "New original: this row does not confirm or settle another measurement."
+            if target is None else
+            "Replication of the named original; live server gates still decide whether it is an eligible settlement voice."
+        ),
+    }
+
+
+def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
     """Return a frozen, mint-ready plan without importing or loading a tokenizer."""
     if not isinstance(spec, dict):
         raise ValueError("the run specification must be a JSON object")
@@ -269,6 +297,7 @@ def prepare(spec, *, token_limits=None):
     if not isinstance(source, dict):
         raise ValueError("spec.manifest must be a JSON object")
     manifest = copy.deepcopy(source)
+    _check_expected_replication(manifest, expected_replicates_hash)
     if manifest.get("metric") != "token_delta":
         raise ValueError("manifest.metric must be token_delta")
     models = _models(manifest)
@@ -382,6 +411,7 @@ def prepare(spec, *, token_limits=None):
         "state": "prepared_not_run",
         "manifest": manifest,
         "manifest_commitment": commitment,
+        "intent": intent_summary(manifest),
         "estimand_contract_policy": policy,
         "design_declaration": declaration,
         "replication_target": None if target is None else {
@@ -527,7 +557,7 @@ def verify_payload(payload, encoder_factory=None):
     }
 
 
-def run_prepared(plan, attempt_id, encoder_factory=None, *, token_limits=None):
+def run_prepared(plan, attempt_id, encoder_factory=None, *, token_limits=None, expected_replicates_hash=None):
     """Count a previously prepared plan and return a complete measurement payload plus audit."""
     if not isinstance(plan, dict) or plan.get("kind") != PLAN_KIND \
             or plan.get("state") != "prepared_not_run":
@@ -537,6 +567,9 @@ def run_prepared(plan, attempt_id, encoder_factory=None, *, token_limits=None):
     manifest = copy.deepcopy(plan.get("manifest"))
     if not isinstance(manifest, dict) or manifest_commitment(manifest) != plan.get("manifest_commitment"):
         raise ValueError("prepared manifest no longer matches its commitment; do not run it")
+    _check_expected_replication(manifest, expected_replicates_hash)
+    if "intent" in plan and plan["intent"] != intent_summary(manifest):
+        raise ValueError("prepared intent summary differs from the committed role; do not run it")
     rows, models = _test_set(manifest), _models(manifest)
     if _digest(rows) != plan.get("items_sha256"):
         raise ValueError("prepared test_set no longer matches items_sha256; do not run it")
@@ -896,22 +929,26 @@ def cli(argv=None):
     prepare_parser.add_argument("spec")
     prepare_parser.add_argument("-o", "--output", default="-")
     prepare_parser.add_argument("--token-limits", help="JSON capability from current protocols.measurement_submission.manifest.token_delta_limits")
+    prepare_parser.add_argument("--expect-replication-of", metavar="HASH", help="Refuse before preparation if the manifest does not target this exact original")
     run_parser = sub.add_parser("run", help="run an already-minted prepared plan")
     run_parser.add_argument("plan")
     run_parser.add_argument("--attempt-id", required=True)
     run_parser.add_argument("-o", "--output", default="-")
     run_parser.add_argument("--token-limits", help="Explicit current server capability for a manifest over the legacy 20 KB limit")
+    run_parser.add_argument("--expect-replication-of", metavar="HASH", help="Recheck the intended original before any encoding; never adds or changes a target")
     args = parser.parse_args(argv)
     try:
         if args.selftest:
             selftest()
             return 0
         if args.command == "prepare":
-            _write(prepare(_read(args.spec), token_limits=_read(args.token_limits) if args.token_limits else None), args.output)
+            _write(prepare(_read(args.spec), token_limits=_read(args.token_limits) if args.token_limits else None,
+                           expected_replicates_hash=args.expect_replication_of), args.output)
             return 0
         if args.command == "run":
             _write(run_prepared(_read(args.plan), args.attempt_id,
-                                token_limits=_read(args.token_limits) if args.token_limits else None), args.output)
+                                token_limits=_read(args.token_limits) if args.token_limits else None,
+                                expected_replicates_hash=args.expect_replication_of), args.output)
             return 0
         parser.error("choose prepare, run, or --selftest")
     except (ValueError, OSError, json.JSONDecodeError) as exc:
