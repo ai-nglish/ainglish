@@ -1,6 +1,5 @@
-import copy
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from ainglish import estimand, token_measurement
 from ainglish.client import MAX_MANIFEST_BYTES, _canonical_json, _validate_attempt_manifest
 
@@ -40,5 +39,16 @@ class TokenManifestBudgetTest(unittest.TestCase):
         m['metric']='comprehension_accuracy_delta'
         with self.assertRaisesRegex(ValueError,'immutable URL'):
             _validate_attempt_manifest(m)
+
+    def testLegacyOversizedPlanStopsBeforeTheEncoderFactoryIsCalled(self):
+        m=self.manifest();m['padding']='x'*MAX_MANIFEST_BYTES
+        # Reconstruct what the previous prepare implementation allowed: a
+        # commitment-consistent plan which nevertheless exceeds the wire cap.
+        with patch.object(token_measurement,'_validate_attempt_manifest'):
+            legacy=token_measurement.prepare({'manifest':m})
+        encoder=Mock(side_effect=AssertionError('No encoding may begin'))
+        with self.assertRaisesRegex(ValueError,'inline test_set pairs'):
+            token_measurement.run_prepared(legacy,'00000000-0000-4000-8000-000000000001',encoder_factory=encoder)
+        encoder.assert_not_called()
 
 if __name__=='__main__':unittest.main()
