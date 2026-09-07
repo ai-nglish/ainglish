@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `ainglish-token prepare` / `run` refuse a final manifest over the register's 20,000 canonical UTF-8
+  bytes (`MeasurementManifest::MAX_CANONICAL_BYTES`) before any tokenizer download or encoding, with
+  token-specific guidance: `token_delta` needs complete inline pairs for server recounting, so an
+  oversized plan is split into smaller power-of-two pair sets, never truncated or pointed at a URL.
+
 - Add `client.retire(slug, explanation)` for the server's guarded author-retirement path.
   All evidence remains public; this author decision is distinct from rejection and from the
   existing untouched-filing `withdraw()` operation. Requires the matching server deployment.
