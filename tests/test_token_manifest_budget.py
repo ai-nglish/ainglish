@@ -1,10 +1,11 @@
 import unittest
 from unittest.mock import Mock, patch
 from ainglish import estimand, token_measurement
-from ainglish.client import MAX_MANIFEST_BYTES, _canonical_json, _validate_attempt_manifest
+from ainglish.client import AinglishClient, MAX_MANIFEST_BYTES, MAX_INLINE_TOKEN_MANIFEST_BYTES, _canonical_json, _validate_attempt_manifest
 
 
 class TokenManifestBudgetTest(unittest.TestCase):
+    LIMITS = {'kind': 'ainglish.inline-token-limits.v1', 'max_canonical_bytes': 131072}
     def manifest(self):
         return {'metric':'token_delta','models':['cl100k_base','o200k_base'],
             'test_set':[{'english':f'careful complete sentence {i}', 'ainglish':f'marked sentence {i}'} for i in range(4)],
@@ -50,5 +51,81 @@ class TokenManifestBudgetTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'inline test_set pairs'):
             token_measurement.run_prepared(legacy,'00000000-0000-4000-8000-000000000001',encoder_factory=encoder)
         encoder.assert_not_called()
+
+    def testExpandedLimitIsExplicitAndDoesNotChangeScientificBytes(self):
+        m = self.manifest(); m['padding'] = 'x' * 21000
+        with self.assertRaisesRegex(ValueError, '20 KB'):
+            token_measurement.prepare({'manifest': m})
+        with patch.object(token_measurement, 'token_delta', side_effect=AssertionError('No encoding in prepare')):
+            plan = token_measurement.prepare({'manifest': m}, token_limits=self.LIMITS)
+        self.assertNotIn('transport_limits', plan['manifest'])
+        self.assertEqual(self.LIMITS, plan['transport_limits'])
+        with patch.object(token_measurement, '_validate_attempt_manifest'):
+            legacy = token_measurement.prepare({'manifest': m})
+        self.assertEqual(legacy['manifest'], plan['manifest'])
+        self.assertEqual(legacy['manifest_commitment'], plan['manifest_commitment'])
+        encoder = Mock(side_effect=AssertionError('Old cached support is not fresh support'))
+        with self.assertRaisesRegex(ValueError, '20 KB'):
+            token_measurement.run_prepared(plan, '00000000-0000-4000-8000-000000000001', encoder_factory=encoder)
+        encoder.assert_not_called()
+
+    def testExpandedCanonicalBoundaryIsStillFiniteAndUtf8Aware(self):
+        m = self.manifest(); m['padding'] = ''
+        size = len(_canonical_json(m).encode())
+        m['padding'] = 'é' * ((MAX_INLINE_TOKEN_MANIFEST_BYTES - size) // 2)
+        remaining = MAX_INLINE_TOKEN_MANIFEST_BYTES - len(_canonical_json(m).encode())
+        m['padding'] += 'x' * remaining
+        self.assertEqual(MAX_INLINE_TOKEN_MANIFEST_BYTES, len(_validate_attempt_manifest(m, token_limits=self.LIMITS)))
+        m['padding'] += 'x'
+        with self.assertRaisesRegex(ValueError, '131072'):
+            _validate_attempt_manifest(m, token_limits=self.LIMITS)
+        for bad in [{}, {'kind': 'other', 'max_canonical_bytes': 131072},
+                    dict(self.LIMITS, max_canonical_bytes=True), dict(self.LIMITS, max_canonical_bytes='131072')]:
+            with self.assertRaises(ValueError):
+                _validate_attempt_manifest(m, token_limits=bad)
+        with self.assertRaisesRegex(ValueError, '131072'):
+            _validate_attempt_manifest(m, token_limits=dict(self.LIMITS, max_canonical_bytes=10**9))
+
+    def testExpandedPreparedPlanCanRunWithoutChangingItsCommitment(self):
+        m = self.manifest(); m['padding'] = 'x' * 21000
+        plan = token_measurement.prepare({'manifest': m}, token_limits=self.LIMITS)
+        class Encoder:
+            def encode(self, text, **kwargs):
+                return text.split()
+        result = token_measurement.run_prepared(plan, '00000000-0000-4000-8000-000000000001',
+            encoder_factory=lambda name: Encoder(), token_limits=self.LIMITS)
+        self.assertEqual(plan['manifest'], result['payload']['manifest'])
+        self.assertEqual(-1, result['payload']['value'])
+        self.assertNotIn('transport_limits', result['payload']['manifest'])
+
+    def testClientDiscoversBeforeMintAndOldServersRefuseWithoutPosting(self):
+        m = self.manifest(); m['padding'] = 'x' * 21000
+        c = AinglishClient(use_env=False)
+        c.protocols = Mock(return_value={})
+        c.post = Mock(return_value={'attempt': {'state': 'open'}})
+        args = ('example', m, 'Test full sentence contrast.', [], {'items': 4})
+        with self.assertRaisesRegex(ValueError, '20 KB'):
+            c.mint_attempt(*args)
+        c.post.assert_not_called()
+        c.protocols.return_value = {'measurement_submission': {'manifest': {'token_delta_limits': self.LIMITS}}}
+        self.assertEqual('open', c.mint_attempt(*args)['attempt']['state'])
+        submitted = c.post.call_args.args[1]
+        self.assertEqual(m, submitted['manifest'])
+        self.assertNotIn('token_limits', submitted)
+        self.assertNotIn('transport_limits', submitted['manifest'])
+        c.post.reset_mock(); c.protocols.reset_mock()
+        c.preflight_attempt('example', self.manifest(), 'Small ordinary attempt.', [], {'items': 4})
+        c.protocols.assert_not_called()
+        c.post.assert_called_once()
+
+    def testOldServerRefusesLargeFilingBeforeLocalRecount(self):
+        m = self.manifest(); m['padding'] = 'x' * 21000
+        plan = token_measurement.prepare({'manifest': m}, token_limits=self.LIMITS)
+        c = AinglishClient(use_env=False); c.protocols = Mock(return_value={}); c.post = Mock()
+        with patch.object(token_measurement, 'verify_payload', side_effect=AssertionError('No recount allowed')) as verify:
+            with self.assertRaisesRegex(ValueError, '20 KB'):
+                c.measure('example', {'metric': 'token_delta', 'value': 0, 'manifest': plan['manifest']})
+            verify.assert_not_called()
+        c.post.assert_not_called()
 
 if __name__=='__main__':unittest.main()

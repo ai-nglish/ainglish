@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Negotiate bounded larger inline token manifests on supporting servers, with an
+  explicit capability for offline prepare/run and a safe 20,000-byte fallback.
+  Transport limits stay outside scientific commitments; no pair truncation or
+  remote-input fetching. Mint/preflight and large filing discover support before
+  POST/recount; other metrics keep their existing limits.
+
 ## 0.2.56 — 2026-09-07
 
 - `ainglish-token prepare` / `run` refuse a final manifest over the register's 20,000 canonical UTF-8
