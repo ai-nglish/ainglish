@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.58 — 2026-09-08
 
 - Separate stable token comparison identity v2 from the run-specific input digest.
   Fresh samples can preserve the shared design without copying stale fingerprints.
