@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.57 — 2026-09-08
 
 - Document optional server-supported exact tokenizer populations in bounded token
   prerequisites, including old-server refusal, visible amendment and independent
