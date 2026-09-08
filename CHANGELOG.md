@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Separate stable token comparison identity v2 from the run-specific input digest.
+  Fresh samples can preserve the shared design without copying stale fingerprints.
+  New plans report exact identity compatibility with the target; historical v1
+  identities are not silently reinterpreted. Run and filing verification reject
+  contradictory fingerprints before encoding, while consistent old frozen plans
+  remain runnable without changing their commitments.
+
 ## 0.2.57 — 2026-09-08
 
 - Document optional server-supported exact tokenizer populations in bounded token

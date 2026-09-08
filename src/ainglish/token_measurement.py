@@ -34,9 +34,27 @@ ATTEMPT_ID = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 PROTECTED_COMPARISON_FIELDS = (
-    "kind", "items_sha256", "item_count", "tokenizer_roster", "comparator",
+    "kind", "item_count", "tokenizer_roster", "comparator",
     "population", "aggregation", "unit_span",
 )
+COMPARISON_KIND = "ainglish.token-comparison-identity.v2"
+
+
+def _assert_input_fingerprints(manifest, rows):
+    """Validate own-sample declarations before encoding; do not reinterpret shared identities."""
+    actual = _digest(rows)
+    if manifest.get("items_sha256") != actual:
+        raise ValueError("manifest.items_sha256 does not match canonical manifest.test_set")
+    identity = manifest.get("comparison_identity")
+    if not isinstance(identity, dict):
+        return
+    if identity.get("kind") == "ainglish.token-comparison-identity.v1" \
+            and "items_sha256" in identity and identity["items_sha256"] != actual:
+        raise ValueError("manifest.comparison_identity.items_sha256 conflicts with the frozen design; "
+                         "never copy a source sample digest into fresh inputs")
+    if identity.get("kind") == COMPARISON_KIND and "items_sha256" in identity:
+        raise ValueError("token comparison identity v2 must not include items_sha256; "
+                         "the fresh sample digest belongs only at manifest.items_sha256")
 
 
 def _digest(value):
@@ -355,8 +373,7 @@ def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
     manifest["items_sha256"] = items_sha256
 
     expected_identity = {
-        "kind": "ainglish.token-comparison-identity.v1",
-        "items_sha256": items_sha256,
+        "kind": COMPARISON_KIND,
         "item_count": len(rows),
         "tokenizer_roster": models,
         "comparator": comparator,
@@ -367,10 +384,25 @@ def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
     supplied_identity = manifest.get("comparison_identity", {})
     if not isinstance(supplied_identity, dict):
         raise ValueError("manifest.comparison_identity must be an object when supplied")
+    if "items_sha256" in supplied_identity or supplied_identity.get("kind") == "ainglish.token-comparison-identity.v1":
+        raise ValueError("new token plans use stable comparison identity v2, without a per-run items_sha256. "
+                         "Do not copy a v1 source identity into fresh inputs. Remove the copied v1 identity "
+                         "only while preparing a new plan, inspect the resulting comparison_identity_status "
+                         "against the target and the live governing rule; never rewrite an already minted plan")
     for key in PROTECTED_COMPARISON_FIELDS:
         if key in supplied_identity and supplied_identity[key] != expected_identity[key]:
             raise ValueError("manifest.comparison_identity.%s conflicts with the frozen design" % key)
     manifest["comparison_identity"] = dict(copy.deepcopy(supplied_identity), **expected_identity)
+    target_identity = target.get("comparison_identity") if target is not None else None
+    identity_status = {
+        "state": "original" if target is None else (
+            "matched" if manifest["comparison_identity"] == target.get("comparison_identity") else "mismatched"),
+        "target_kind": target_identity.get("kind") if isinstance(target_identity, dict) else None,
+        "prepared_kind": COMPARISON_KIND,
+        "note": "Exact shared declaration only, not proof of comparator fairness or settlement eligibility. "
+                "Historical v1 identities remain different; consult live eligibility before mint. "
+                "Never copy a stale sample digest to manufacture a match.",
+    }
 
     if manifest.get("interval_kind") not in (None, "member_span"):
         raise ValueError("manifest.interval_kind conflicts with the token runner's member_span interval")
@@ -412,6 +444,7 @@ def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
         "manifest": manifest,
         "manifest_commitment": commitment,
         "intent": intent_summary(manifest),
+        "comparison_identity_status": identity_status,
         "estimand_contract_policy": policy,
         "design_declaration": declaration,
         "replication_target": None if target is None else {
@@ -452,8 +485,7 @@ def verify_payload(payload, encoder_factory=None):
     if not isinstance(manifest, dict) or manifest.get("metric") != "token_delta":
         raise ValueError("token payload verification requires manifest.metric token_delta")
     rows, models = _test_set(manifest), _models(manifest)
-    if manifest.get("items_sha256") != _digest(rows):
-        raise ValueError("manifest.items_sha256 does not match canonical manifest.test_set")
+    _assert_input_fingerprints(manifest, rows)
     if manifest.get("interval_kind") != "member_span":
         raise ValueError("canonical token payloads require manifest.interval_kind member_span")
 
@@ -573,6 +605,7 @@ def run_prepared(plan, attempt_id, encoder_factory=None, *, token_limits=None, e
     rows, models = _test_set(manifest), _models(manifest)
     if _digest(rows) != plan.get("items_sha256"):
         raise ValueError("prepared test_set no longer matches items_sha256; do not run it")
+    _assert_input_fingerprints(manifest, rows)
     _validate_attempt_manifest(manifest, token_limits=token_limits)
 
     if encoder_factory is None:
@@ -697,7 +730,8 @@ def selftest():
     }
     plan = prepare({"manifest": manifest})
     assert plan["pair_count"] == 4 and plan["sample_size_rule"]["passed"] is True
-    assert plan["manifest"]["comparison_identity"]["items_sha256"] == plan["items_sha256"]
+    assert "items_sha256" not in plan["manifest"]["comparison_identity"]
+    assert plan["manifest"]["items_sha256"] == plan["items_sha256"]
     result = run_prepared(
         plan, "11111111-2222-4333-8444-555555555555",
         encoder_factory=lambda name: _FakeEncoding(1 if name == "tok-a" else 2),
