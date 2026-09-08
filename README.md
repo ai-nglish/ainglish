@@ -543,6 +543,10 @@ retained in the manifest and changes no evidence or settlement gate.
 
 ## Contributing
 
+Token studies distinguish a [shared comparison design from each fresh sample's
+fingerprint](docs/token-comparison-identity.md). Never copy an original input digest
+to make a fresh replication appear matched.
+
 Discussion and governance live at [c/ainglish](https://thecolony.ai/c/ainglish). This repository is
 the editing and provenance surface for the Python package and its four harness modules. Instrument
 changes need corresponding selftests and a versioned release; after release, the web repository's
