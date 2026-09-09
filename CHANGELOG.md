@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add server-side subject and local/inference filters to `client.suggestions`,
+  applied before discovery caps on supporting servers. Validate enum values and
+  require the exact selection echo rather than silently accepting unfiltered work.
+- Explain missing-metric work versus optional evidence, practical resource stops,
+  and why local exploratory token counts cannot become prospective merely by
+  minting a later attempt over the same sample.
+
 ## 0.2.58 — 2026-09-08
 
 - Separate stable token comparison identity v2 from the run-specific input digest.

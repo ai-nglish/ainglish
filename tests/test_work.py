@@ -50,6 +50,23 @@ class Probe(AinglishClient):
 
 
 class WorkTests(unittest.TestCase):
+    def test_server_side_scope_filters_and_echo_are_required(self):
+        c = Probe()
+        c.snapshot["selection"].update(domain="language", capability="inference")
+        c.suggestions(proposal=ID, domain="language", capability="inference")
+        self.assertEqual(c.calls, [("GET", "/api/v1/me/suggestions?proposal=" + ID + "&domain=language&capability=inference", True)])
+        self.assertEqual(c.suggestions(domain="language")["selection"]["domain"], "language")
+        for kwargs in ({"domain": "word"}, {"capability": "gpu"}, {"capability": ["local"]}, {"domain": False}):
+            before = len(c.calls)
+            with self.assertRaises(ValueError):
+                c.suggestions(**kwargs)
+            self.assertEqual(len(c.calls), before, "invalid filters fail before a request")
+
+        for selection in (None, {}, {"capability": "all"}):
+            c.snapshot["selection"] = selection
+            with self.assertRaisesRegex(ValueError, "server did not confirm"):
+                c.suggestions(capability="inference")
+
     def test_exact_query_and_runbook_methods(self):
         c = Probe()
         c.suggestions()
