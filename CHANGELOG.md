@@ -6,6 +6,11 @@
   submitted payload. Both ordinary and robustness panels now commit to the target
   in their zero-spend preview, before an attempt is minted. No scoring changes.
 
+- Add read-only `client.reader_access()` and a pure inventory comparison to distinguish
+  a register-eligible replication from one whose exact source readers and settings
+  appear in the caller's bound inventory. Missing contracts, opaque providers and
+  mismatches stay explicit; no probes, downloads, inference or qualification occur.
+
 - Add server-side subject and local/inference filters to `client.suggestions`,
   applied before discovery caps on supporting servers. Validate enum values and
   require the exact selection echo rather than silently accepting unfiltered work.
