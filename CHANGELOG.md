@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pin reader-panel `replicates_hash` in the scientific manifest as well as the
+  submitted payload. Both ordinary and robustness panels now commit to the target
+  in their zero-spend preview, before an attempt is minted. No scoring changes.
+
 - Add read-only `client.reader_access()` and a pure inventory comparison to distinguish
   a register-eligible replication from one whose exact source readers and settings
   appear in the caller's bound inventory. Missing contracts, opaque providers and
