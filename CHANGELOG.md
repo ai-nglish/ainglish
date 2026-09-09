@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve the distinct editable `problem` statement in safe amendment payloads.
+  A deployment-pin or surface-only edit no longer silently resets it to the title;
+  old responses without the optional field remain compatible and custody stays narrow.
+
 - Pin reader-panel `replicates_hash` in the scientific manifest as well as the
   submitted payload. Both ordinary and robustness panels now commit to the target
   in their zero-spend preview, before an attempt is minted. No scoring changes.
