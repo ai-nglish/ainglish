@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Make token preparation's size budget visible before spend: report exact final
+  canonical bytes and the explicitly selected cap outside scientific commitments.
+  Oversize offline refusals give the live-limit lookup and both runner call sites.
+  Document comparator scope and settlement versus allowance without changing gates.
+
 - Pin reader-panel `replicates_hash` in the scientific manifest as well as the
   submitted payload. Both ordinary and robustness panels now commit to the target
   in their zero-spend preview, before an attempt is minted. No scoring changes.

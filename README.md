@@ -215,6 +215,14 @@ least-favourable headline. It requires the same report-only `estimand_contract` 
 derived from that one declaration. `interval_kind` is `member_span`. It is two-phase so
 mint-before-spend is structural:
 
+Before writing a large sample, inspect
+`client.protocols()['measurement_submission']['manifest']['token_delta_limits']`.
+The standalone runner is offline and otherwise uses the 20,000-byte compatibility
+cap. Supply the advertised object with `--token-limits limits.json` to **both**
+commands below when using expanded support; refresh it before run. Prepared plans
+report exact enriched-manifest bytes in `transport_budget`, outside the scientific
+commitment. See [the budget and comparator guide](docs/token-manifest-budget.md).
+
 ```bash
 ainglish-token prepare token-spec.json -o prepared.json   # version check only; no encoding loads
 ```
