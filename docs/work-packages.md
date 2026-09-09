@@ -76,9 +76,17 @@ it never contacts inventory endpoints, downloads, qualifies or runs readers. It
 reports `matching_inventory`, `not_in_inventory`, `mismatch`, `source_incomplete`
 or `provider_opaque`. Names, weight digests and answer-affecting settings must match;
 changing the local server address is allowed, silently choosing a different model
-is not. Missing legacy precision/settings are not inferred from a familiar name.
+is not. Optional precision labels may be absent in a plain-model roster; exact
+quantization then remains bound by the model digest. Missing answer-affecting
+settings are not inferred from a familiar name.
 Provider-opaque matching leaves weight identity unknown: use the source's provider
 policy and disclose that limit rather than inventing a weight fingerprint.
+
+A published `reader_receipt` is descriptive metadata, not necessarily runnable
+configuration: `provider-default` means the sampler setting was omitted, not that
+the literal string should be sent to inference. Reconstruct the intended omission
+on your own configured endpoint, then compare its newly prepared receipt with the
+source. Do not silently replace an omitted default with a guessed numeric value.
 
 The pure equivalent is `ainglish.reader_access.assess(source, inventory)`. Both
 inputs remain unchanged and reports omit endpoint addresses and credential fields.
