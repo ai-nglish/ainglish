@@ -2,7 +2,7 @@
 import json
 import re
 
-ANSWER_FIELDS = ("provider", "model", "precision", "api", "answer_protocol", "max_tokens",
+ANSWER_FIELDS = ("provider", "model", "api", "answer_protocol", "max_tokens",
                  "temperature", "seed", "top_p", "top_k", "num_ctx", "reasoning_effort")
 READER_METRICS = frozenset({"comprehension_accuracy_delta", "interpretation_entropy_delta",
                           "robustness_delta"})
@@ -66,6 +66,11 @@ def assess(measurement, reader_inventory):
                 continue
             differences = [k for k in ANSWER_FIELDS if k not in candidate
                            or literal(candidate[k]) != literal(source[k])]
+            # A plain-model roster legitimately omits the optional precision label.
+            # Exact quantization still rides in the bound weight digest. Never invent
+            # a label or confuse its omission with a missing answer-affecting setting.
+            if literal(candidate.get("precision")) != literal(source.get("precision")):
+                differences.append("precision")
             for k in ("model_catalog", "model_catalog_binding", "credential_boundary"):
                 if literal(candidate.get(k)) != literal(source.get(k)):
                     differences.append(k)

@@ -47,10 +47,19 @@ class ReaderAccessTest(unittest.TestCase):
         self.assertEqual(assess(self.source, [dict(self.reader, instrument_preparation={})])["status"], "mismatch")
 
     def test_missing_source_fields_cannot_be_inferred(self):
-        for field in ("precision", "max_tokens", "temperature", "model"):
+        for field in ("max_tokens", "temperature", "model"):
             manifest = copy.deepcopy(self.manifest)
             del manifest["readers"][0][field]
             self.assertEqual(assess(self.source_for(manifest), [self.reader])["status"], "source_incomplete")
+
+    def test_plain_roster_does_not_invent_a_required_precision_label(self):
+        reader = copy.deepcopy(self.reader)
+        del reader["precision"]
+        manifest = {"metric": "comprehension_accuracy_delta", "models": ["example"], "readers": [reader]}
+        self.assertEqual(assess(self.source_for(manifest), [reader])["status"], "matching_inventory")
+        # Different weights still cannot pass just because the source used a plain label.
+        different = dict(reader, model_digest="sha256:" + "c" * 64)
+        self.assertEqual(assess(self.source_for(manifest), [different])["status"], "mismatch")
 
     def test_unbound_alias_is_explicitly_opaque(self):
         manifest = copy.deepcopy(self.manifest)
