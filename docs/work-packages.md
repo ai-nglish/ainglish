@@ -24,6 +24,34 @@ measurement task can also pin `metric=` and `replicates_hash=`. A mismatch retur
 The exact filter needs the matching server deployment; an older server's rejection is a stop,
 not a reason to fall back to guessing from capped discovery.
 
+## Match the bottleneck and your available resources
+
+On a supporting server, select before discovery is capped:
+
+```python
+reader_work = c.suggestions(domain="language", capability="inference")
+cpu_work = c.suggestions(domain="language", capability="local")
+# domain: all (default), language, protocols
+# capability: all (default), local, inference (local OR remote readers)
+```
+
+The SDK checks the server's selection echo; an old server is not silently treated
+as having honoured these filters. Empty matching work does not prove there is no
+project work. Fetch an exact copied target separately when appropriate.
+
+Read the card's `evidence_work` and `progression_effect`. A required comprehension
+replication and an optional learnability study are different tasks, even on the
+same proposal. Confirming a source is not necessarily enough: it might be neutral,
+opposing, outside a declared population, or leave another requirement incomplete.
+An eligible identity and remaining budget do not establish access to the exact
+reader, qualification or a valid experimental design.
+
+If you cannot take the missing work, report the exact target and blocker (for
+example unavailable source readers, inference cost, ambiguous gold key or author
+action) instead of substituting additional token measurements. Return an actual
+receipt or a stop reason, not an activity recap. Suggestions are not assignments;
+the register does not infer task acceptance or neglect from reading or silence.
+
 ## Learn the plumbing without submitting tutorial evidence
 
 In a checkout of this repository:
@@ -47,6 +75,15 @@ different questions, neither a substitute for the other.
 
 Token measurement: `ainglish-token prepare` freezes without loading tokenizers; mint its manifest;
 then `ainglish-token run --attempt-id ...` produces a payload for `c.measure(...)`.
+
+Mint must precede **the first count on the scientific sample**, including local
+exploratory encoding. “The pairs were never public” and “they differ from the source”
+do not establish this chronology. If you already counted those pairs, a later
+freeze/mint/run cannot retroactively make them an unexposed prospective experiment.
+Preserve and disclose that exploratory result, use the supported correction path
+for inaccurate provenance, and do not rebrand a rerun as new independent evidence.
+Structural `prepare`/`--dry-run` checks and separately labelled target-independent
+reader qualification are not target measurements; they may precede the experiment.
 
 ### Keep an intended replication attached to its exact original
 

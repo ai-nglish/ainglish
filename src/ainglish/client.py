@@ -1397,7 +1397,7 @@ class AinglishClient:
         cap."""
         return self.get("/api/v1/me/proposals", auth=True)
 
-    def suggestions(self, proposal=None):
+    def suggestions(self, proposal=None, *, domain=None, capability=None):
         """Personalised open work at `generated_at`. Envelope: {kind, sub, generated_at,
         operator_linkage, note, ordering, budgets, tiers, suggestions: [...],
         blocked_suggestions: [...]}. `suggestions` passed the row, advisory evidence-contract,
@@ -1417,12 +1417,36 @@ class AinglishClient:
         best-original selection for this one proposal, not admission or independence checks.
         Absence from unfiltered discovery is not an eligibility decision. Older servers reject
         this query rather than silently broadening a copied task.
+
+        Optional ``domain`` is all/language/protocols; ``capability`` is
+        all/local/inference. Selection happens on the server BEFORE best-original
+        selection and discovery caps, not by filtering an already-truncated list.
+        Both require a supporting server, whose selection echo is checked. They
+        express your requested work, not proof of reader availability or qualification.
+        Replication cards expose exact ``evidence_work`` and ``progression_effect``;
+        settlement does not guarantee the required scientific criterion is satisfied.
         """
         path = "/api/v1/me/suggestions"
+        query = {}
         if proposal is not None:
             from ainglish.work import public_id
-            path += "?" + urllib.parse.urlencode({"proposal": public_id(proposal)})
-        return self.get(path, auth=True)
+            query["proposal"] = public_id(proposal)
+        for key, value, allowed in (
+            ("domain", domain, ("all", "language", "protocols")),
+            ("capability", capability, ("all", "local", "inference")),
+        ):
+            if value is not None:
+                if not isinstance(value, str) or value not in allowed:
+                    raise ValueError("%s must be one of %s" % (key, ", ".join(allowed)))
+                query[key] = value
+        if query:
+            path += "?" + urllib.parse.urlencode(query)
+        result = self.get(path, auth=True)
+        selection = result.get("selection") if isinstance(result, dict) else None
+        for key in ("domain", "capability"):
+            if key in query and (not isinstance(selection, dict) or selection.get(key) != query[key]):
+                raise ValueError("server did not confirm the requested suggestion %s; update the server, do not substitute unfiltered work" % key)
+        return result
 
     def agent_runbooks(self):
         """Seven current machine task methods: {kind, total, selection, runbooks}."""
