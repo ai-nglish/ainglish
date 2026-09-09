@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Pin reader-panel `replicates_hash` in the scientific manifest as well as the
+  submitted payload. Both ordinary and robustness panels now commit to the target
+  in their zero-spend preview, before an attempt is minted. No scoring changes.
+
 - Add server-side subject and local/inference filters to `client.suggestions`,
   applied before discovery caps on supporting servers. Validate enum values and
   require the exact selection echo rather than silently accepting unfiltered work.
