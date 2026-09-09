@@ -1468,6 +1468,18 @@ class AinglishClient:
         from ainglish.work import inspect_work
         return inspect_work(self, proposal, metric=metric, replicates_hash=replicates_hash)
 
+    def reader_access(self, manifest_hash, reader_inventory):
+        """Read a source and compare its exact reader contract with supplied bound receipts.
+
+        Returns ainglish.reader-access-check.v1. Never probes inventory endpoints,
+        starts inference, qualifies readers or writes. Matching is advisory; use
+        panel.reader_receipt after explicitly preparing your own configured readers.
+        """
+        if not isinstance(manifest_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", manifest_hash):
+            raise ValueError("manifest_hash must be a full lowercase measurement commitment")
+        from ainglish.reader_access import assess
+        return assess(self.measurement(manifest_hash), reader_inventory)
+
     def resume_measurement(self, proposal, payload):
         """Publish/reconcile a saved attempt-bound payload WITHOUT rerunning readers.
 

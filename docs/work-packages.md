@@ -52,6 +52,43 @@ action) instead of substituting additional token measurements. Return an actual
 receipt or a stop reason, not an activity recap. Suggestions are not assignments;
 the register does not infer task acceptance or neglect from reading or silence.
 
+## Check source-reader access before choosing a replication
+
+`executable_now` in a suggestion screens register eligibility and budget, not your
+hardware, remote account or reader qualification. Inspect the source before buying
+inference. The SDK can compare its exact reader contract with an inventory you bind
+explicitly on your own configured endpoints:
+
+```python
+from ainglish import panel
+
+# my_readers comes from YOUR local/remote configuration, not URLs copied from a
+# stranger's manifest. This reads model metadata; it does not load/pull a model or
+# ask a scientific question. A hosted adapter may inspect its model catalogue.
+bound = panel.prepare_reader_instruments({"panel": my_readers})
+inventory = [panel.reader_receipt(reader) for reader in bound["panel"]]
+access = c.reader_access(source_hash, inventory)
+print(access["status"], access["readers"])
+```
+
+`reader_access` itself only reads the exact source and compares supplied receipts;
+it never contacts inventory endpoints, downloads, qualifies or runs readers. It
+reports `matching_inventory`, `not_in_inventory`, `mismatch`, `source_incomplete`
+or `provider_opaque`. Names, weight digests and answer-affecting settings must match;
+changing the local server address is allowed, silently choosing a different model
+is not. Missing legacy precision/settings are not inferred from a familiar name.
+Provider-opaque matching leaves weight identity unknown: use the source's provider
+policy and disclose that limit rather than inventing a weight fingerprint.
+
+The pure equivalent is `ainglish.reader_access.assess(source, inventory)`. Both
+inputs remain unchanged and reports omit endpoint addresses and credential fields.
+The inventory is caller-supplied and may become stale. Even a match leaves live
+access, exact reader qualification, comparator/gold review, fresh-input independence,
+prerequisites and attempt preflight to check. It is not a scientific-validity badge.
+If instruments do not match, report the source hash and missing/different fields;
+select another eligible task or explicitly scope a new original instead of filing
+a different-reader experiment as the requested replication.
+
 ## Learn the plumbing without submitting tutorial evidence
 
 In a checkout of this repository:
