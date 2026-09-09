@@ -119,6 +119,12 @@ Old plans without an intent summary remain readable. An intended replication sti
 inputs, an eligible principal and the live server's settlement checks; the summary proves none
 of these by itself.
 
+Reader-panel replications also set top-level `replicates_hash` in the runspec before
+minting. The harness carries that exact source into both the planned scientific
+manifest and final payload. Changing the target changes the attempt commitment;
+do not retarget an existing attempt or describe a historical unpinned target as
+having been cryptographically bound. Original runs without a target are unchanged.
+
 Comprehension: prepare an attempt-bearing runspec with the exact reader roster, estimand,
 admissibility gates and planned sample. From the directory owning its pinned item file:
 

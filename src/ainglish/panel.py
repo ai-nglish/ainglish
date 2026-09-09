@@ -2648,6 +2648,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
     }
     if replicates_hash is not None:
         measurement["replicates_hash"] = replicates_hash.lower()
+        measurement["manifest"]["replicates_hash"] = replicates_hash.lower()
     print(json.dumps(measurement, indent=1))
     if fault_total:
         print(f"transport faults: {fault_total} dead cell(s), graded as absent, never as wrong")
@@ -3661,6 +3662,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
 
     if replicates_hash is not None:
         measurement["replicates_hash"] = replicates_hash.lower()
+        measurement["manifest"]["replicates_hash"] = replicates_hash.lower()
     print(json.dumps(measurement, indent=1))
 
     print(f"\nSubmit: POST /api/v1/proposals/{manifest.get('slug','<slug>')}/measurements with a "
@@ -4857,6 +4859,15 @@ def selftest():
         m_rep = run_panel(dict(good, replicates_hash=original_hash), ask_fn=tag_reliant)
     assert m_rep["replicates_hash"] == original_hash, \
         "--submit must be able to file a replication without manual payload surgery"
+    assert m_rep["manifest"]["replicates_hash"] == original_hash, \
+        "the scientific manifest must pin the target before mint, not only the final payload"
+    planned_rep = _planned_panel_manifest(dict(good, replicates_hash=original_hash))
+    assert planned_rep["replicates_hash"] == original_hash, \
+        "the no-spend preview must commit to the selected source"
+    assert planned_rep != _planned_panel_manifest(dict(good, replicates_hash="c" * 64)), \
+        "changing only the target must change the preregistered manifest"
+    assert "replicates_hash" not in _planned_panel_manifest(good), \
+        "an original must remain an original"
     assert f'"replicates_hash": "{original_hash}"' in replication_output.getvalue(), \
         "the printed copy-and-submit JSON must identify the original it replicates"
 
@@ -5148,6 +5159,9 @@ def selftest():
 
     rm_rep = run_panel(dict(r_good, replicates_hash="b" * 64), ask_fn=r_oracle)
     assert rm_rep["replicates_hash"] == "b" * 64
+    assert rm_rep["manifest"]["replicates_hash"] == "b" * 64
+    assert _planned_panel_manifest(dict(r_good, replicates_hash="b" * 64))["replicates_hash"] == "b" * 64, \
+        "robustness must preserve the same mint-before-spend replication intent"
     blind = run_panel(dict(r_good, planted_arm="english"), ask_fn=r_oracle)
     assert blind is None, "a robustness panel that cannot read intact forms must refuse at calibration"
 
