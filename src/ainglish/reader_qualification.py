@@ -225,16 +225,29 @@ def validate_screen(value):
         "kind", "roster_id", "reader", "lineage", "controls", "validity_days",
         "min_gap_bps", "min_recovered_bps",
     }
-    unknown = set(value) - expected - {"screen_url"}
+    unknown = set(value) - expected - {"screen_url", "receipt_precision"}
     missing = expected - set(value)
     if unknown or missing:
         raise ValueError("screen has missing or unknown fields")
     reader = value["reader"]
     if not isinstance(reader, dict) or not isinstance(reader.get("name"), str):
         raise ValueError("reader must be one panel reader object with a non-empty name")
-    for field in ("name", "provider", "model", "precision"):
+    for field in ("name", "provider", "model"):
         _text(reader.get(field), "reader.%s" % field, 160)
-    roster = reader["name"] + ("@" + reader["precision"] if reader.get("precision") else "")
+    precision = reader.get("precision")
+    if precision is None:
+        # A source may use a plain roster ID while still binding exact weights.
+        # Receipt metadata must describe the known quantization without silently
+        # inserting a suffix into that source's scientific roster or settings hash.
+        _text(value.get("receipt_precision"), "receipt_precision", 160)
+        if not isinstance(reader.get("model_digest"), str) \
+                or _MODEL_DIGEST.fullmatch(reader["model_digest"]) is None:
+            raise ValueError("a plain qualification roster needs an explicit bound model_digest")
+    else:
+        _text(precision, "reader.precision", 160)
+        if "receipt_precision" in value:
+            raise ValueError("receipt_precision is only for a plain reader roster without a precision label")
+    roster = reader["name"] + ("@" + precision if precision else "")
     if _text(value["roster_id"], "roster_id", 120) != roster:
         raise ValueError("roster_id must equal reader name@precision exactly (%s)" % roster)
     lineage = value["lineage"]
@@ -321,7 +334,7 @@ def run_screen(value, *, ask_fn=None, prepare_fn=None, now=None):
         roster_id=spec["roster_id"],
         provider=reader_data.get("provider", reader.get("provider")),
         model=reader_data.get("model", reader.get("model")),
-        precision=reader_data.get("precision", reader.get("precision")),
+        precision=reader_data.get("precision") or spec.get("receipt_precision"),
         lineage_key=spec["lineage"]["key"], lineage_basis=spec["lineage"]["basis"],
         screen_sha256=hashlib.sha256(screen_bytes).hexdigest(),
         settings_sha256=hashlib.sha256(settings_bytes).hexdigest(),

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support qualification screens for exact, digest-bound plain reader rosters with
+  explicit `receipt_precision` metadata. Keep the source roster and actual settings
+  commitment unchanged; do not invent a precision suffix or infer unknown weights.
+  Existing labelled rosters and qualification receipt wire format are unchanged.
+
 - Pin reader-panel `replicates_hash` in the scientific manifest as well as the
   submitted payload. Both ordinary and robustness panels now commit to the target
   in their zero-spend preview, before an attempt is minted. No scoring changes.
