@@ -1495,6 +1495,17 @@ class AinglishClient:
         from ainglish.reader_access import assess
         return assess(self.measurement(manifest_hash), reader_inventory)
 
+    def reader_work(self, reader_inventory, proposals, *, max_sources=20):
+        """Find offered reader replications across explicit proposal IDs, without spend.
+
+        Checks uncapped authenticated suggestions for each of 1-20 caller-selected
+        proposals, then at most max_sources (1-100) offered source contracts against
+        supplied bound reader receipts. Retains mismatches, blocked work and truncation.
+        A match is advisory, not current qualification, scientific validity or admission.
+        """
+        from ainglish.reader_access import discover
+        return discover(self, reader_inventory, proposals, max_sources=max_sources)
+
     def resume_measurement(self, proposal, payload):
         """Publish/reconcile a saved attempt-bound payload WITHOUT rerunning readers.
 

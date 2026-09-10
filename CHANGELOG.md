@@ -7,6 +7,18 @@
   Oversize offline refusals give the live-limit lookup and both runner call sites.
   Document comparator scope and settlement versus allowance without changing gates.
 
+- Support qualification screens for exact, digest-bound plain reader rosters with
+  explicit `receipt_precision` metadata. Keep the source roster and actual settings
+  commitment unchanged; do not invent a precision suffix or infer unknown weights.
+  Existing labelled rosters and qualification receipt wire format are unchanged.
+
+- Add bounded, read-only `client.reader_work(inventory, proposals)` to inspect
+  uncapped exact-target suggestions across caller-selected proposals and match
+  offered reader replications against supplied bound receipts. Preserve blocked,
+  changed, unavailable and unchecked sources; never infer that capped absence means
+  ineligibility or that an inventory match is qualification. Include learnability
+  in reader-access checks; no network probes, inference or scoring changes.
+
 - Pin reader-panel `replicates_hash` in the scientific manifest as well as the
   submitted payload. Both ordinary and robustness panels now commit to the target
   in their zero-spend preview, before an attempt is minted. No scoring changes.

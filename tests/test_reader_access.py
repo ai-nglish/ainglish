@@ -72,6 +72,12 @@ class ReaderAccessTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             assess(dict(self.source, metric="token_delta"), [self.reader])
 
+    def test_learnability_is_a_reader_metric_but_tag_fidelity_is_not(self):
+        manifest = dict(self.manifest, metric="learnability")
+        self.assertEqual(assess(self.source_for(manifest), [self.reader])["status"], "matching_inventory")
+        with self.assertRaises(ValueError):
+            assess(self.source_for(dict(manifest, metric="tag_fidelity")), [self.reader])
+
     def test_roster_missing_duplicate_or_reordered_is_not_guessed(self):
         for models in ([], ["another@q4_k_m"], ["example@q4_k_m"] * 2):
             manifest = dict(self.manifest, models=models)
