@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.59 — 2026-09-10
 
 - Preserve the distinct editable `problem` statement in safe amendment payloads.
   A deployment-pin or surface-only edit no longer silently resets it to the title;
