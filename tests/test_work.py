@@ -36,7 +36,7 @@ class Probe(AinglishClient):
         if path == '/api/v1/proposals/' + ID:
             raise AssertionError('detail API is slug-only; resolve the namespace first')
         if path == '/api/v1/proposals/current-slug':
-            return {"public_id": ID, "slug": "current-slug", "stage": "seconded"}
+            return {"public_id": ID, "slug": "current-slug", "stage": "seconded", **getattr(self, "proposal_extra", {})}
         if path.startswith("/api/v1/attempts/"):
             return copy.deepcopy(self.state)
         if path == "/api/v1/me":
@@ -50,6 +50,18 @@ class Probe(AinglishClient):
 
 
 class WorkTests(unittest.TestCase):
+    def test_public_author_notice_is_fresh_advice_not_a_veto(self):
+        c = Probe()
+        c.card['author_work_notice'] = {'notice_id': 'old'}
+        c.proposal_extra = {'author_work_notices': {'active': {'notice_id': 'fresh', 'kind': 'pause_measurements'}}}
+        package = c.work_package(ID)
+        self.assertEqual(package['author_work_notices'], c.proposal_extra['author_work_notices'])
+        self.assertEqual(package['status'], 'offered')
+        self.assertTrue(all(row[0] == 'GET' for row in c.calls))
+        package['author_work_notices']['active']['notice_id'] = 'mutated'
+        self.assertEqual(c.proposal_extra['author_work_notices']['active']['notice_id'], 'fresh')
+        self.assertIsNone(Probe().work_package(ID)['author_work_notices'])
+
     def test_server_side_scope_filters_and_echo_are_required(self):
         c = Probe()
         c.snapshot["selection"].update(domain="language", capability="inference")
