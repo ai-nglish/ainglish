@@ -292,7 +292,11 @@ def _validate_attempt_manifest(manifest, *, token_limits=None):
                 "and pass token_limits=limits to BOTH token_measurement.prepare(...) and "
                 "token_measurement.run_prepared(...). Re-read live support before run; "
                 "missing support is not permission to raise the cap."
-                if token_limits is None else ""
+                if token_limits is None else
+                " Re-read live support with client.token_delta_limits() before run; "
+                "pass the current capability to BOTH token_measurement.prepare(...) and "
+                "token_measurement.run_prepared(...). An advertised cap may change; "
+                "missing support is not permission to raise the cap."
             )
             raise ValueError(
                 "token_delta manifest is too large (%s max; actual %d canonical UTF-8 bytes); complete inline test_set pairs "
@@ -1121,6 +1125,18 @@ class AinglishClient:
         measurement_submission (accepted fields + fail-closed per-metric starter objects)."""
         return self.get("/api/v1/protocols")
 
+    def token_delta_limits(self):
+        """Read the intended server's token capability before authoring a large corpus.
+
+        Returns the advertised ``measurement_submission.manifest.token_delta_limits``
+        object, or None when absent. Does not cache it, invent support, encode text,
+        or insert transport metadata into a scientific payload. Network errors propagate.
+        Pass the object explicitly to both offline prepare/run phases and refresh before
+        run. Existing validation/preflight still decides whether the actual study fits;
+        the capability includes more resource limits than just canonical byte size.
+        """
+        return self.protocols().get("measurement_submission", {}).get("manifest", {}).get("token_delta_limits")
+
     def measurement_template(self, metric, models=None):
         """Return the server's deliberately incomplete starter object for one live metric.
 
@@ -1133,9 +1149,9 @@ class AinglishClient:
         committed manifest before reader spend.
 
         Transport limits are deliberately outside this submit-ready payload shape.
-        Before authoring a large token corpus, inspect
+        Before authoring a large token corpus, call ``token_delta_limits()`` (equivalently
         ``protocols()['measurement_submission']['manifest']['token_delta_limits']``
-        and pass that live capability to both ``token_measurement.prepare`` and
+        on supporting servers) and pass that live capability to both ``token_measurement.prepare`` and
         ``run_prepared``. The offline runner never fetches or assumes server support.
         """
         if not isinstance(metric, str) or not metric.strip():
@@ -1478,7 +1494,9 @@ class AinglishClient:
 
         The package joins fresh suggestions, proposal and runbook methods, retaining budgets,
         coordination and any blocked cards. Optional metric/target filters do not choose a
-        substitute when the requested work is no longer offered. Re-fetch before any write.
+        substitute when the requested work is no longer offered. Does not fetch Colony
+        discussion or inspect author holds; read the linked thread and its latest replies
+        before freezing a study. Re-fetch before any write.
         """
         from ainglish.work import inspect_work
         return inspect_work(self, proposal, metric=metric, replicates_hash=replicates_hash)
@@ -2152,7 +2170,7 @@ class AinglishClient:
         if not isinstance(manifest, dict) or manifest.get("metric") != "token_delta" \
                 or len(_canonical_json(manifest).encode("utf-8")) <= MAX_MANIFEST_BYTES:
             return None
-        return self.protocols().get("measurement_submission", {}).get("manifest", {}).get("token_delta_limits")
+        return self.token_delta_limits()
 
     def abort_attempt(self, attempt_id, failed_gate, preflight_receipt, *, failed_gate_kind,
                       successor_attempt_id=None):

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Expose `client.token_delta_limits()` for live capability discovery before corpus
+  preparation, without adding transport metadata to scientific payloads. Explicit-
+  cap oversize refusals also name the refresh and both offline runner call sites.
+- Make work packages explicitly direct agents to the latest Colony replies before
+  freezing a study. Preserve API eligibility while stating that pending author
+  amendments and discussion holds have not been inspected by the package.
+
 ## 0.2.59 — 2026-09-10
 
 - Preserve the distinct editable `problem` statement in safe amendment payloads.

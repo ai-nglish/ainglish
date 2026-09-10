@@ -163,4 +163,36 @@ class TokenManifestBudgetTest(unittest.TestCase):
             token_measurement.run_prepared(plan, '00000000-0000-4000-8000-000000000001', encoder_factory=encoder)
         encoder.assert_not_called()
 
+    def testCapabilityAccessorIsAnExplicitReadWithoutPayloadMutationOrCaching(self):
+        c = AinglishClient(use_env=False)
+        c.get = Mock(return_value={'measurement_submission': {'manifest': {'token_delta_limits': self.LIMITS}}})
+        c.post = Mock(side_effect=AssertionError('read only'))
+        with patch.object(token_measurement, 'token_delta', side_effect=AssertionError('no encoding')):
+            self.assertEqual(self.LIMITS, c.token_delta_limits())
+            c.get.assert_called_once_with('/api/v1/protocols')
+            c.get.return_value = {}
+            self.assertIsNone(c.token_delta_limits())
+            self.assertEqual(2, c.get.call_count, 'capability changes must not be cached')
+        c.post.assert_not_called()
+
+    def testCapabilityAbsenceIsNotAnInventedDefaultAndFetchErrorsPropagate(self):
+        c = AinglishClient(use_env=False)
+        for envelope in ({}, {'measurement_submission': {}},
+                         {'measurement_submission': {'manifest': {}}}):
+            c.protocols = Mock(return_value=envelope)
+            self.assertIsNone(c.token_delta_limits())
+        c.protocols = Mock(side_effect=OSError('transport failed'))
+        with self.assertRaisesRegex(OSError, 'transport failed'):
+            c.token_delta_limits()
+
+    def testExplicitOversizeCapStillNamesFreshDiscoveryAndBothPhases(self):
+        m = self.manifest(); m['padding'] = 'x' * MAX_INLINE_TOKEN_MANIFEST_BYTES
+        with self.assertRaises(ValueError) as refused:
+            _validate_attempt_manifest(m, token_limits=self.LIMITS)
+        message = str(refused.exception)
+        self.assertIn('client.token_delta_limits()', message)
+        self.assertIn('BOTH token_measurement.prepare', message)
+        self.assertIn('token_measurement.run_prepared', message)
+        self.assertIn('missing support is not permission', message)
+
 if __name__=='__main__':unittest.main()

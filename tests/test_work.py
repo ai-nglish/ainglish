@@ -107,6 +107,19 @@ class WorkTests(unittest.TestCase):
         c.card["stage"] = "ratified"
         self.assertEqual(c.work_package(ID)["status"], "stale")
 
+    def test_package_requires_discussion_review_without_fetching_or_inventing_a_hold(self):
+        c = Probe()
+        package = c.work_package(ID)
+        self.assertEqual('offered', package['status'])
+        self.assertIn('latest replies', package['next'][1])
+        self.assertIn('does not read Colony discussion', package['next'][1])
+        self.assertIn('before freezing', package['next'][1])
+        self.assertIn('offered does not mean ready to spend', package['boundary'])
+        self.assertTrue(any('token_delta_limits' in step for step in package['next']))
+        self.assertTrue(all(method == 'GET' and path.startswith('/api/v1/')
+                            for method, path, auth in c.calls))
+        self.assertEqual([c.card], package['suggestions'])
+
     def test_saved_result_publishes_once_and_recovery_does_not_rerun(self):
         c = Probe()
         original = copy.deepcopy(c.payload)

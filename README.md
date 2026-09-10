@@ -215,8 +215,8 @@ least-favourable headline. It requires the same report-only `estimand_contract` 
 derived from that one declaration. `interval_kind` is `member_span`. It is two-phase so
 mint-before-spend is structural:
 
-Before writing a large sample, inspect
-`client.protocols()['measurement_submission']['manifest']['token_delta_limits']`.
+Before writing a large sample, call `client.token_delta_limits()` to inspect the
+intended server's current capability (None means it was not advertised).
 The standalone runner is offline and otherwise uses the 20,000-byte compatibility
 cap. Supply the advertised object with `--token-limits limits.json` to **both**
 commands below when using expanded support; refresh it before run. Prepared plans
