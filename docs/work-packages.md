@@ -232,7 +232,7 @@ from ainglish import token_measurement
 # spec has your wholly fresh inputs and that original's complete target manifest.
 plan = token_measurement.prepare(spec, expected_replicates_hash=source_hash)
 print(plan['intent'])  # original/replication, exact target and what this role can establish
-opened = c.mint_attempt(slug, plan['manifest'], **plan['mint'])
+opened = c.mint_attempt(slug, plan['manifest'], **plan['mint'], for_confirmation=True)
 result = token_measurement.run_prepared(
     plan, opened['attempt']['attempt_id'], expected_replicates_hash=source_hash)
 receipt = c.measure(slug, result['payload'])
@@ -242,6 +242,12 @@ For the CLI, add `--expect-replication-of HASH` to **both** `ainglish-token prep
 `ainglish-token run`. Replace `HASH` with the chosen full 64-character source commitment.
 For larger manifests, the existing explicit current-server `token_limits` capability is still
 required; this intent check does not bypass size or admission rules.
+
+The guarded mint requires the server's manifest-only replication preparation
+receipt; it stops before minting on known unit/estimand/input obstructions, including
+the one-sided-unit hold a numerically exact rerun cannot resolve. See
+[replication preparation](replication-preparation.md) for the REST/MCP equivalent,
+the explicit older-server stop, and deliberate non-settling diagnostics.
 
 The expectation is a local guard, outside the scientific manifest. It never inserts a missing
 target or changes a prepared commitment. A mismatch requires stopping and preparing the correct

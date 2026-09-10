@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in `for_confirmation=True` to attempt preflight and mint. The guarded
+  path stops before mint/spend on known source-contract or copied-input obstructions
+  and fails explicitly on servers without the matching preparation receipt.
+  Ordinary diagnostic calls remain wire-compatible; no scientific rule changes.
+
 - Add optional private `client.suggestion_feedback()` and admin-only
   `client.participation_diagnostics()`. Work packages preserve returned observation
   receipts without inventing them on older servers or automatically sending feedback.

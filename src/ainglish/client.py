@@ -2187,7 +2187,7 @@ class AinglishClient:
                          urllib.parse.quote(source, safe=""), payload)
 
     def mint_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
-                     proposal_revision=None, *, store_manifest=True):
+                     proposal_revision=None, *, store_manifest=True, for_confirmation=False):
         """Preregister an exact measurement design before reader/tokenizer spend.
 
         ``manifest`` is the SAME object that will later ride in ``measure(..., payload)``. This
@@ -2199,6 +2199,12 @@ class AinglishClient:
         Returns the wire envelope ``{attempt: {attempt_id, state, pin, manifest, ...}}``. Complete
         the attempt by including that ``attempt_id`` in the measurement payload, or abort it with
         an evidence receipt via :meth:`abort_attempt` if a declared gate fires.
+
+        For a confirmation attempt use ``for_confirmation=True``: a fresh non-writing server
+        preview must report no known manifest/source obstruction before the mint POST. This
+        fails closed on older servers without that preview. It does not certify future results,
+        interval provenance, reader access or final settlement. Deliberate diagnostics retain
+        the ordinary path without pretending they are confirmation work.
         """
         # Refuse locally as well as server-side before an invalid commitment creates an obligation
         # that can never be completed. This also keeps store_manifest=False safe against a legacy
@@ -2208,17 +2214,27 @@ class AinglishClient:
             proposal_revision, store_manifest,
             token_limits=self._token_limits_for(manifest),
         )
+        if for_confirmation:
+            if not store_manifest:
+                raise ValueError("Confirmation preparation requires a retained exact manifest")
+            self.preflight_attempt(slug, manifest, estimand, admissibility_gates, planned_sample,
+                                   proposal_revision, for_confirmation=True)
         path = "/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe="")
         return self.post(path, body)
 
     def preflight_attempt(self, slug, manifest, estimand, admissibility_gates, planned_sample,
-                          proposal_revision=None):
+                          proposal_revision=None, *, for_confirmation=False):
         """Validate an exact design without opening or spending an attempt.
 
         Returns ``ainglish.attempt-preflight.v1`` with the canonical manifest commitment,
         byte count, current attempt budget and the mint route. The server runs the same validator
         as :meth:`mint_attempt`, but makes no write and consumes no budget. Because proposal stage
         and rate windows can change, mint still repeats every check under its proposal lock.
+
+        ``accepted`` means mint-valid, not settlement-eligible. New servers additionally return
+        ``replication_preparation``. With ``for_confirmation=True``, require that exact-target
+        report and stop on known source/unit/estimand/input obstructions, before any mint or
+        inference. The default returns the unchanged receipt, including diagnostic holds.
         """
         body = _attempt_pin(
             slug, manifest, estimand, admissibility_gates, planned_sample,
@@ -2226,7 +2242,20 @@ class AinglishClient:
             token_limits=self._token_limits_for(manifest),
         )
         path = "/api/v1/proposals/%s/attempts/preflight" % urllib.parse.quote(slug, safe="")
-        return self.post(path, body)
+        if for_confirmation and not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("replicates_hash", ""))):
+            raise ValueError("for_confirmation requires the exact source replicates_hash in the manifest")
+        receipt = self.post(path, body)
+        if for_confirmation:
+            preview = receipt.get("replication_preparation") if isinstance(receipt, dict) else None
+            if not isinstance(preview, dict) or preview.get("kind") != "ainglish.replication-preparation.v1":
+                raise ValueError("Server has no replication preparation receipt; stop before mint/spend, not silently fall back")
+            if receipt.get("accepted") is not True or receipt.get("manifest_commitment") != body["manifest_commitment"] \
+                    or preview.get("replicates_hash") != manifest["replicates_hash"]:
+                raise ValueError("Replication preparation does not describe this exact manifest and source")
+            if preview.get("status") != "no_known_obstruction" or preview.get("known_obstructions") != []:
+                raise ValueError("Stop before confirmation mint/spend: %s; %s" %
+                                 (preview.get("status", "unknown"), preview.get("known_obstructions", "unknown")))
+        return receipt
 
     def _token_limits_for(self, manifest):
         """Discover expanded support only when needed, never assume an old server has it."""
