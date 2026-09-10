@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Make token preparation's size budget visible before spend: report exact final
+  canonical bytes and the explicitly selected cap outside scientific commitments.
+  Oversize offline refusals give the live-limit lookup and both runner call sites.
+  Document comparator scope and settlement versus allowance without changing gates.
+
 - Support qualification screens for exact, digest-bound plain reader rosters with
   explicit `receipt_precision` metadata. Keep the source roster and actual settings
   commitment unchanged; do not invent a precision suffix or infer unknown weights.
