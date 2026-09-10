@@ -286,12 +286,21 @@ def _validate_attempt_manifest(manifest, *, token_limits=None):
         limit = min(advertised, MAX_INLINE_TOKEN_MANIFEST_BYTES)
     if len(canonical) > limit:
         if manifest.get("metric") == "token_delta":
+            discovery = (
+                " For a supporting server, fetch limits = "
+                "client.protocols()['measurement_submission']['manifest']['token_delta_limits'] "
+                "and pass token_limits=limits to BOTH token_measurement.prepare(...) and "
+                "token_measurement.run_prepared(...). Re-read live support before run; "
+                "missing support is not permission to raise the cap."
+                if token_limits is None else ""
+            )
             raise ValueError(
-                "token_delta manifest is too large (%s max); complete inline test_set pairs "
+                "token_delta manifest is too large (%s max; actual %d canonical UTF-8 bytes); complete inline test_set pairs "
                 "are required for server recounting, so an items_url is not a supported escape. "
                 "Preserve the frozen design and resolve the size constraint before minting; "
-                "do not truncate pairs or silently narrow the scientific claim"
-                % ("20 KB" if limit == MAX_MANIFEST_BYTES else "%d canonical UTF-8 bytes" % limit))
+                "do not truncate pairs or silently narrow the scientific claim.%s"
+                % ("20 KB" if limit == MAX_MANIFEST_BYTES else "%d canonical UTF-8 bytes" % limit,
+                   len(canonical), discovery))
         raise ValueError(
             "manifest is too large (20 KB max); reference bulky test sets by immutable URL "
             "and sha256 instead of inlining them")
@@ -1122,6 +1131,12 @@ class AinglishClient:
         Public example fixtures are reusable plumbing/calibration checks, never fresh settlement
         inputs. A replication must substitute wholly fresh answer-bearing items and mint its own
         committed manifest before reader spend.
+
+        Transport limits are deliberately outside this submit-ready payload shape.
+        Before authoring a large token corpus, inspect
+        ``protocols()['measurement_submission']['manifest']['token_delta_limits']``
+        and pass that live capability to both ``token_measurement.prepare`` and
+        ``run_prepared``. The offline runner never fetches or assumes server support.
         """
         if not isinstance(metric, str) or not metric.strip():
             raise ValueError("metric must be a non-empty string")
@@ -1479,6 +1494,17 @@ class AinglishClient:
             raise ValueError("manifest_hash must be a full lowercase measurement commitment")
         from ainglish.reader_access import assess
         return assess(self.measurement(manifest_hash), reader_inventory)
+
+    def reader_work(self, reader_inventory, proposals, *, max_sources=20):
+        """Find offered reader replications across explicit proposal IDs, without spend.
+
+        Checks uncapped authenticated suggestions for each of 1-20 caller-selected
+        proposals, then at most max_sources (1-100) offered source contracts against
+        supplied bound reader receipts. Retains mismatches, blocked work and truncation.
+        A match is advisory, not current qualification, scientific validity or admission.
+        """
+        from ainglish.reader_access import discover
+        return discover(self, reader_inventory, proposals, max_sources=max_sources)
 
     def resume_measurement(self, proposal, payload):
         """Publish/reconcile a saved attempt-bound payload WITHOUT rerunning readers.

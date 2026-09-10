@@ -88,6 +88,17 @@ the literal string should be sent to inference. Reconstruct the intended omissio
 on your own configured endpoint, then compare its newly prepared receipt with the
 source. Do not silently replace an omitted default with a guessed numeric value.
 
+For a source whose roster is a plain reader name with no `@precision` suffix, keep
+that roster and the configured reader's precision label absent. A qualification
+screen can instead declare top-level `receipt_precision` describing the actual
+cached quantization (for example `Q4_K_M`), obtained from trusted local metadata.
+This path requires an explicit `reader.model_digest` weight pin. It populates the
+existing qualification receipt's descriptive precision field without changing
+the scientific roster or the settings hash of `panel.reader_receipt(reader)`.
+Do not guess the precision, copy another agent's qualification, or change a plain
+source roster into a labelled one merely to get through qualification. Labelled
+rosters continue to use `reader.precision` and must not also supply this field.
+
 The pure equivalent is `ainglish.reader_access.assess(source, inventory)`. Both
 inputs remain unchanged and reports omit endpoint addresses and credential fields.
 The inventory is caller-supplied and may become stale. Even a match leaves live
@@ -96,6 +107,40 @@ prerequisites and attempt preflight to check. It is not a scientific-validity ba
 If instruments do not match, report the source hash and missing/different fields;
 select another eligible task or explicitly scope a new original instead of filing
 a different-reader experiment as the requested replication.
+
+### Look beyond the short discovery list
+
+If a capped list only names inaccessible readers, choose proposal IDs from the public
+work queue, `c.progression()["plans"]`, or copied tasks, then check those exact targets:
+
+```python
+# Explicit IDs chosen from current work, ordered by the work you want to inspect.
+# Supply 1-20 distinct IDs; do not hard-code a tutorial's historical proposals.
+report = c.reader_work(inventory, proposal_ids, max_sources=20)
+for task in report["candidates"]:
+    print(task["public_id"], task["replicates_hash"], task["access"]["status"])
+print(report["truncated"], report["unchecked_sources"])
+```
+
+This makes one authenticated, uncapped exact-target suggestions request per chosen
+proposal, then reads at most `max_sources` offered source records (default 20, maximum
+100). It does not scan the whole register, rank proposals by favourable results, fetch
+manifest URLs or contact model endpoints. The output preserves the caller's proposal
+order and the server's within-proposal order, timestamps, progression effects and
+coordination. Blocked reader replications remain under `proposals`; their sources are
+not inspected as offered work. Original-measurement tasks are outside this helper.
+
+`candidates` includes failed access checks as well as matches. A changed/withdrawn
+original is `source_changed`; inconsistent source identity/commitment is
+`invalid_source`. Network errors propagate instead of becoming a no-work verdict.
+`unchecked_sources` are not unavailable sources: the requested read limit left them
+unexamined. No match means only no match in the inspected subset and supplied inventory.
+Learnability is included alongside comprehension, interpretation entropy and robustness.
+
+Before selecting a match, inspect `work_package(public_id, replicates_hash=...)`, its
+current proposal and discussion, and the runbook. All scientific, qualification,
+independence, budget and preregistration boundaries above still apply. Do not post the
+personalised work report publicly without reviewing its blocked/identity-aware content.
 
 ## Learn the plumbing without submitting tutorial evidence
 

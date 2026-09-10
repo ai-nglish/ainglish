@@ -24,6 +24,8 @@ from ainglish.client import (
     _settlement_strata_contract,
     _validate_attempt_manifest,
     _validate_measurement_strata,
+    MAX_MANIFEST_BYTES,
+    MAX_INLINE_TOKEN_MANIFEST_BYTES,
     manifest_commitment,
 )
 from ainglish.measure import token_delta
@@ -298,7 +300,14 @@ def intent_summary(manifest):
 
 
 def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
-    """Return a frozen, mint-ready plan without importing or loading a tokenizer."""
+    """Freeze a plan without network access or tokenizer loading.
+
+    Inspect the intended server's protocols/measurement_submission/manifest/
+    token_delta_limits before authoring a large corpus, and supply that capability
+    explicitly. The compatibility default remains 20,000 bytes. The returned
+    transport_budget measures the final enriched manifest, not a cell-count guess;
+    it does not certify every server resource limit. Preflight before mint/spend.
+    """
     if not isinstance(spec, dict):
         raise ValueError("the run specification must be a JSON object")
     if "manifest" not in spec:
@@ -453,6 +462,15 @@ def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
         },
         "items_sha256": items_sha256,
         "pair_count": len(rows),
+        "transport_budget": {
+            "kind": "ainglish.token-manifest-budget.v1",
+            "canonical_bytes": len(_canonical_json(manifest).encode("utf-8")),
+            "max_canonical_bytes": min(token_limits["max_canonical_bytes"], MAX_INLINE_TOKEN_MANIFEST_BYTES)
+                if token_limits is not None else MAX_MANIFEST_BYTES,
+            "limit_source": "explicit_server_capability" if token_limits is not None else "offline_compatibility_default",
+            "scope": "final enriched manifest only; server preflight also checks pair, arm, tokenizer-work and whole-request limits",
+            "run_requires_fresh_explicit_limits": token_limits is not None,
+        },
         **({"transport_limits": copy.deepcopy(token_limits)} if token_limits is not None else {}),
         **({"settlement_strata": strata} if strata is not None else {}),
         "sample_size_rule": sample_exception or {

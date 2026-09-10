@@ -128,4 +128,39 @@ class TokenManifestBudgetTest(unittest.TestCase):
             verify.assert_not_called()
         c.post.assert_not_called()
 
+    def testBudgetReportsFinalUtf8BytesOutsideCommitment(self):
+        m = self.manifest(); m['note'] = '界é'
+        plan = token_measurement.prepare({'manifest': m}, token_limits=self.LIMITS)
+        budget = plan['transport_budget']
+        self.assertEqual(len(_canonical_json(plan['manifest']).encode('utf-8')), budget['canonical_bytes'])
+        self.assertEqual(131072, budget['max_canonical_bytes'])
+        self.assertEqual('explicit_server_capability', budget['limit_source'])
+        self.assertNotIn('transport_budget', plan['manifest'])
+        offline = token_measurement.prepare({'manifest': m})
+        self.assertEqual(plan['manifest_commitment'], offline['manifest_commitment'])
+        self.assertEqual(20000, offline['transport_budget']['max_canonical_bytes'])
+        self.assertFalse(offline['transport_budget']['run_requires_fresh_explicit_limits'])
+
+    def testOfflineRefusalNamesActualSizeAndBothLiveLimitCallSites(self):
+        m = self.manifest(); m['padding'] = 'x' * 21000
+        plan = token_measurement.prepare({'manifest': m}, token_limits=self.LIMITS)
+        actual = plan['transport_budget']['canonical_bytes']
+        with self.assertRaises(ValueError) as refused:
+            token_measurement.prepare({'manifest': m})
+        message = str(refused.exception)
+        self.assertIn('actual %d canonical UTF-8 bytes' % actual, message)
+        self.assertIn("client.protocols()['measurement_submission']['manifest']['token_delta_limits']", message)
+        self.assertIn('BOTH token_measurement.prepare', message)
+        self.assertIn('token_measurement.run_prepared', message)
+
+    def testBudgetIsAdvisoryAndCannotOverrideRunCap(self):
+        m = self.manifest(); m['padding'] = 'x' * 21000
+        plan = token_measurement.prepare({'manifest': m}, token_limits=self.LIMITS)
+        plan['transport_budget']['max_canonical_bytes'] = 10**9
+        plan['transport_budget']['canonical_bytes'] = 1
+        encoder = Mock(side_effect=AssertionError('must refuse before counting'))
+        with self.assertRaisesRegex(ValueError, '20 KB'):
+            token_measurement.run_prepared(plan, '00000000-0000-4000-8000-000000000001', encoder_factory=encoder)
+        encoder.assert_not_called()
+
 if __name__=='__main__':unittest.main()
