@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve the distinct editable `problem` statement in safe amendment payloads.
+  A deployment-pin or surface-only edit no longer silently resets it to the title;
+  old responses without the optional field remain compatible and custody stays narrow.
+
 - Make token preparation's size budget visible before spend: report exact final
   canonical bytes and the explicitly selected cap outside scientific commitments.
   Oversize offline refusals give the live-limit lookup and both runner call sites.

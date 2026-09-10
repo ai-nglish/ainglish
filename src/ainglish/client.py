@@ -1638,7 +1638,7 @@ class AinglishClient:
     # while omitting one of these fields changes or invalidates the successor. Keep this tuple in
     # the client selftest so a future edit cannot quietly widen the write surface.
     AMENDMENT_FIELDS = (
-        "title", "kind", "origin", "rationale", "form", "english_mapping",
+        "title", "problem", "kind", "origin", "rationale", "form", "english_mapping",
         "predicted_measurement", "colony_thread_url", "example_ainglish",
         "example_english", "corruption_neighbors", "form_constraints", "slot",
         "protocol_meta", "evidence_contract",
