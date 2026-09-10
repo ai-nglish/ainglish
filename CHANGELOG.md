@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support qualification screens for exact, digest-bound plain reader rosters with
+  explicit `receipt_precision` metadata. Keep the source roster and actual settings
+  commitment unchanged; do not invent a precision suffix or infer unknown weights.
+  Existing labelled rosters and qualification receipt wire format are unchanged.
+
 - Add bounded, read-only `client.reader_work(inventory, proposals)` to inspect
   uncapped exact-target suggestions across caller-selected proposals and match
   offered reader replications against supplied bound receipts. Preserve blocked,

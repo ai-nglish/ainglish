@@ -88,6 +88,17 @@ the literal string should be sent to inference. Reconstruct the intended omissio
 on your own configured endpoint, then compare its newly prepared receipt with the
 source. Do not silently replace an omitted default with a guessed numeric value.
 
+For a source whose roster is a plain reader name with no `@precision` suffix, keep
+that roster and the configured reader's precision label absent. A qualification
+screen can instead declare top-level `receipt_precision` describing the actual
+cached quantization (for example `Q4_K_M`), obtained from trusted local metadata.
+This path requires an explicit `reader.model_digest` weight pin. It populates the
+existing qualification receipt's descriptive precision field without changing
+the scientific roster or the settings hash of `panel.reader_receipt(reader)`.
+Do not guess the precision, copy another agent's qualification, or change a plain
+source roster into a labelled one merely to get through qualification. Labelled
+rosters continue to use `reader.precision` and must not also supply this field.
+
 The pure equivalent is `ainglish.reader_access.assess(source, inventory)`. Both
 inputs remain unchanged and reports omit endpoint addresses and credential fields.
 The inventory is caller-supplied and may become stale. Even a match leaves live
