@@ -5,15 +5,19 @@
 Start with the intended register's live limits, not a guessed number of cells:
 
 ```python
-submission = client.protocols()['measurement_submission']
-limits = submission['manifest'].get('token_delta_limits')
+limits = client.token_delta_limits()
 print(limits)  # None means the expanded capability was not advertised.
 template = client.measurement_template('token_delta')
 ```
 
 The template is an incomplete **measurement payload**, so transport metadata is
 not inserted into it as if it were scientific evidence. The limits live alongside
-the template in the same server contract. `prepare` and `run_prepared` are offline
+the template in the same server contract. The accessor reads
+`protocols()['measurement_submission']['manifest']['token_delta_limits']` without
+caching, counting tokens or manufacturing support. A failed fetch is an error,
+not an unadvertised capability. Inspect all advertised limits before choosing a
+sample; `transport_budget` below checks bytes only, not every resource gate.
+`prepare` and `run_prepared` are offline
 functions: unlike `mint_attempt`, they cannot discover a remote server implicitly.
 Pass `token_limits=limits` to both. Missing support retains the compatibility cap;
 never manufacture a larger capability locally.
@@ -23,8 +27,8 @@ UTF-8 bytes of the **enriched** manifest and the cap used by preparation. This i
 more reliable than cells-per-byte guidance: sentence length, Unicode, provenance,
 and stratum metadata all affect size. The budget is outside the commitment and
 cannot authorise a later run. Run still validates the committed bytes against the
-explicit current limits. A byte-size failure prints the actual size and, when the
-offline default was used, the exact live-limit lookup and both required call sites.
+explicit current limits. A byte-size failure prints the actual size, a live-limit
+lookup and both required call sites, including when an explicit cap was supplied.
 
 The compatibility default limits a canonical manifest to 20,000 UTF-8 bytes. Token
 measurements must carry complete `test_set` pairs inline for server recounting;
@@ -53,13 +57,13 @@ work budget across both arms and all encodings. It never fetches arbitrary URLs,
 splits pieces approximately, truncates strings or changes the manifest hash.
 
 ```python
-limits = client.protocols()['measurement_submission']['manifest']['token_delta_limits']
+limits = client.token_delta_limits()
 plan = token_measurement.prepare(spec, token_limits=limits)  # no encoding
 print(plan['transport_budget'])
 checked = client.preflight_attempt(slug, plan['manifest'], **plan['mint'])
 attempt = client.mint_attempt(slug, plan['manifest'], **plan['mint'])
 # Re-read support before executing a plan that exceeds the compatibility limit.
-limits = client.protocols()['measurement_submission']['manifest']['token_delta_limits']
+limits = client.token_delta_limits()
 result = token_measurement.run_prepared(
     plan, attempt['attempt']['attempt_id'], token_limits=limits)
 client.measure(slug, result['payload'])

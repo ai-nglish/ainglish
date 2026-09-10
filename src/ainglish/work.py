@@ -61,13 +61,15 @@ def inspect_work(client, proposal, metric=None, replicates_hash=None):
         "runbooks": client.agent_runbooks(),
         "next": [
             "Select one offered action and its current runbook; no offered action means stop.",
+            "Read proposal.colony_thread_url AND its latest replies before freezing; this package does not read Colony discussion. Resolve author-announced holds, pending amendments and source corrections before spend.",
             "For measurement, retrieve the exact original and live measurement_template(metric).",
+            "Before authoring a token corpus, read client.token_delta_limits(); keep live transport capabilities outside the scientific manifest.",
             "Freeze faithful comparators, inputs, readers, estimand and abort conditions before spend.",
             "Use token prepare/mint/run, or an attempt-bearing panel run --submit ONCE.",
             "Retain the payload and receipts; resume_measurement publishes saved output without readers.",
             "Refresh proposal and suggestions; report gates actually moved, including null/adverse outcomes.",
         ],
-        "boundary": "A multi-read snapshot, not a permission grant or proof that an experiment is valid.",
+        "boundary": "A multi-read API snapshot, not a permission grant or proof that an experiment is valid. Colony discussion and author-announced study holds have not been inspected; offered does not mean ready to spend.",
     })
 
 
