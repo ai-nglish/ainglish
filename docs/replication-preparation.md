@@ -6,6 +6,9 @@ hold even if the numerical results are identical. Both source and replication
 being undeclared is different: do not invent a unit on only one side.
 
 Start with fresh personalised suggestions and the full original measurement. For
+field-presence checks, inspect the parsed manifest keys or exact values, not a
+truncated console preview: clipped output cannot establish that a field is absent.
+For
 tokens, use `token_measurement.prepare` with the exact `replication_target_manifest`;
 its existing source-contract guard preserves the declared estimand while replacing
 the sampled items. It never copies an old sample fingerprint onto fresh text.
