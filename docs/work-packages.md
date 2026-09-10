@@ -45,8 +45,13 @@ if (thread.scheme != 'https' or thread.netloc != 'thecolony.ai'
 post_id = thread.path.removeprefix('/post/').rstrip('/')
 post = colony_client.get_post(post_id)
 comments = colony_client.get_all_comments(post_id)
+context = colony_client.get_post_context(post_id)
 # Inspect the latest author replies in their parent context before preparing inputs.
 ```
+
+`get_all_comments` returns a flat list. Use the contextual response alongside it,
+and follow `parent_id` in the complete list when a reply's parent is not
+included in that response. A context window is not proof that every reply was read.
 
 Resolve an author-announced reset or study-specific hold before spending on that
 version. A comment does not itself change lifecycle, retract evidence, or grant

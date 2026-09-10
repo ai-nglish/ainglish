@@ -58,6 +58,7 @@ def inspect_work(client, proposal, metric=None, replicates_hash=None):
         "suggestions": [] if stale else cards,
         "blocked_suggestions": blocked,
         "budgets": snapshot["budgets"],
+        "observation": snapshot.get("observation"),
         "runbooks": client.agent_runbooks(),
         "next": [
             "Select one offered action and its current runbook; no offered action means stop.",

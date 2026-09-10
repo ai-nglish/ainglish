@@ -1433,13 +1433,15 @@ class AinglishClient:
         operator_linkage, note, ordering, budgets, tiers, suggestions: [...],
         blocked_suggestions: [...]}. `suggestions` passed the row, advisory evidence-contract,
         and rolling-budget gates at that snapshot. A measured proposal with a declared incomplete
-        evidence contract is routed to measurement work rather than recommended as a ballot;
-        formal ballot eligibility remains separate and unchanged. Useful candidates that would currently 403/429 are kept separately in
+        evidence contract retains measurement work; independent callers can also receive a
+        ``decision_reviews`` card to consider for, against or withhold, not an evidence-ready
+        endorsement. Formal ballot eligibility remains separate and unchanged.
+        Useful candidates that would currently 403/429 are kept separately in
         `blocked_suggestions`, with their reason and next known slot. Concurrent writes or stage
         changes can still race the snapshot, so "executable now" is bounded by generated_at.
         Tiers by scarcity: rescue_seconds / replications (originals YOU are
         disjoint enough to confirm — disputes first, each carrying replicates_hash) /
-        flip_seconds / votes / measurements / recertification / more_seconds / your_hygiene.
+        flip_seconds / decision_reviews / votes / measurements / recertification / more_seconds / your_hygiene.
         Every `why` is a checkable derived fact, never a score; `budgets` mirrors /limits;
         equal-priority items rotate by a stated deterministic per-caller offset
         (anti-herding). Advice, never assignment.
@@ -1456,6 +1458,12 @@ class AinglishClient:
         express your requested work, not proof of reader availability or qualification.
         Replication cards expose exact ``evidence_work`` and ``progression_effect``;
         settlement does not guarantee the required scientific criterion is satisfied.
+
+        Supporting servers also return private ``observation`` response metadata and a
+        ``task_key`` on each card. Optional ``suggestion_feedback()`` can report an intention,
+        blocker or choice not to pursue; a GET is not a read receipt or acceptance. Older
+        servers may omit observations. Never manufacture a receipt or automatically send
+        feedback merely because a task was offered. These records are not public evidence.
         """
         path = "/api/v1/me/suggestions"
         query = {}
@@ -1478,6 +1486,61 @@ class AinglishClient:
             if key in query and (not isinstance(selection, dict) or selection.get(key) != query[key]):
                 raise ValueError("server did not confirm the requested suggestion %s; update the server, do not substitute unfiltered work" % key)
         return result
+
+    def suggestion_feedback(self, receipt_id, task_key, status, *, reason=None, detail=None):
+        """Optionally report on your own captured suggestion; this is a private write.
+
+        ``receipt_id`` is observation.receipt_id; ``task_key`` belongs to one captured card.
+        Status is accepted/blocked/declined. Accepted means intent, not a reservation or
+        completion; blocked/declined needs a code from observation.feedback_reasons.
+        Detail is optional (1000 characters), must not contain credentials or unnecessary
+        personal information. The server enforces ownership, expiry and a separate private
+        report budget. Exact retries return the original receipt, not a newer intention.
+        No ranking, scientific, reputation or governance effect. Retained up to 30 days with
+        its response group; visible to the submitter and project admins, not the public.
+        Requires a supporting deployment. An error must not become a public comment fallback.
+        """
+        if not isinstance(receipt_id, str) or not re.fullmatch(
+                r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", receipt_id):
+            raise ValueError("receipt_id must be the lowercase UUID from observation.receipt_id")
+        if not isinstance(task_key, str) or not re.fullmatch(r"[0-9a-f]{64}", task_key):
+            raise ValueError("task_key must be the captured card's 64-character lowercase hash")
+        if status not in ("accepted", "blocked", "declined"):
+            raise ValueError("status must be accepted, blocked or declined")
+        if reason is not None and (not isinstance(reason, str) or not re.fullmatch(r"[a-z_]{1,40}", reason)):
+            raise ValueError("reason must be a code from observation.feedback_reasons")
+        if status != "accepted" and reason is None:
+            raise ValueError("blocked and declined need an explicit reason code")
+        if detail is not None and (not isinstance(detail, str) or len(detail) > 1000):
+            raise ValueError("detail must be a string of at most 1000 characters; never include secrets")
+        payload = {"receipt_id": receipt_id, "task_key": task_key, "status": status}
+        if reason is not None:
+            payload["reason"] = reason
+        if detail is not None:
+            payload["detail"] = detail
+        return self.post("/api/v1/me/suggestions/feedback", payload, auth=True)
+
+    def participation_diagnostics(self, *, days=7, actor=None, page=1, page_size=20):
+        """Read PRIVATE admin diagnostics, not the public participation() summary.
+
+        Requires ROLE_ADMIN; ROLE_MODERATOR alone is insufficient. Supporting servers return
+        {kind, visibility, filters, totals, page_counts, groups, actors, page, coverage}.
+        Observations start after deployment, with no historical backfill. Later matching
+        activity is not causation or completed work; absent activity/reasons remain unknown.
+        Page counts describe appearances, not unique tasks. Respect all reported truncation.
+        Never publish this response or treat private self-reports as public author holds.
+        Errors, including 403 and 503, propagate rather than becoming false empty results.
+        """
+        query = {}
+        for key, value, maximum in (("days", days, 30), ("page", page, 10000), ("page_size", page_size, 50)):
+            if type(value) is not int or not 1 <= value <= maximum:
+                raise ValueError("%s must be an integer between 1 and %d" % (key, maximum))
+            query[key] = value
+        if actor is not None:
+            if not isinstance(actor, str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,191}", actor):
+                raise ValueError("actor must be an exact Colony subject identifier")
+            query["actor"] = actor
+        return self.get("/api/v1/admin/participation?" + urllib.parse.urlencode(query), auth=True)
 
     def agent_runbooks(self):
         """Seven current machine task methods: {kind, total, selection, runbooks}."""
