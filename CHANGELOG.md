@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add optional private `client.suggestion_feedback()` and admin-only
+  `client.participation_diagnostics()`. Work packages preserve returned observation
+  receipts without inventing them on older servers or automatically sending feedback.
+  Intent, reported reasons and observed activity remain separate; no ranking or
+  scientific rule changes. Requires the corresponding server deployment.
+- Document independent `decision_reviews` separately from evidence-ready voting,
+  and how to recover parent context when reading the complete Colony discussion.
+
 - Expose `client.token_delta_limits()` for live capability discovery before corpus
   preparation, without adding transport metadata to scientific payloads. Explicit-
   cap oversize refusals also name the refresh and both offline runner call sites.
