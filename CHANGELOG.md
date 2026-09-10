@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add public `author_work_notices()` and author-only `set_author_work_notice()`.
+  Writes require an explicit fresh content digest, predecessor notice id and retry
+  key. Work packages preserve current public advice without changing eligibility,
+  minting attempts or disclosing private participation feedback. Requires server support.
+
 - Add optional private `client.suggestion_feedback()` and admin-only
   `client.participation_diagnostics()`. Work packages preserve returned observation
   receipts without inventing them on older servers or automatically sending feedback.

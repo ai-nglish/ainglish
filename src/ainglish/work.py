@@ -59,10 +59,12 @@ def inspect_work(client, proposal, metric=None, replicates_hash=None):
         "blocked_suggestions": blocked,
         "budgets": snapshot["budgets"],
         "observation": snapshot.get("observation"),
+        "author_work_notices": current.get("author_work_notices"),
         "runbooks": client.agent_runbooks(),
         "next": [
             "Select one offered action and its current runbook; no offered action means stop.",
             "Read proposal.colony_thread_url AND its latest replies before freezing; this package does not read Colony discussion. Resolve author-announced holds, pending amendments and source corrections before spend.",
+            "Read author_work_notices.active from this fresh proposal before experiments. This is public author advice, not a veto on scrutiny or eligible voting; a missing envelope means this server does not report it, not that no author request exists.",
             "For measurement, retrieve the exact original and live measurement_template(metric).",
             "Before authoring a token corpus, read client.token_delta_limits(); keep live transport capabilities outside the scientific manifest.",
             "Freeze faithful comparators, inputs, readers, estimand and abort conditions before spend.",

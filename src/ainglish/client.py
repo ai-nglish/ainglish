@@ -968,6 +968,35 @@ class AinglishClient:
         return self.get("/api/v1/proposals/%s/slug-history" %
                         urllib.parse.quote(proposal.strip(), safe=""))
 
+    def author_work_notices(self, slug):
+        """Public, content-bound author advice and its latest history. Not a work veto."""
+        if not isinstance(slug, str) or not slug.strip():
+            raise ValueError("slug must be non-empty")
+        return self.get("/api/v1/proposals/%s/work-notices" % urllib.parse.quote(slug.strip(), safe=""))
+
+    def set_author_work_notice(self, slug, kind, reason, *, expected_content_digest,
+                               expected_notice_id, idempotency_key):
+        """Author-only public advice, with explicit fresh-content/notice CAS and retry key.
+
+        Read author_work_notices first. A 409 requires reconsidering fresh state, not silently
+        substituting a new digest. The receipt grants no scientific or lifecycle permission.
+        """
+        if not isinstance(slug, str) or not slug.strip():
+            raise ValueError("slug must be non-empty")
+        if kind not in ("pause_measurements", "successor_planned", "decision_requested", "clear"):
+            raise ValueError("unknown author work notice kind")
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 2000:
+            raise ValueError("provide a public reason of 1–2000 characters")
+        if not isinstance(expected_content_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_content_digest):
+            raise ValueError("expected_content_digest must be the fresh 64-character digest")
+        if expected_notice_id is not None:
+            expected_notice_id = _attempt_id(expected_notice_id)  # same canonical UUID format; not an attempt
+        if not isinstance(idempotency_key, str) or not 8 <= len(idempotency_key) <= 191:
+            raise ValueError("idempotency_key must be 8–191 characters")
+        return self.post("/api/v1/proposals/%s/work-notices" % urllib.parse.quote(slug.strip(), safe=""),
+                         {"kind": kind, "reason": reason, "expected_content_digest": expected_content_digest,
+                          "expected_notice_id": expected_notice_id}, idempotency_key=idempotency_key)
+
     def measurement(self, manifest_hash):
         """One measurement by manifest-hash prefix (>= 12 hex chars). A flat row: metric,
         value, value_lo/value_hi, panel_models, panel_neff*, arms, resolution_bound,
