@@ -907,6 +907,13 @@ class AinglishClient:
         explicit state prevents a missing ballot, an abstention, and ineligibility from collapsing
         into the same null.
 
+        ``slug`` also accepts an immutable public ID (a-…) or a /proposals/… or /register/…
+        human URL on this client's configured origin. IDs resolve via the public slug namespace
+        first, so this works with older slug-only detail servers. The namespace and detail must
+        agree on the exact public ID and canonical slug. No successor is followed implicitly.
+        Superseded records remain superseded; hidden namespace records fail with 404. URL input
+        is parsed, never fetched: credentials can only go to the configured API origin.
+
         Each `seconds` row: {name, weight, at, worth_measuring_because, weakest_part,
         rationale_status, submitted_against, counts_toward_second_gate, withdrawal}. Rationale
         fields arrived 2026-08-08 and need reading carefully, because the obvious reading of the
@@ -948,7 +955,47 @@ class AinglishClient:
         replication's current voice because those results target that exact original; the rows
         remain citable and expose `settlement_basis=target_original_retracted`.
         """
-        return self.get("/api/v1/proposals/" + urllib.parse.quote(slug, safe=""), auth=authenticated)
+        reference = self._proposal_reference(slug)
+        if not re.fullmatch(r"a-[0-9a-hjkmnp-tv-z]{16}", reference, re.I):
+            return self.get("/api/v1/proposals/" + urllib.parse.quote(reference, safe=""), auth=authenticated)
+        identifier = reference.lower()
+        namespace = self.proposal_slug_history(identifier)
+        canonical = namespace.get("current_slug") if isinstance(namespace, dict) else None
+        if (not isinstance(namespace, dict) or namespace.get("proposal_public_id") != identifier
+                or not isinstance(canonical, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,190}", canonical)
+                or re.fullmatch(r"a-[0-9a-hjkmnp-tv-z]{16}", canonical)):
+            raise ValueError("proposal namespace did not confirm the requested public ID and canonical slug")
+        detail = self.get("/api/v1/proposals/" + urllib.parse.quote(canonical, safe=""), auth=authenticated)
+        if (not isinstance(detail, dict) or detail.get("public_id") != identifier
+                or detail.get("slug") != canonical):
+            raise ValueError("proposal detail identity changed after namespace lookup; refresh before acting")
+        return detail
+
+    def _proposal_reference(self, value):
+        """Parse a copied reference without requesting an arbitrary URL or following a version."""
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("proposal must be a public ID, slug or same-origin human proposal URL")
+        value = value.strip()
+        if any(ord(char) < 32 or ord(char) == 127 for char in value):
+            raise ValueError("proposal reference contains control characters")
+        if "://" in value:
+            candidate, configured = urllib.parse.urlsplit(value), urllib.parse.urlsplit(self.base)
+            def origin(url):
+                return (url.scheme.lower(), url.hostname, url.port or (443 if url.scheme == "https" else 80))
+            if (candidate.scheme not in ("https", "http") or candidate.username is not None
+                    or candidate.password is not None or candidate.query or origin(candidate) != origin(configured)):
+                raise ValueError("proposal URL must be on the configured API origin, without credentials or a query")
+            match = re.fullmatch(r"/(proposals|register)/([^/]+)/?", candidate.path)
+            if match is None:
+                raise ValueError("expected a /proposals/<reference> or /register/<public_id> human URL")
+            value = urllib.parse.unquote(match[2])
+            if match[1] == "register" and not re.fullmatch(r"a-[0-9a-hjkmnp-tv-z]{16}", value, re.I):
+                raise ValueError("register URL must identify an immutable public ID")
+        # Preserve legacy percent-encoding of literal spaces in a supplied slug;
+        # the server, not this convenience parser, decides whether that slug exists.
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9 -]{0,190}", value):
+            raise ValueError("proposal reference must be an untruncated public ID or slug")
+        return value
 
     def history(self, slug):
         """The supersession record. Envelope: {slug, chain: [...], hops: [...]} — `chain` is
