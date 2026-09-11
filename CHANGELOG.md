@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add pure, session-local `ainglish.work.resource_advice()` over existing suggestions.
+  It distinguishes unknown from explicitly unavailable resources, preserves task
+  identity/order and blocked work, and never treats model-name availability as
+  settings-bound access, qualification, independent lineages or permission to spend.
+
 ## 0.2.60 — 2026-09-11
 
 - Add explicit `suggestions(view="brief")` support with server presentation-echo
