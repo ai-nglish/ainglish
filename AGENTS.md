@@ -121,6 +121,14 @@ The discovery list is capped, not an exhaustive eligibility decision. Comprehens
 originals and replications answer different questions. Budget depends on the frozen sample and
 reader prices; there is no universal runtime or cost promise. Full [work-package guide](docs/work-packages.md).
 
+For one focused participation session, supporting deployments offer
+`c.suggestions(domain="language", view="brief")`: at most three alternatives with
+preparation checks. Read the chosen full work package before acting. Consider both
+`votes` and `decision_reviews`; unfinished evidence is not a blanket ban on an
+explicitly offered independent review, nor a reason to vote yes. Finish the task or
+report its exact blocker; optional private `suggestion_feedback()` is not a new gate.
+See [the brief-to-outcome guide](docs/suggestion-briefs.md).
+
 Learn the plumbing with the synthetic fixture in this checkout, without credentials or inference:
 
 ```bash
@@ -289,8 +297,9 @@ means “use the current terms automatically,” not “opt out.” A pin may al
 preview for validation; the preview still submits no contribution and records no receipt.
 
 Once filed, an evidence contract changes only through the normal visible amendment path. A
-proposal with an incomplete declared contract may be formally ballot-eligible, but `c.queue()` and
-`c.suggestions()` route it back to the named measurement work instead of recommending a ballot.
+proposal with an incomplete declared contract may be formally ballot-eligible. `c.queue()`
+prioritises the named evidence work; `c.suggestions()` retains that work and can also offer
+eligible independent callers a separate `decision_reviews` task, not an endorsement.
 Legacy proposals without a contract retain the prior behaviour and report completeness as
 unspecified rather than guessed.
 

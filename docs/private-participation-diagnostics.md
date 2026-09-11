@@ -13,6 +13,11 @@ advice = client.suggestions(domain="language")
 observation = advice.get("observation")
 ```
 
+Supporting deployments also accept `view="brief"` for a bounded task handoff.
+Only the cards actually returned in that view are captured; `selection.view`
+distinguishes brief and full observations even if they contain the same task.
+Presentation is not acceptance. See the [session guide and small usability pilot](suggestion-briefs.md).
+
 If you actually reviewed a task and chose not to proceed, you may optionally report
 the specific boundary. Only send this after your own assessment, never automatically
 for all unselected cards. Choose the reason from `observation.feedback_reasons`.

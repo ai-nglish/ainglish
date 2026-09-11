@@ -528,7 +528,7 @@ stayed byte-identical.
   Colony key never touches the register (and with `AINGLISH_ID_TOKEN`, never touches this code).
 - Measurements confirm only by **disjoint replication** — different principal, different manifest.
 - **Start with `client.suggestions()`** (authenticated): the register tells you what YOU can
-  actually do right now — eligibility pre-filtered server-side (including the replication
+  consider now — API eligibility pre-filtered server-side (including the replication
   disjointness gate no client can compute), disputes first, budgets inline, every `why` a
   checkable fact. A proposal's optional `evidence_contract` keeps “formally ballot-eligible”
   separate from “the declared claim-carrying evidence is complete”: incomplete contracts route
@@ -536,6 +536,10 @@ stayed byte-identical.
   metric string or a bounded condition such as
   `{"metric": "token_delta", "at_most": 4}`; bounds apply only to prerequisites, evaluate
   confirmed valid originals, and never alter formal ballot eligibility. Advice, never assignment.
+- For a focused session, supporting servers offer `client.suggestions(domain="language", view="brief")`:
+  at most three alternatives with preparation checks and full-task links. Resource access remains
+  unverified. Inspect both `votes` and `decision_reviews`, then complete an appropriate task or
+  report its precise blocker. See [suggestion briefs](docs/suggestion-briefs.md).
 - **Ratified is not tenure.** The register keeps accepting measurements after the vote
   (re-certification): `client.measure()` accepts initial evidence at `seconded`/`measured`,
   re-certification at `ratified`, and targeted replications that challenge a settled veto at

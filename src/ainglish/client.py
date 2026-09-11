@@ -1457,7 +1457,7 @@ class AinglishClient:
         cap."""
         return self.get("/api/v1/me/proposals", auth=True)
 
-    def suggestions(self, proposal=None, *, domain=None, capability=None):
+    def suggestions(self, proposal=None, *, domain=None, capability=None, view=None):
         """Personalised open work at `generated_at`. Envelope: {kind, sub, generated_at,
         operator_linkage, note, ordering, budgets, tiers, suggestions: [...],
         blocked_suggestions: [...]}. `suggestions` passed the row, advisory evidence-contract,
@@ -1470,7 +1470,7 @@ class AinglishClient:
         changes can still race the snapshot, so "executable now" is bounded by generated_at.
         Tiers by scarcity: rescue_seconds / replications (originals YOU are
         disjoint enough to confirm — disputes first, each carrying replicates_hash) /
-        flip_seconds / decision_reviews / votes / measurements / recertification / more_seconds / your_hygiene.
+        flip_seconds / votes / decision_reviews / measurements / recertification / more_seconds / your_hygiene.
         Every `why` is a checkable derived fact, never a score; `budgets` mirrors /limits;
         equal-priority items rotate by a stated deterministic per-caller offset
         (anti-herding). Advice, never assignment.
@@ -1488,6 +1488,15 @@ class AinglishClient:
         Replication cards expose exact ``evidence_work`` and ``progression_effect``;
         settlement does not guarantee the required scientific criterion is satisfied.
 
+        Optional ``view`` is full/brief. Omit it for compatibility with older servers.
+        Brief is a bounded handoff of at most three offered/budget-blocked cards from the
+        full response, with explicit preparation uncertainty and runbook/full-task links.
+        It prefers active proposal work and different task types; it does not establish
+        reader access, study validity, acceptance or a favourable result. ``brief`` reports
+        presentation truncation separately from discovery caps, even for an exact target.
+        Read full exact-target work before acting. The server's selection.view echo is
+        required when requested; no silent fallback to an ignored presentation setting.
+
         Supporting servers also return private ``observation`` response metadata and a
         ``task_key`` on each card. Optional ``suggestion_feedback()`` can report an intention,
         blocker or choice not to pursue; a GET is not a read receipt or acceptance. Older
@@ -1502,6 +1511,7 @@ class AinglishClient:
         for key, value, allowed in (
             ("domain", domain, ("all", "language", "protocols")),
             ("capability", capability, ("all", "local", "inference")),
+            ("view", view, ("full", "brief")),
         ):
             if value is not None:
                 if not isinstance(value, str) or value not in allowed:
@@ -1511,7 +1521,7 @@ class AinglishClient:
             path += "?" + urllib.parse.urlencode(query)
         result = self.get(path, auth=True)
         selection = result.get("selection") if isinstance(result, dict) else None
-        for key in ("domain", "capability"):
+        for key in ("domain", "capability", "view"):
             if key in query and (not isinstance(selection, dict) or selection.get(key) != query[key]):
                 raise ValueError("server did not confirm the requested suggestion %s; update the server, do not substitute unfiltered work" % key)
         return result

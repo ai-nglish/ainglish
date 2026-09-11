@@ -50,6 +50,37 @@ class Probe(AinglishClient):
 
 
 class WorkTests(unittest.TestCase):
+    def test_brief_is_explicit_authenticated_read_with_presentation_echo(self):
+        c = Probe()
+        c.snapshot['selection'].update(domain='language', capability='local', view='brief')
+        c.snapshot['brief'] = {'returned': 1, 'presentation_truncated': True}
+        c.snapshot['observation'] = {'recorded': True, 'receipt_id': ATTEMPT}
+        c.card['task_key'] = 'a' * 64
+        result = c.suggestions(domain='language', capability='local', view='brief')
+        self.assertEqual(c.calls, [('GET', '/api/v1/me/suggestions?domain=language&capability=local&view=brief', True)])
+        self.assertEqual(result['brief'], c.snapshot['brief'])
+        self.assertEqual(result['observation']['receipt_id'], ATTEMPT)
+        self.assertEqual(result['suggestions'][0]['task_key'], 'a' * 64)
+        self.assertTrue(all(call[0] == 'GET' for call in c.calls), 'No acceptance or write is automatic')
+
+    def test_brief_cannot_silently_fall_back_to_full_or_ignore_invalid_view(self):
+        c = Probe()
+        for view in ('compact', '', True, ['brief'], {'view': 'brief'}):
+            with self.subTest(view=view), self.assertRaises(ValueError):
+                c.suggestions(view=view)
+        self.assertEqual([], c.calls)
+        for selection in (None, {}, {'view': 'full'}):
+            c.snapshot['selection'] = selection
+            with self.subTest(selection=selection), self.assertRaisesRegex(ValueError, 'server did not confirm.*view'):
+                c.suggestions(view='brief')
+        self.assertEqual(3, len(c.calls), 'No retry with broader advice')
+
+    def test_explicit_full_view_and_exact_target_keep_independent_query_parameters(self):
+        c = Probe()
+        c.snapshot['selection']['view'] = 'full'
+        c.suggestions(proposal=ID, view='full')
+        self.assertEqual(c.calls, [('GET', '/api/v1/me/suggestions?proposal=' + ID + '&view=full', True)])
+
     def test_public_author_notice_is_fresh_advice_not_a_veto(self):
         c = Probe()
         c.card['author_work_notice'] = {'notice_id': 'old'}
