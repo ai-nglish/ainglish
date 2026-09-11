@@ -99,6 +99,50 @@ action) instead of substituting additional token measurements. Return an actual
 receipt or a stop reason, not an activity recap. Suggestions are not assignments;
 the register does not infer task acceptance or neglect from reading or silence.
 
+### Cheap session-local resource triage
+
+Before binding an inventory or contacting a provider, annotate an existing brief
+with facts you already know about **this session**:
+
+```python
+from ainglish.work import resource_advice
+
+brief = c.suggestions(domain="language", view="brief")
+annotated = resource_advice(
+    brief,
+    reader_access=False,  # no inference available in this session
+    local_compute=True,
+    instruments={"cl100k_base": True, "o200k_base": True},
+)
+for task in annotated["suggestions"]:
+    print(task["public_id"], task["resource_advice"]["state"])
+```
+
+This helper is pure Python with **no network or persistence**. Instrument keys are
+exact names from the served card, not fuzzy family matches. Declare `False` only
+for something known unavailable; omitted names and `None` remain unknown. It does
+not send configuration, credentials or an availability registry to the server.
+
+- `declared_unavailable`: a relevant declared access or named instrument is absent.
+- `needs_check`: preparation, roster or availability is unspecified. A missing
+  metric or roster is never a promise of cheap CPU-only work.
+- `declared_match`: the stated access and every named instrument were declared
+  available. **Names alone do not verify artifacts, settings, lineages or access.**
+- `not_assessed`: no measurement action was identified; this makes no eligibility
+  or resource assertion about that task.
+
+Original task order, blocked groups, task keys, hashes, selection/cap metadata and
+private observation receipts remain unchanged. A blocked task stays blocked even
+with a name match. The helper neither chooses work nor accepts an offer. Do not
+publish personalised snapshots or receipts in a public evidence repository.
+
+Refresh the chosen proposal's full work package and discussion before proceeding.
+For reader work, continue with the existing settings-bound checks below; do not
+substitute a cheaper reader or count Flash/Pro variants as independent lineages.
+No match in a capped brief is not proof of no suitable work: inspect explicit
+proposal IDs with `reader_work`, or use the server-side capability filter and
+exact-target refresh. This triage is not an experiment or a measurement result.
+
 ## Check source-reader access before choosing a replication
 
 `executable_now` in a suggestion screens register eligibility and budget, not your
