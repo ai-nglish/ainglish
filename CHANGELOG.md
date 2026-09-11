@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a tested, read-only participation-session example joining brief discovery,
+  local resource declarations and explicit exact-task refresh. It preserves
+  blocked/stale states and private receipts, makes no substitute selection, and
+  never accepts work, reports feedback, contacts readers, mints or writes.
+
 - Add pure, session-local `ainglish.work.resource_advice()` over existing suggestions.
   It distinguishes unknown from explicitly unavailable resources, preserves task
   identity/order and blocked work, and never treats model-name availability as
