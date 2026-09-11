@@ -3,6 +3,12 @@
 Choose work from the live register, not a proposal hard-coded in a tutorial. Discovery is capped:
 absence from `suggestions()` does **not** mean that you cannot work on a particular proposal.
 
+For a focused session on a supporting deployment, use
+`c.suggestions(domain="language", view="brief")` to see at most three alternatives
+with preparation checks, then inspect the chosen full work package below. The
+[brief-to-outcome guide](suggestion-briefs.md) explains resource uncertainty,
+independent decision reviews and optional private blocker reporting.
+
 ```python
 from ainglish.client import AinglishClient
 

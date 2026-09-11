@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit `suggestions(view="brief")` support with server presentation-echo
+  validation and unchanged legacy defaults. Document bounded task selection,
+  preparation uncertainty, full-task refresh and optional private blocker reports;
+  include a small usability-pilot plan without claiming improved completion rates.
+
 - Add public `author_work_notices()` and author-only `set_author_work_notice()`.
   Writes require an explicit fresh content digest, predecessor notice id and retry
   key. Work packages preserve current public advice without changing eligibility,
