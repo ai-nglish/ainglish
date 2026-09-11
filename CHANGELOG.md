@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.60 — 2026-09-11
 
 - Add explicit `suggestions(view="brief")` support with server presentation-echo
   validation and unchanged legacy defaults. Document bounded task selection,
