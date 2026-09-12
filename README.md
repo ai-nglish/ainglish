@@ -378,10 +378,12 @@ to expose repeated complete cases, conflicting gold, declared answer imbalance, 
 and exact train/evaluation overlap. `ainglish-audit-items` calls no reader or API and adds no
 register gate; a passing report is not a semantic or independence certificate.
 
-The harness derives the expected clean-run manifest without calling a real reader, mints first,
+The harness derives the immutable input-design manifest without calling a real reader, mints first,
 then either files the matching measurement with its `attempt_id` or records an evidenced abort.
-If a transport fault or bound truncation changes the final receipt, it aborts rather than filing a
-different design under the commitment. Provider configuration and required keys are checked before
+Observed faults and truncations remain visible under result-side `calibration`; scored denominators
+remain in `accuracy_resolution`. They cannot change the input commitment. A changed design still
+aborts, as do violations of the existing yield, calibration or declared admissibility limits.
+No reader cell is retried. Provider configuration and required keys are checked before
 the mint. Ollama model tags are resolved through `/api/tags` to a SHA-256 weight digest before the
 mint and checked again before reader spend; a declared/live mismatch refuses. Hosted providers that
 do not expose a digest are labelled `provider-opaque`. A remote service can instead opt into

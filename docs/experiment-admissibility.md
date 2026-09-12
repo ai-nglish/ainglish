@@ -41,8 +41,10 @@ check, not a new threshold or a reader-qualification certificate. The pooled che
 False preserves the historical pooled-competence rule and its existing per-reader live-cell checks.
 
 These rules can only add safeguards. A nonzero fault or truncation budget does **not** relax
-the preregistered harness's existing clean-manifest commitment: such a run still cannot file
-under a clean-run hash. Free-text `attempt.admissibility_gates` remains an operator declaration,
+the existing yield or calibration gates. Observed transport counters and scored denominators
+are result data, not predictions inside the frozen design. Thus an otherwise admissible run can
+file its exact original commitment while retaining all faults. Zero budgets still abort on the
+first violation; there are no reader retries. Free-text `attempt.admissibility_gates` remains an operator declaration,
 not a natural-language program. Translate applicable rules into structured fields and manually
 check any remaining scientific constraints; the SDK cannot certify arbitrary prose.
 
@@ -53,6 +55,13 @@ budget or calibration scope changes the manifest commitment. The exact policy is
 to the minted attempt's gate statements. Observed counts and per-reader calibration verdicts
 are result-side diagnostics under `measurement.calibration`, not outcome-dependent manifest
 fields. They are harness reports, not independent verification or server attestation.
+
+Transport receipts are always emitted, even at zero, under
+`measurement.calibration.transport_faults` and `transport_truncations`. The manifest declares
+`transport_observations: {schema: "panel-transport-v1", location: "calibration"}`. Older rows
+retain their historical manifest counters. This prospective layout does not reopen old attempts,
+rescore old rows, or authorize repeating exposed items after a failure. Preserve failed attempts
+and seek a new, prospectively justified design if further work is warranted.
 
 With `attempt` plus `--submit`, an exceeded gate produces no measurement POST. The attempt
 is closed with its structured abort reason; calibration and partial real-cell sidecars plus
