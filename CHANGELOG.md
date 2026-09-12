@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a tested, read-only participation-session example joining brief discovery,
+  local resource declarations and explicit exact-task refresh. It preserves
+  blocked/stale states and private receipts, makes no substitute selection, and
+  never accepts work, reports feedback, contacts readers, mints or writes.
+
 - Let `proposal()` accept immutable public IDs and same-origin human proposal/register
   URLs as well as current/former slugs. ID reads resolve through the public namespace
   for compatibility with slug-only servers and verify the exact returned identity.

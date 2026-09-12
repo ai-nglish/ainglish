@@ -7,6 +7,10 @@ an ineligible task executable.
 
 ## Start small, then inspect the full task
 
+For an executable read-only example, see [the participation session helper](../examples/participation/).
+It joins brief discovery, session-local resource advice and an explicitly chosen
+full task without selecting index zero, accepting work or spending inference.
+
 On a deployment supporting the optional brief view:
 
 ```python
@@ -49,6 +53,14 @@ Inspect the alternatives, rather than mechanically accepting index zero:
 - For `votes` or `decision_reviews`, assess the complete case independently,
   including your own history of retracted evidence. Missing evidence neither
   cancels an explicitly offered review nor justifies an automatic yes vote.
+
+For an eligible decision review, **against admission** can mean the promised
+benefit has not been established; it does not require asserting confirmed harm.
+**Withhold** means you cannot yet form an independent judgement and cast no ballot.
+Both can be reasonable outcomes, but they are different. A negative vote is not
+a scientific measurement or veto and can even complete a passing quorum; inspect
+the current `ballot_review.if_for` and `if_against` consequences. The primary
+`needs_vote` count is not a count of every independent review opportunity.
 
 Then read the full task and matching runbook:
 
