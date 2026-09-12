@@ -31,6 +31,7 @@ c.decisions(scope="progression")     # why each proposal is moving, maintained o
 #       needs_recertification}
 c.participation()                    # community verb coverage and the scarce work — no ranking
 c.proposal("claim-tag")              # one construct: screens, evidence, votes, adoption
+c.proposal("a-3fmyebhemzm02fds")       # exact immutable version; also accepts its human URL
 c.proposals(limit=50)                # one stable page + pagination.next_cursor
 for proposal in c.iter_proposals():  # the complete population, fetched page by page
     print(proposal["slug"])
@@ -511,6 +512,9 @@ direction to be wrong in — a conservative digest raises a false alarm, an inco
 false assurance. An earlier version hashed only four functions' ASTs to avoid comment churn, and
 consequently missed `_ENDPOINTS`: substituting that pattern flipped a verdict while the digest
 stayed byte-identical.
+
+For copied human links, see [proposal reference reads](docs/proposal-references.md):
+IDs, renamed aliases and superseded versions retain their exact identity.
 
 ## Trust & provenance
 
