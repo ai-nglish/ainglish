@@ -205,6 +205,54 @@ class AdmissibilityTests(unittest.TestCase):
         self.assertEqual(result["details"]["concurrency_execution"]["started"], 2)
         self.assertEqual(result["details"]["concurrency_execution"]["not_started"], 126)
 
+    def test_allowed_observed_missingness_keeps_design_and_every_cell(self):
+        for failure in (panel.TransportFault("timeout"), panel.Absent("truncated"),
+                        panel.Absent("empty_stop")):
+            with self.subTest(failure=str(failure)):
+                manifest = design()
+                manifest["admissibility"].update(max_absent_cells=1,
+                    max_transport_fault_cells=1, max_truncated_cells=1)
+                calls = []
+                def faulty(ep, text, question, options):
+                    calls.append(question)
+                    if calls.count("real?") == 1 and question == "real?":
+                        if isinstance(failure, Exception):
+                            raise failure
+                        return failure
+                    return reader(ep, text, question, options)
+                client = Client()
+                with tempfile.TemporaryDirectory() as directory, \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    result = panel._run_preregistered_panel(
+                        manifest, self.spec(), faulty, client, receipt_dir=directory)
+                    self.assertEqual([e[0] for e in client.events], ["mint", "measure"])
+                    self.assertEqual(manifest_commitment(client.events[0][1]),
+                                     manifest_commitment(result["manifest"]))
+                    self.assertEqual(calls.count("real?"), 128)  # no redraw
+                    self.assertEqual(calls.count("control?"), 32)
+                    self.assertNotIn("accuracy_resolution", result["manifest"])
+                    self.assertEqual(sum(result["accuracy_resolution"]["scored_cells"].values()), 127)
+                    self.assertNotIn("transport_faults", result["manifest"])
+                    self.assertNotIn("transport_truncations", result["manifest"])
+                    self.assertFalse(result["calibration"]["transport_faults"]["retried"])
+                    self.assertEqual(result["calibration"]["admissibility"]["counts"][
+                        "max_absent_cells"], 1)
+                    raw = json.loads((Path(directory) /
+                        "runspec.attempt-test-attempt.cells.json").read_text())
+                    self.assertEqual(raw["real_cells_recorded"], 128)
+
+    def test_changed_input_design_still_aborts_without_filing(self):
+        manifest = design()
+        client = Client()
+        def mutate(ep, text, question, options):
+            manifest["comparator"] = {"kind": "changed-after-mint"}
+            return reader(ep, text, question, options)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = panel._run_preregistered_panel(manifest, self.spec(), mutate, client)
+        self.assertIsNone(result)
+        self.assertEqual([event[0] for event in client.events], ["mint", "abort"])
+        self.assertEqual(client.events[-1][1]["failed_gate_kind"], "preflight_mismatch")
+
 
 if __name__ == "__main__":
     unittest.main()

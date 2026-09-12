@@ -546,7 +546,7 @@ derive fields such as the effective-basis label. For a preregistered attempt, ke
    higher than the defensible number of independent error structures.
 7. If using bounded concurrency, freeze both the global cap and every provider-specific override;
    dry-run and qualification should use the same contract.
-8. Include an `attempt` block and run with `--submit`. The harness mints the exact clean-run
+8. Include an `attempt` block and run with `--submit`. The harness mints the exact input-design
    commitment before remote inference, then files that same result or records a typed abort.
 9. A second principal confirms only with a wholly fresh complete item set and a different manifest.
    Sharing the endpoint is allowed, but sharing answer-bearing items is reproduction, not

@@ -2593,11 +2593,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
                                   "seeded per (seed,item,arm); no-op corruptions refuse pre-spend; "
                                   "chance floor computed per item from its own option count"}
     spec["transport"] = {_labelled(p_): transport_settings(p_) for p_ in panel}
-    spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
-    spec["transport_truncations"] = truncation_receipt(
-        truncations,
-        ("english_baseline", "english_corrupted", "ainglish_baseline", "ainglish_corrupted"),
-    )
+    spec["transport_observations"] = {"schema": "panel-transport-v1", "location": "calibration"}
     spec["harness"] = f"ainglish-panel/{HARNESS_VERSION}"
     spec["protocol"] = "panel.py robustness v4: within-instrument 2x2, calibration-gated-first, per-item chance floors, COMPLETE-QUARTET scoring, censored value beside its uncensored twin" + (
         " [DRY-RUN: mock oracle readers — plumbing verification, NOT a measurement]" if manifest.get("_dry_run") else "")
@@ -2646,6 +2642,12 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
         "panel_neff_basis": "declared:reader-axis-unvalidated",
         "manifest": spec,
     }
+    measurement["calibration"]["transport_faults"] = {
+        "total": fault_total, "retried": False, "per_cell": faults}
+    measurement["calibration"]["transport_truncations"] = truncation_receipt(
+        truncations,
+        ("english_baseline", "english_corrupted", "ainglish_baseline", "ainglish_corrupted"),
+    )
     if replicates_hash is not None:
         measurement["replicates_hash"] = replicates_hash.lower()
         measurement["manifest"]["replicates_hash"] = replicates_hash.lower()
@@ -2668,8 +2670,8 @@ def admissibility_policy(manifest):
     """Validate an optional prospective policy; omission preserves historical behavior.
 
     These are absolute cell budgets across calibration AND real exposure. They can only add
-    refusals: the existing yield, calibration and clean-preregistration gates still apply.
-    In particular a nonzero transport budget cannot relax the clean-manifest commitment.
+    refusals: the existing yield, calibration and immutable-design commitment still apply.
+    Observed faults are retained as results, not predicted as part of that design.
     """
     if "admissibility" not in manifest:
         return None
@@ -3537,8 +3539,6 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         spec["settlement_strata"] = [dict(row) for row in manifest["settlement_strata"]]
         spec["settlement_item_field"] = "settlement_stratum"
         spec["settlement_rule"] = "manifest-weighted arms and value; every stratum load-bearing"
-    if accuracy_resolution is not None:
-        spec["accuracy_resolution"] = accuracy_resolution
     spec["calibration"] = {
         "planted_arm": planted_arm,
         "min_gap": calibration_min_gap,
@@ -3570,14 +3570,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     # safety boundaries: calibration is still a hard barrier, results are consumed in the frozen
     # plan order, and a 429/timeout is one dead cell rather than an invitation to redraw it.
     spec["concurrency"] = concurrency
-    # Cells lost to the wire, per (model, arm, reason) — the same granularity the guard reports
-    # dead_rate at, plus the cause it cannot see. EMITTED EVEN AT ZERO, on purpose: a field whose
-    # absence has a direction cannot be optional, and this one's absence reads as "no faults" when
-    # it equally means "this harness never counted them". `retried: false` is part of the claim —
-    # a retried cell got two draws at the same question, and a delta over re-drawn cells is not
-    # the delta the manifest describes.
-    spec["transport_faults"] = {"total": fault_total, "retried": False, "per_cell": faults}
-    spec["transport_truncations"] = truncation_receipt(truncations, ("english", "ainglish"))
+    # Commit the receipt location, not unknowable observed counters. Both zero and nonzero
+    # receipts are mandatory result-side diagnostics; they never authorize redrawing a cell.
+    spec["transport_observations"] = {"schema": "panel-transport-v1", "location": "calibration"}
     spec["protocol"] = (("panel.py learnability v2: target-independent calibration first + "
                          "one digest-bound entry snapshot + cold-then-entry both-arms exposure "
                          "for every real reader-item") if metric == "learnability" else
@@ -3613,6 +3608,10 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         "per_member": per_member,
         "manifest": spec,
     }
+    measurement["calibration"]["transport_faults"] = {
+        "total": fault_total, "retried": False, "per_cell": faults}
+    measurement["calibration"]["transport_truncations"] = truncation_receipt(
+        truncations, ("english", "ainglish"))
     if policy is not None:
         # Observations are result-side, never outcome-dependent manifest identity.
         measurement["calibration"]["admissibility"] = admission_receipt()
@@ -3620,9 +3619,8 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
     if interval_provenance is not None:
         measurement["interval_provenance"] = interval_provenance
     if accuracy_resolution is not None:
-        # First-class result data lets the register validate and serve the exact grid without
-        # making every consumer retrieve manifest bytes. Keep the committed copy during the
-        # transition: SDK 0.2.28 rows carried it there, and the server verifies both agree.
+        # Scored denominators depend on observed missingness. The register already validates
+        # this first-class result; historical manifest copies remain readable, never rewritten.
         measurement["accuracy_resolution"] = accuracy_resolution
     if stratum_results is not None:
         measurement["stratum_results"] = stratum_results
@@ -4484,7 +4482,7 @@ def selftest():
 
     m_fault = run_panel(good, ask_fn=stalls_once)
     assert m_fault is not None, "one stalled cell must not kill the run"
-    tf = m_fault["manifest"]["transport_faults"]
+    tf = m_fault["calibration"]["transport_faults"]
     assert tf["total"] == 1 and tf["retried"] is False, tf
     assert sum(n for arms in tf["per_cell"].values() for r in arms.values() for n in r.values()) == 1
     assert any("timeout" in r for arms in tf["per_cell"].values() for r in arms.values()), tf
@@ -4605,7 +4603,12 @@ def selftest():
                                 "gap": 1.0, "headroom": 1.0, "recovered": 1.0,
                                 "min_gap": CALIBRATION_MIN_GAP,
                                 "min_recovered": CALIBRATION_MIN_RECOVERED,
-                                "rule": CALIBRATION_RULE, "passed": True}
+                                "rule": CALIBRATION_RULE, "passed": True,
+                                "transport_faults": {"total": 0, "retried": False, "per_cell": {}},
+                                "transport_truncations": {
+                                    "total": 0, "per_reader_cell": {},
+                                    "by_cell": {"english": 0, "ainglish": 0},
+                                    "imbalanced_across_cells": False}}
     assert m["manifest"]["calibration"] == {
         "planted_arm": "ainglish", "min_gap": CALIBRATION_MIN_GAP,
         "min_recovered": CALIBRATION_MIN_RECOVERED, "rule": CALIBRATION_RULE,
@@ -4616,7 +4619,7 @@ def selftest():
         "inline bytes must survive beside their digest so another party can rerun them"
     assert all("api_key_env" not in r for r in m["manifest"]["readers"]), \
         "reproducible reader configuration must never carry credential locations"
-    assert m["manifest"]["transport_truncations"] == {
+    assert m["calibration"]["transport_truncations"] == {
         "total": 0, "per_reader_cell": {},
         "by_cell": {"english": 0, "ainglish": 0},
         "imbalanced_across_cells": False,
@@ -4810,7 +4813,7 @@ def selftest():
     assert concurrent_fault_result is not None, "one concurrent 429 must remain one dead cell"
     assert concurrent_fault_calls == {"target": 1, "all": (8 + 4 * 2) * 2}, \
         "a provider 429 must never trigger an automatic scientific redraw"
-    concurrent_fault_receipt = concurrent_fault_result["manifest"]["transport_faults"]
+    concurrent_fault_receipt = concurrent_fault_result["calibration"]["transport_faults"]
     assert concurrent_fault_receipt["total"] == 1 and \
         concurrent_fault_receipt["retried"] is False
     assert sum(row["execution"]["state"] == "transport_fault"
@@ -4968,7 +4971,7 @@ def selftest():
 
     r_truncated = run_panel(dict(r_good), ask_fn=one_bound_truncation)
     assert r_truncated is not None, "one typed truncation below the guard threshold may emit"
-    tr = r_truncated["manifest"]["transport_truncations"]
+    tr = r_truncated["calibration"]["transport_truncations"]
     assert tr["total"] == 1 and tr["by_cell"]["ainglish_corrupted"] == 1, tr
     assert tr["imbalanced_across_cells"] is True, \
         "condition-correlated truncation must be visible in the receipt, never only a dead-cell total"
@@ -5367,7 +5370,7 @@ def selftest():
     assert pairwise_agreement([("i1", "english", "a", "wrong1"), ("i1", "english", "b", "wrong2")]) == 0.0
     # Absence has a direction, so the fault count is emitted even when nothing went wrong: an
     # omitted count reads as "no faults" and equally means "this harness never counted them".
-    assert m["manifest"]["transport_faults"] == {"total": 0, "retried": False, "per_cell": {}}, \
+    assert m["calibration"]["transport_faults"] == {"total": 0, "retried": False, "per_cell": {}}, \
         "a clean run must still STATE zero faults"
 
     bad = dict(good, panel=[{"name": "flip-a"}, {"name": "flip-b"}])
@@ -5672,16 +5675,16 @@ def selftest():
     # the box's own guards: arms ship with the payload; a swapped or unpinned item set refuses
     assert m["arms"]["english"] is not None and m["arms"]["ainglish"] is not None and 0 < m["arms"]["chance"] < 1, \
         "protocol v2: absolute arm accuracies + chance must ride with the delta"
-    resolution = m["manifest"]["accuracy_resolution"]
-    assert m["accuracy_resolution"] == resolution, \
-        "the exact scored-cell grid must ride first-class beside its committed copy"
+    resolution = m["accuracy_resolution"]
+    assert "accuracy_resolution" not in m["manifest"], \
+        "observed scored-cell denominators must not change the input commitment"
     en_cells = resolution["scored_cells"]["english"]
     ai_cells = resolution["scored_cells"]["ainglish"]
     assert resolution["delta_grid"]["denominator_lcm"] == math.lcm(en_cells, ai_cells)
     assert resolution["delta_grid"]["numerator_pp"] == 100
     assert resolution["delta_grid"]["step_pp"] == _portable_decimal(
         100 / math.lcm(en_cells, ai_cells)
-    ), "the committed resolution must come from exact scored-cell counts, not rounded accuracy"
+    ), "the result resolution must come from exact scored-cell counts, not rounded accuracy"
     import tempfile, os as _os
     ok_doc = {"kind": "t", "items": items,
               "sha256": hashlib.sha256(json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()}
@@ -5964,13 +5967,13 @@ def selftest():
                 raise TransportFault("timeout")
             return tag_reliant(ep, text, q, options)
 
-        assert _run_preregistered_panel(good, attempt_spec, prereg_fault_once,
-                                        divergent_probe) is None
-        assert divergent_events[-1][0] == "abort"
-        assert "diverged" in divergent_events[-1][1]["failed_gate"], \
-            "an observed transport receipt must abort, not alter the preregistered manifest"
-        assert divergent_probe.aborts[-1]["failed_gate_kind"] == "preflight_mismatch"
-        assert not any(e[0] == "measure" for e in divergent_events)
+        fault_filed = _run_preregistered_panel(good, attempt_spec, prereg_fault_once,
+                                              divergent_probe)
+        assert fault_filed is not None and divergent_events[-1][0] == "measure"
+        assert not divergent_probe.aborts, \
+            "one fault within existing yield limits must not change the frozen input design"
+        assert fault_filed["calibration"]["transport_faults"]["total"] == 1
+        assert fault_filed["calibration"]["transport_faults"]["retried"] is False
 
         exit_events = []
         exit_probe = _AttemptProbe(exit_events)
@@ -6507,13 +6510,12 @@ def _attempt_settings(raw, effective_gates=()):
 
 
 def _planned_panel_manifest(manifest):
-    """Derive the exact clean-run manifest without calling a real reader.
+    """Derive the exact input-design manifest without calling a real reader.
 
-    The panel receipt records observed transport faults and bound truncations inside the filed
-    manifest. A clean run is therefore the only final manifest knowable before spend. The dry
-    oracle builds that manifest from frozen inputs; only its loud non-evidence protocol suffix is
-    removed. If the real run later records a fault, the commitment differs and the attempt aborts
-    instead of filing a changed design under the preregistration.
+    Faults, truncations and scored denominators are observed result data. The dry oracle derives
+    only the frozen design; its loud non-evidence protocol suffix is removed for preregistration.
+    A changed design still aborts. Existing yield, calibration and declared admissibility limits
+    still decide whether an observed run may emit; no failed cell is retried or quietly removed.
     """
     import contextlib
     import io

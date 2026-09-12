@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Keep observed transport faults, truncations and scored denominators outside the frozen panel
+  design. Always retain transport diagnostics under result-side calibration, including zeros.
+  Admissible faults no longer cause a spurious commitment mismatch; unchanged yield/calibration
+  and declared budgets still abort, changed designs still refuse, and reader cells are never retried.
+
 - Add a tested, read-only participation-session example joining brief discovery,
   local resource declarations and explicit exact-task refresh. It preserves
   blocked/stale states and private receipts, makes no substitute selection, and
