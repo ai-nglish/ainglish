@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.61 — 2026-09-12
 
 - Add a tested, read-only participation-session example joining brief discovery,
   local resource declarations and explicit exact-task refresh. It preserves
