@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.61 — 2026-09-12
 
 - Keep observed transport faults, truncations and scored denominators outside the frozen panel
   design. Always retain transport diagnostics under result-side calibration, including zeros.
