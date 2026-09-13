@@ -971,6 +971,18 @@ class AinglishClient:
             raise ValueError("proposal detail identity changed after namespace lookup; refresh before acting")
         return detail
 
+    def _proposal_route_slug(self, value, *, authenticated=False):
+        """Resolve an immutable ID for a still-slug-based route; never follow a successor.
+
+        Keep ordinary slug calls unchanged. A copied ID (including a same-origin
+        human URL) uses the same checked namespace/detail pair as proposal().
+        Do not cache across writes: a rename or visibility change must be rechecked.
+        """
+        reference = self._proposal_reference(value)
+        if re.fullmatch(r"a-[0-9a-hjkmnp-tv-z]{16}", reference, re.I):
+            return self.proposal(reference, authenticated=authenticated)["slug"]
+        return reference
+
     def _proposal_reference(self, value):
         """Parse a copied reference without requesting an arbitrary URL or following a version."""
         if not isinstance(value, str) or not value.strip():
@@ -1179,7 +1191,9 @@ class AinglishClient:
     def attempts(self, slug):
         """Every attempt on a proposal, including open, completed and aborted obligations.
         Envelope: {kind, proposal, note, counts: {open, completed, aborted}, attempts: [...]}.
+        Accepts a canonical slug, immutable public ID, or same-origin human proposal URL.
         """
+        slug = self._proposal_route_slug(slug)
         return self.get("/api/v1/proposals/%s/attempts" % urllib.parse.quote(slug, safe=""))
 
     def attempt(self, attempt_id):
@@ -2141,6 +2155,7 @@ class AinglishClient:
             # serialization step had its chance to corrupt headline/member values.
             from ainglish.token_measurement import verify_payload
             verify_payload(payload)
+        slug = self._proposal_route_slug(slug, authenticated=True)
         return self.post("/api/v1/proposals/%s/measurements" % urllib.parse.quote(slug, safe=""), payload)
 
     def retract_measurement(self, attempt_id, reason, replacement_attempt_id=None):
@@ -2282,6 +2297,11 @@ class AinglishClient:
         after mint. ``store_manifest=False`` is a temporary compatibility escape hatch for an old
         commitment-only server; such an attempt is intrinsically less auditable.
 
+        ``slug`` also accepts an immutable public ID or same-origin human proposal URL.
+        IDs are resolved and identity-checked before the POST, including on slug-only servers.
+        The default proposal_revision uses the resolved canonical slug; an explicit revision is
+        preserved, never silently rewritten. The frozen manifest and its commitment are unchanged.
+
         Returns the wire envelope ``{attempt: {attempt_id, state, pin, manifest, ...}}``. Complete
         the attempt by including that ``attempt_id`` in the measurement payload, or abort it with
         an evidence receipt via :meth:`abort_attempt` if a declared gate fires.
@@ -2300,6 +2320,9 @@ class AinglishClient:
             proposal_revision, store_manifest,
             token_limits=self._token_limits_for(manifest),
         )
+        slug = self._proposal_route_slug(slug, authenticated=True)
+        if not proposal_revision:
+            body["proposal_revision"] = slug
         if for_confirmation:
             if not store_manifest:
                 raise ValueError("Confirmation preparation requires a retained exact manifest")
@@ -2321,12 +2344,16 @@ class AinglishClient:
         ``replication_preparation``. With ``for_confirmation=True``, require that exact-target
         report and stop on known source/unit/estimand/input obstructions, before any mint or
         inference. The default returns the unchanged receipt, including diagnostic holds.
+        Accepts the same canonical slug, public ID and same-origin human URL as mint_attempt().
         """
         body = _attempt_pin(
             slug, manifest, estimand, admissibility_gates, planned_sample,
             proposal_revision, True,
             token_limits=self._token_limits_for(manifest),
         )
+        slug = self._proposal_route_slug(slug, authenticated=True)
+        if not proposal_revision:
+            body["proposal_revision"] = slug
         path = "/api/v1/proposals/%s/attempts/preflight" % urllib.parse.quote(slug, safe="")
         if for_confirmation and not re.fullmatch(r"[0-9a-f]{64}", str(manifest.get("replicates_hash", ""))):
             raise ValueError("for_confirmation requires the exact source replicates_hash in the manifest")

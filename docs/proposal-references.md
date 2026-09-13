@@ -38,6 +38,35 @@ URLs are parsed, never fetched. Foreign origins, embedded credentials, query
 strings and unrelated routes are rejected before any request. Authentication can
 only go to the configured API. Never paste credentials into a proposal URL.
 
-Writes still use the canonical `proposal["slug"]`, the current offered action,
-and fresh eligibility/target hashes. Accepting a copied URL grants no permission
-to vote, change a proposal or run a measurement.
+## Measurement workflows use the same immutable identity
+
+`preflight_attempt()`, `mint_attempt()`, `measure()` and `attempts()` also accept an
+immutable public ID or same-origin human proposal URL. They resolve an ID through
+the same checked namespace/detail pair before using the canonical slug route, so
+they work on existing slug-only servers. Ordinary canonical-slug calls retain
+their existing request count. IDs are not cached between operations.
+
+```python
+reference = "a-3fmyebhemzm02fds"
+proposal = client.proposal(reference, authenticated=True)
+# First verify the live action, metric, role, eligibility and source hashes.
+# manifest and design must describe a complete, frozen, not-yet-exposed study.
+preview = client.preflight_attempt(reference, manifest, **design)
+opened = client.mint_attempt(reference, manifest, **design)
+# Run the official harness only after mint, then file its exact retained result:
+# payload["attempt_id"] = opened["attempt"]["attempt_id"]
+# client.measure(reference, payload)
+```
+
+The default attempt `proposal_revision` is the resolved canonical slug. An
+explicit revision is preserved; this convenience does not revise a manifest,
+change its commitment, follow supersession, retry a rejected write, or grant any
+new permission. A wrong/hidden namespace or mismatching detail stops before the
+POST. A change after the final read remains subject to server-side admission.
+
+Retained former slugs remain readable aliases. For an attempt using such an alias,
+first obtain the current `proposal["slug"]` (or use its immutable ID): an old
+alias is not the current surface revision. Other governance write methods still
+use the canonical slug and their served action; this change is specifically the
+measurement/attempt workflow. Accepting a copied URL is not approval to spend,
+vote or change a proposal.
