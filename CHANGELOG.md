@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extend the offline item auditor with explicitly loaded, digest-verified source
+  banks and exact complete-pair/per-arm reuse reports. Distinguish parsed-item
+  identity from file-byte hashes; changed bank digests never certify freshness.
+  No URLs are fetched, readers called, eligibility granted or past results changed.
+
 - Keep observed transport faults, truncations and scored denominators outside the frozen panel
   design. Always retain transport diagnostics under result-side calibration, including zeros.
   Admissible faults no longer cause a spurious commitment mismatch; unchanged yield/calibration

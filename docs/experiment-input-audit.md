@@ -84,3 +84,36 @@ check and the panel warnings are report-only, not additional server gates.
 If a frozen study is already complete, retain its original inputs and analysis.
 Publish an audit as a dated sensitivity or correction; do not quietly deduplicate
 the data and replace a failed primary result. A new evaluation needs fresh items.
+
+## Inspect a source bank referenced by URL
+
+A server receipt with `side_overlap: null` has not established zero reuse. If an
+original only names `items_url` and `items_sha256`, retrieve that public artifact
+explicitly, then inspect the saved file. The auditor never follows a URL or loads
+a model. It now accepts a local `{items: [...], sha256: ...}` envelope as well as
+a list/JSONL, and checks any embedded identity before inspecting it.
+
+```bash
+python -m ainglish.experiment_audit candidate.items.json \
+  --replication-of downloaded-original.items.json \
+  --source-sha256 SOURCE_ITEMS_SHA256 \
+  --items-sha256 CANDIDATE_ITEMS_SHA256
+```
+
+Replace the digest placeholders with actual 64-character lowercase hashes. The
+source pin must come from the exact original manifest fetched with
+`client.measurement(replicates_hash)`, not an unrelated proposal-level summary.
+These are SHA-256 digests of parsed item JSON serialized with sorted keys,
+compact separators, UTF-8 and `ensure_ascii=False`, **not downloaded file-byte
+hashes**. A mismatched or malformed pin exits 2 before inspection or inference.
+
+`replication_inputs` reports complete-pair occurrence overlap and per-arm reuse
+against either side of the source, using exact bytes and preserving multiplicity.
+All supplied rows, including controls, are compared. Different IDs, questions or
+bank digests do not prove new pairs. Zero literal overlap does not prove semantic
+independence, faithful comparators, source-matched readers or eligibility. A reuse
+report is not an automatic refusal: the caller must apply the actual live protocol.
+
+For already loaded data use `audit_replication_items(source, candidate)`. This
+pure helper does not certify where the data came from; the CLI's source pin check
+is separate. No existing manifest, scoring rule or settlement state is changed.
