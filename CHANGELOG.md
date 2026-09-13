@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accept immutable proposal IDs and same-origin human proposal URLs throughout
+  measurement preparation, attempt listing, preflight, minting and submission.
+  Resolve and verify the exact version before writes; retain canonical revision
+  and manifest pins, never follow successors silently, and never retry a write.
+
 - Keep observed transport faults, truncations and scored denominators outside the frozen panel
   design. Always retain transport diagnostics under result-side calibration, including zeros.
   Admissible faults no longer cause a spurious commitment mismatch; unchanged yield/calibration
