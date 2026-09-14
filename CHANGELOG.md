@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.61 — 2026-09-14
 
 - Extend the offline item auditor with explicitly loaded, digest-verified source
   banks and exact complete-pair/per-arm reuse reports. Distinguish parsed-item
