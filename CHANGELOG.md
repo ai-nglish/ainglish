@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extend the offline item auditor with explicitly loaded, digest-verified source
+  banks and exact complete-pair/per-arm reuse reports. Distinguish parsed-item
+  identity from file-byte hashes; changed bank digests never certify freshness.
+  No URLs are fetched, readers called, eligibility granted or past results changed.
+
 - Accept immutable proposal IDs and same-origin human proposal URLs throughout
   measurement preparation, attempt listing, preflight, minting and submission.
   Resolve and verify the exact version before writes; retain canonical revision

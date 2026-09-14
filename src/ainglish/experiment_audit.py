@@ -15,6 +15,49 @@ from . import panel
 MAX_FILE_BYTES = 20 * 1024 * 1024
 
 
+def items_digest(items):
+    """Panel-compatible parsed-JSON identity, NOT the downloaded file-byte hash."""
+    return hashlib.sha256(json.dumps(items, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False).encode()).hexdigest()
+
+
+def audit_replication_items(source, candidate):
+    """Compare retained complete pairs and each arm offline, without granting eligibility.
+
+    All supplied rows are compared, including controls: no hidden phase filtering.
+    IDs, options, golds and questions do not turn a copied pair into a fresh pair.
+    """
+    checks = [audit_token_pairs(rows) for rows in (source, candidate)]
+    result = {"kind": "ainglish.replication-input-audit.v1", "report_only": True,
+        "reader_calls": 0, "api_calls": 0, "tokenizer_calls": 0,
+        "normalisation": "exact-bytes", "scope": "all supplied complete pairs, including controls",
+        "semantic_equivalence": "not_checked", "eligibility": "not_assessed",
+        "status": "not_evaluable", "source": checks[0], "candidate": checks[1],
+        "complete_pairs": None, "side_overlap": None, "bank_digest": None,
+        "interpretation": "Report-only inspection of explicitly loaded data. Different digests do not establish pair freshness; different pairs do not establish independent semantic frames or matched estimands."}
+    if not all(c['ok'] for c in checks):
+        return result
+
+    def pairs(rows):
+        return [(r.get('english', r.get('baseline')), r['ainglish'])
+                if isinstance(r, dict) else tuple(r) for r in rows]
+
+    original, fresh = pairs(source), pairs(candidate)
+    left, right = Counter(original), Counter(fresh)
+    shared = sum(min(count, left[pair]) for pair, count in right.items())
+    text = {arm for pair in original for arm in pair}
+    left_digest, right_digest = items_digest(source), items_digest(candidate)
+    result.update(status="evaluated", bank_digest={"source": left_digest, "candidate": right_digest,
+        "relation": "equal" if left_digest == right_digest else "different",
+        "basis": "SHA-256 of parsed items JSON; metadata/order changes can change this digest"},
+        complete_pairs={"source_total": len(original), "candidate_total": len(fresh),
+            "shared_occurrences": shared, "fresh_fraction": (len(fresh) - shared) / len(fresh)},
+        side_overlap={"english_shared": sum(e in text for e, _ in fresh),
+            "ainglish_shared": sum(a in text for _, a in fresh),
+            "english_total": len(fresh), "ainglish_total": len(fresh)})
+    return result
+
+
 def _visible_arm_conflicts(items):
     """Compare what ONE arm exposes, not the hidden counterpart or option order.
 
@@ -225,14 +268,24 @@ def audit_token_pairs(pairs):
     return report
 
 
-def _read(path):
+def _read(path, pinned_sha256=None):
     with Path(path).open("rb") as handle:
         raw = handle.read(MAX_FILE_BYTES + 1)
     if len(raw) > MAX_FILE_BYTES:
         raise ValueError("Input exceeds the 20 MiB local audit limit")
+    def invalid_constant(_):
+        raise ValueError("Non-finite JSON is not item data")
     if str(path).endswith(".jsonl"):
-        return [json.loads(line) for line in raw.splitlines() if line.strip()]
-    return json.loads(raw)
+        doc = [json.loads(line, parse_constant=invalid_constant) for line in raw.splitlines() if line.strip()]
+    else:
+        doc = json.loads(raw, parse_constant=invalid_constant)
+    items = doc['items'] if isinstance(doc, dict) and 'items' in doc else doc
+    embedded = doc.get('sha256') if isinstance(doc, dict) and 'items' in doc else None
+    for pin in (embedded, pinned_sha256):
+        if pin is not None and (not isinstance(pin, str) or not re.fullmatch(r'[0-9a-f]{64}', pin)
+                                or pin != items_digest(items)):
+            raise ValueError("Item identity does not match the pinned parsed-JSON digest")
+    return items
 
 
 def cli(argv=None):
@@ -241,12 +294,24 @@ def cli(argv=None):
     parser.add_argument("--training", help="Optional local training item file to check for literal leakage")
     parser.add_argument("--require-balanced", action="store_true", help="Treat declared answer-position imbalance as a local audit error")
     parser.add_argument("--token-pairs", action="store_true", help="Inspect a local complete token-pair list without loading tokenizers")
+    parser.add_argument("--items-sha256", help="Optional pinned parsed-items SHA-256, not file-byte SHA-256")
+    parser.add_argument("--replication-of", help="Explicit local source item bank; never fetched automatically")
+    parser.add_argument("--source-sha256", help="Required source manifest items_sha256 with --replication-of")
     args = parser.parse_args(argv)
     if args.token_pairs and (args.training or args.require_balanced):
         parser.error("--token-pairs cannot be combined with panel training or answer-balance options")
+    if bool(args.replication_of) != bool(args.source_sha256):
+        parser.error("--replication-of and --source-sha256 must be supplied together")
     try:
-        report = audit_token_pairs(_read(args.items)) if args.token_pairs else audit_items(
-            _read(args.items), _read(args.training) if args.training else None, args.require_balanced)
+        items = _read(args.items, args.items_sha256)
+        report = audit_token_pairs(items) if args.token_pairs else audit_items(
+            items, _read(args.training) if args.training else None, args.require_balanced)
+        if args.replication_of:
+            source = _read(args.replication_of, args.source_sha256)
+            report['replication_inputs'] = audit_replication_items(source, items)
+            report['replication_inputs']['source_pin_verified'] = True
+            report['replication_inputs']['candidate_pin_verified'] = args.items_sha256 is not None
+            report['ok'] = report['ok'] and report['replication_inputs']['status'] == 'evaluated'
     except (OSError, ValueError, TypeError) as error:
         print(json.dumps({"kind": "ainglish.experiment-input-audit.error", "error_type": type(error).__name__,
                           "message": "Cannot read valid bounded local item data; no reader or API call occurred."}))
