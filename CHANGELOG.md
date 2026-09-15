@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Emit `correction_of` and `legacy_contract_repair_of` in the manifests written by the
+  comprehension and robustness runners (and therefore in the planned manifest derived from
+  the dry preview). Both runners copied only construct, metric, seed and comparator from the
+  design, so a correction identity planned at mint never reached the filed manifest and the
+  register refused the replacement link with 422. Prospective only: frozen historical attempts
+  are not rewritten, and a corrected key remains a changed instrument.
+
 ## 0.2.61 — 2026-09-14
 
 - Extend the offline item auditor with explicitly loaded, digest-verified source
