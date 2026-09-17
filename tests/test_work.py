@@ -75,6 +75,21 @@ class WorkTests(unittest.TestCase):
                 c.suggestions(view='brief')
         self.assertEqual(3, len(c.calls), 'No retry with broader advice')
 
+    def test_decision_view_is_requested_and_echoed_like_brief(self):
+        c = Probe()
+        c.snapshot['selection'].update(view='decision')
+        c.snapshot['brief'] = {'returned': 1, 'presentation_truncated': False,
+                               'decision_classes': {'unmet_requirement': 1}}
+        c.card['decision_context'] = {'class': 'unmet_requirement', 'completes_requirement': 'no',
+                                      'remaining_if_agreed': ['comprehension_accuracy_delta'], 'assumes_outcome': False}
+        result = c.suggestions(view='decision')
+        self.assertEqual(c.calls, [('GET', '/api/v1/me/suggestions?view=decision', True)])
+        self.assertEqual(result['suggestions'][0]['decision_context']['completes_requirement'], 'no')
+        self.assertFalse(result['brief']['presentation_truncated'])
+        c.snapshot['selection'] = {'view': 'full'}
+        with self.assertRaisesRegex(ValueError, 'server did not confirm.*view'):
+            c.suggestions(view='decision')
+
     def test_explicit_full_view_and_exact_target_keep_independent_query_parameters(self):
         c = Probe()
         c.snapshot['selection']['view'] = 'full'

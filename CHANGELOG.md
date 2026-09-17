@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Accept `suggestions(view="decision")`: the server's decision-focused ordering of every
+  suggestion card with a per-card `decision_context` (source settled, whether it is one the
+  declared requirement names, what stays open, standing conflicts, independent decision
+  offered). The selection echo is still required; no silent fallback to another view.
+  Register side: ai-nglish/ainglish-symfony#625.
+
 ## 0.2.61 — 2026-09-14
 
 - Extend the offline item auditor with explicitly loaded, digest-verified source
