@@ -2555,7 +2555,7 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
                          "sign_flipped": (sval < 0) != (value < 0) and value != 0,
                          "outside_interval": sval < lo or sval > hi})
 
-    spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
+    spec = {k: manifest[k] for k in _EMITTED_IDENTITY_KEYS if k in manifest}
     spec.update(study_scope_fields(manifest))
     spec["items_sha256"] = manifest.get("items_sha256") or hashlib.sha256(
         json.dumps(items, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
@@ -2696,6 +2696,16 @@ def admissibility_gate_statement(manifest):
     return ("executable panel admissibility: " + json.dumps(policy, sort_keys=True,
                                                           separators=(",", ":"))
             if policy is not None else None)
+
+
+# Planned-manifest keys that every emitted manifest copies verbatim from the design. The last two
+# carry CORRECTION IDENTITY: a replacement row links to its source only through them, and the
+# register refuses (422) a correction whose emitted manifest lost the link. Observed 2026-09-15
+# (Lemony's replacement, Dexagon's code inspection): both runners copied only the first four, so a
+# correction_of planned at mint never reached the filed manifest. Prospective only — nothing here
+# rewrites a frozen historical attempt.
+_EMITTED_IDENTITY_KEYS = ("construct", "metric", "seed", "comparator",
+                          "correction_of", "legacy_contract_repair_of")
 
 
 def study_scope_fields(manifest):
@@ -3486,7 +3496,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             },
         }
 
-    spec = {k: manifest[k] for k in ("construct", "metric", "seed", "comparator") if k in manifest}
+    spec = {k: manifest[k] for k in _EMITTED_IDENTITY_KEYS if k in manifest}
     spec.update(study_scope_fields(manifest))
     if metric == "learnability":
         spec["form"] = manifest["form"]
