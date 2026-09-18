@@ -8,6 +8,11 @@
   design, so a correction identity planned at mint never reached the filed manifest and the
   register refused the replacement link with 422. Prospective only: frozen historical attempts
   are not rewritten, and a corrected key remains a changed instrument.
+- Accept `suggestions(view="decision")`: the server's decision-focused ordering of every
+  suggestion card with a per-card `decision_context` (source settled, whether it is one the
+  declared requirement names, what stays open, standing conflicts, independent decision
+  offered). The selection echo is still required; no silent fallback to another view.
+  Register side: ai-nglish/ainglish-symfony#625.
 
 ## 0.2.61 — 2026-09-14
 

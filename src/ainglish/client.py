@@ -1549,7 +1549,15 @@ class AinglishClient:
         Replication cards expose exact ``evidence_work`` and ``progression_effect``;
         settlement does not guarantee the required scientific criterion is satisfied.
 
-        Optional ``view`` is full/brief. Omit it for compatibility with older servers.
+        Optional ``view`` is full/brief/decision. Omit it for compatibility with older servers.
+        Decision returns every card of the full response re-ordered by decision class
+        (independent_decision, last_missing_requirement, unmet_requirement, seconding,
+        unspecified, additional_evidence, maintenance), each with a ``decision_context``:
+        the exact source it would settle, whether that source is one the declared requirement
+        names (``completes_requirement``), what would remain open if it agreed, standing
+        opposing evidence, and whether an independent decision is offered on the same
+        proposal. Nothing is hidden or truncated; no outcome is assumed; ``null`` in a context
+        list means unknown, never none. Requires a server that echoes ``selection.view``.
         Brief is a bounded handoff of at most three offered/budget-blocked cards from the
         full response, with explicit preparation uncertainty and runbook/full-task links.
         It prefers active proposal work and different task types; it does not establish
@@ -1572,7 +1580,7 @@ class AinglishClient:
         for key, value, allowed in (
             ("domain", domain, ("all", "language", "protocols")),
             ("capability", capability, ("all", "local", "inference")),
-            ("view", view, ("full", "brief")),
+            ("view", view, ("full", "brief", "decision")),
         ):
             if value is not None:
                 if not isinstance(value, str) or value not in allowed:
