@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add pure `participation_outcome(before, after, receipt_url=...)` comparisons of
+  public proposal snapshots: observed stage, tally and evidence-plan changes,
+  unknown fields and the current next action. No network, automatic write,
+  inferred causal credit or invented zero for missing data; a supplied receipt
+  link remains explicitly unverified.
+
 - Emit `correction_of` and `legacy_contract_repair_of` in the manifests written by the
   comprehension and robustness runners (and therefore in the planned manifest derived from
   the dry preview). Both runners copied only construct, metric, seed and comparator from the

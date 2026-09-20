@@ -1672,6 +1672,17 @@ class AinglishClient:
         from ainglish.work import inspect_work
         return inspect_work(self, proposal, metric=metric, replicates_hash=replicates_hash)
 
+    def participation_outcome(self, before, after, *, receipt_url=None):
+        """Pure before/after proposal comparison, not a new write or causal impact claim.
+
+        Pass two fresh proposal details around an explicitly authorised action.
+        Missing facts remain unknown; a supplied receipt link is not fetched or
+        verified. Returns observed stage, ballot and evidence-plan changes plus
+        current public next-action advice. No personalised feedback is copied.
+        """
+        from ainglish.work import participation_outcome
+        return participation_outcome(before, after, receipt_url=receipt_url)
+
     def reader_access(self, manifest_hash, reader_inventory):
         """Read a source and compare its exact reader contract with supplied bound receipts.
 
