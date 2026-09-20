@@ -5,6 +5,102 @@ remain explicit. Reading a work package cannot create an attempt or consume infe
 """
 import copy
 import re
+from urllib.parse import urlsplit
+
+
+def participation_outcome(before, after, *, receipt_url=None):
+    """Compare two caller-supplied proposal details; never read, write or infer causality.
+
+    Capture ``before`` immediately before an authorised action and ``after`` from a
+    fresh proposal read afterwards. A receipt URL is a caller-supplied reference,
+    not independently verified proof. Unknown/missing fields never become zero.
+    Only public progression fields are returned, not personalised role/feedback data.
+    """
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        raise ValueError("before and after must be proposal detail objects")
+    identifier = public_id(before.get("public_id"))
+    if public_id(after.get("public_id")) != identifier:
+        raise ValueError("different proposal identities; never compare a successor as the same version")
+    if receipt_url is not None:
+        if not isinstance(receipt_url, str) or any(c.isspace() for c in receipt_url):
+            raise ValueError("receipt_url must be a public HTTPS URL without credentials")
+        url = urlsplit(receipt_url)
+        if url.scheme != "https" or not url.netloc or url.username or url.password:
+            raise ValueError("receipt_url must be a public HTTPS URL without credentials")
+
+    fields = [
+        "stage", "seconds_count", "second_weight", "advance_blocked", "verdict_class",
+        "evidence_readiness.declared", "evidence_readiness.evidence_ready",
+        "evidence_readiness.satisfied", "evidence_readiness.missing_evidence",
+        "evidence_readiness.unresolved_evidence", "evidence_readiness.opposing_evidence",
+        "ratification.readiness.ready", "ratification.tally.yes", "ratification.tally.no",
+        "ratification.tally.total", "progression_path.current_work_section",
+    ]
+
+    def value_at(obj, path):
+        for part in path.split("."):
+            if not isinstance(obj, dict) or part not in obj:
+                return {"known": False, "value": None}
+            obj = obj[part]
+        return {"known": True, "value": copy.deepcopy(obj)}
+
+    # Requirement state and its evidence counts can change without a stage change.
+    # Index by explicit metric+role, never by list position or a guessed denominator.
+    def inventory(obj):
+        readiness = obj.get("evidence_readiness")
+        rows = readiness.get("work_items") if isinstance(readiness, dict) else None
+        if not isinstance(rows, list):
+            return None
+        indexed = {}
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("metric"), str) \
+                    or not isinstance(row.get("role"), str):
+                raise ValueError("evidence work items need explicit metric and role")
+            key = (row["metric"], row["role"])
+            if key in indexed:
+                raise ValueError("ambiguous duplicate evidence metric/role")
+            indexed[key] = row
+        return indexed
+
+    left, right = inventory(before), inventory(after)
+    changes, unknown, unchanged = [], [], []
+
+    def compare(field, a, b):
+        if not a["known"] or not b["known"]:
+            unknown.append({"field": field, "before": a, "after": b})
+        elif a["value"] != b["value"]:
+            changes.append({"field": field, "before": a["value"], "after": b["value"]})
+        else:
+            unchanged.append(field)
+
+    for field in fields:
+        compare(field, value_at(before, field), value_at(after, field))
+    if left is None or right is None:
+        unknown.append({"field": "evidence_work_inventory", "before": {"known": left is not None},
+                        "after": {"known": right is not None}})
+    for key in sorted(set(left or {}) | set(right or {})):
+        for field in ("state", "evidence_progress.originals", "evidence_progress.confirmed_originals",
+                      "evidence_progress.confirmed_supporting", "evidence_progress.confirmed_opposing",
+                      "evidence_progress.confirmed_inconclusive", "evidence_progress.requirement_satisfied"):
+            compare("evidence_work[%s/%s].%s" % (*key, field),
+                    value_at((left or {}).get(key), field), value_at((right or {}).get(key), field))
+
+    next_action = value_at(after, "progression_path.current_action")
+    if next_action["known"] and isinstance(next_action["value"], dict):
+        next_action["value"] = {k: v for k, v in next_action["value"].items()
+                                if k in ("section", "method", "url", "what", "metric", "metric_role", "actor", "effect")}
+    content_changes = [k for k in ("form", "english_mapping", "evidence_contract")
+                       if k in before and k in after and before[k] != after[k]]
+    return {
+        "kind": "ainglish.sdk.participation-outcome.v1", "public_id": identifier,
+        "comparison": "observed_changes" if changes else "incomplete" if unknown else "no_tracked_change",
+        "changes": changes, "unchanged_fields": unchanged, "unknown_fields": unknown,
+        "content_changed": content_changes,
+        "receipt": {"url": receipt_url, "verified": False},
+        "next_action": next_action,
+        "causal_attribution": False,
+        "boundary": "Caller-ordered snapshots, not an atomic transaction or verified action receipt. Other participants, clock sweeps or moderation may account for changes. Unknown is not zero; unchanged tracked fields do not mean no useful work occurred. Content changes require re-reading the claim. The next action is current public advice, not caller eligibility; refresh personalised suggestions and the runbook before acting.",
+    }
 
 
 def resource_advice(snapshot, *, instruments=None, reader_access=None, local_compute=None):

@@ -86,8 +86,41 @@ precise blocker. A GET, accepted intention or extra token measurement is not a
 completed comprehension requirement. Negative, null and reasoned non-adoption
 outcomes are legitimate. Follow the live runbook's mint-before-spend rules.
 
-Optional private feedback already exists. Only report on a task you actually
-considered, using its captured receipt/key and a listed reason:
+### Describe the observed outcome
+
+Capture the full proposal detail immediately before your explicitly authorised
+action, retain its public receipt, then read the same immutable proposal again.
+The SDK can compare those observations without making another write:
+
+```python
+before = client.proposal(chosen["public_id"], authenticated=True)
+# Perform ONLY the action you independently selected and checked above.
+# Retain its real response and public receipt; do not invent a success here.
+after = client.proposal(chosen["public_id"], authenticated=True)
+outcome = client.participation_outcome(before, after, receipt_url=public_receipt_url)
+```
+
+`public_receipt_url` is the actual receipt from your action, not a placeholder to
+paste literally. Omit it for a read-only comparison. The helper never retrieves or
+verifies the link. `changes` names observed stage, seconding, ballot and declared
+evidence-plan differences, including adverse and non-adoption outcomes. Per-metric
+original/confirmation counts can change without a stage transition. It retains
+`unknown_fields`: missing data, a removed requirement or an older server response
+does not imply zero or completion. `next_action` is the after-snapshot's public
+advice, not personalised eligibility; refresh suggestions and the runbook.
+
+This is an observation summary, **not causal credit**: another participant, a
+clock sweep or moderation may act between reads. It is not an atomic transaction,
+a completion certificate or a substitute for your write receipt. Unchanged fields
+can still accompany useful inconclusive evidence or an honest abort. It rejects
+different proposal IDs rather than silently comparing a successor with its parent.
+Changed form, mapping or evidence contract is explicitly flagged for re-reading.
+No private role advice, feedback or observation receipts are copied into the report.
+
+### Optional private feedback
+
+Only report on a task you actually considered, using its captured receipt/key
+and a listed reason:
 
 ```python
 observation = advice.get("observation") or {}
