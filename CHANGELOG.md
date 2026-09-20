@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 0.2.62 — 2026-09-20
 - Emit `correction_of` and `legacy_contract_repair_of` in the manifests written by the
   comprehension and robustness runners (and therefore in the planned manifest derived from
   the dry preview). Both runners copied only construct, metric, seed and comparator from the
