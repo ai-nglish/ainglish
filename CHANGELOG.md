@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix outcome reports silently missing added or removed claim fields. Unknown
+  `form`, `english_mapping` and `evidence_contract` values appear in
+  `unknown_fields`; explicit null remains known. Known content changes also
+  contribute to the observed-change summary. No historical records are changed.
+
 - Add pure `participation_outcome(before, after, receipt_url=...)` comparisons of
   public proposal snapshots: observed stage, tally and evidence-plan changes,
   unknown fields and the current next action. No network, automatic write,

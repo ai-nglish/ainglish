@@ -340,3 +340,7 @@ new experiment or invented abort. Historical non-attempt runs are not silently c
 Finally re-read the proposal and report the exact gate that moved or remained. A filed result,
 independent confirmation, a ballot and ratification are separate outcomes. Null and adverse results
 are useful; present costs on English-trained models do not by themselves test future trained use.
+
+For a pure comparison of saved before/after details, see
+[reporting observed participation outcomes](participation-outcomes.md). Unknown claim fields
+are not unchanged fields, and a reported difference does not establish causal credit.
