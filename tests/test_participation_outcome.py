@@ -12,6 +12,7 @@ ID = "a-0000000000000000"
 def snapshot():
     return {"public_id": ID, "stage": "measured", "seconds_count": 3, "second_weight": 3,
             "advance_blocked": None, "verdict_class": "screened", "form": "fixture",
+            "english_mapping": "Fixture meaning", "evidence_contract": None,
             "evidence_readiness": {"declared": True, "evidence_ready": False,
                 "satisfied": ["token_delta"], "missing_evidence": [],
                 "unresolved_evidence": ["comprehension_accuracy_delta"], "opposing_evidence": [],
@@ -93,6 +94,50 @@ class ParticipationOutcomeTests(unittest.TestCase):
         self.assertEqual(["form"], report["content_changed"])
         self.assertTrue(any(x["field"].startswith("evidence_work[") for x in report["unknown_fields"]))
         self.assertFalse(any(x["field"].startswith("evidence_work[") for x in report["changes"]))
+
+    def test_one_sided_content_presence_is_unknown_not_unchanged_or_a_claimed_edit(self):
+        for field in ("form", "english_mapping", "evidence_contract"):
+            for value in (None, {"fixture": ["value"]}):
+                for reverse in (False, True):
+                    with self.subTest(field=field, value=value, reverse=reverse):
+                        a, b = snapshot(), snapshot()
+                        del a[field]
+                        b[field] = copy.deepcopy(value)
+                        if reverse:
+                            a, b = b, a
+                        saved = copy.deepcopy((a, b))
+                        report = participation_outcome(a, b)
+                        unknown = {x["field"]: x for x in report["unknown_fields"]}
+                        self.assertEqual("incomplete", report["comparison"])
+                        self.assertEqual([], report["content_changed"])
+                        self.assertEqual([], report["changes"])
+                        self.assertNotIn(field, report["unchanged_fields"])
+                        self.assertEqual({"known": reverse, "value": value if reverse else None}, unknown[field]["before"])
+                        self.assertEqual({"known": not reverse, "value": None if reverse else value}, unknown[field]["after"])
+                        self.assertEqual(saved, (a, b))
+
+    def test_content_missing_on_both_sides_is_unknown(self):
+        a, b = snapshot(), snapshot()
+        del a["evidence_contract"], b["evidence_contract"]
+        report = participation_outcome(a, b)
+        self.assertEqual("incomplete", report["comparison"])
+        unknown = {x["field"]: x for x in report["unknown_fields"]}
+        self.assertFalse(unknown["evidence_contract"]["before"]["known"])
+        self.assertFalse(unknown["evidence_contract"]["after"]["known"])
+
+    def test_explicit_null_to_contract_is_a_known_content_change(self):
+        for reverse in (False, True):
+            a, b = snapshot(), snapshot()
+            b["evidence_contract"] = {"claim_carrier": ["comprehension_accuracy_delta"]}
+            if reverse:
+                a, b = b, a
+            report = participation_outcome(a, b)
+            self.assertEqual("observed_changes", report["comparison"])
+            self.assertEqual(["evidence_contract"], report["content_changed"])
+            self.assertEqual([{"field": "evidence_contract", "before": a["evidence_contract"],
+                               "after": b["evidence_contract"]}], report["changes"])
+            report["changes"][0]["before" if reverse else "after"]["claim_carrier"].append("local")
+            self.assertNotIn("local", str((a, b)))
 
 
 if __name__ == "__main__":

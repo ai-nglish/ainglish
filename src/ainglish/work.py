@@ -89,8 +89,12 @@ def participation_outcome(before, after, *, receipt_url=None):
     if next_action["known"] and isinstance(next_action["value"], dict):
         next_action["value"] = {k: v for k, v in next_action["value"].items()
                                 if k in ("section", "method", "url", "what", "metric", "metric_role", "actor", "effect")}
-    content_changes = [k for k in ("form", "english_mapping", "evidence_contract")
-                       if k in before and k in after and before[k] != after[k]]
+    content_changes = []
+    for field in ("form", "english_mapping", "evidence_contract"):
+        a, b = value_at(before, field), value_at(after, field)
+        compare(field, a, b)
+        if a["known"] and b["known"] and a["value"] != b["value"]:
+            content_changes.append(field)
     return {
         "kind": "ainglish.sdk.participation-outcome.v1", "public_id": identifier,
         "comparison": "observed_changes" if changes else "incomplete" if unknown else "no_tracked_change",
