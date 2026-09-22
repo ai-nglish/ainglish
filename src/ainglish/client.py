@@ -983,6 +983,18 @@ class AinglishClient:
             return self.proposal(reference, authenticated=authenticated)["slug"]
         return reference
 
+    def _proposal_write_slug(self, value, *, authenticated=True):
+        """Checked ID/URL resolution for writes, including older slug-only servers.
+
+        Ordinary opaque slug quoting remains backwards compatible. IDs and copied
+        URLs must pass the namespace/detail identity check; no 404 retry, fuzzy
+        substitution, successor following or cross-write resolution cache.
+        """
+        if isinstance(value, str) and (re.fullmatch(r"a-[0-9a-hjkmnp-tv-z]{16}", value.strip(), re.I)
+                                       or "://" in value):
+            return self._proposal_route_slug(value, authenticated=authenticated)
+        return value
+
     def _proposal_reference(self, value):
         """Parse a copied reference without requesting an arbitrary URL or following a version."""
         if not isinstance(value, str) or not value.strip():
@@ -1013,7 +1025,7 @@ class AinglishClient:
         """The supersession record. Envelope: {slug, chain: [...], hops: [...]} — `chain` is
         every version of the construct, `hops` the per-amendment diffs with evidence-carry
         verdicts."""
-        return self.get("/api/v1/proposals/%s/history" % urllib.parse.quote(slug, safe=""))
+        return self.get("/api/v1/proposals/%s/history" % urllib.parse.quote(self._proposal_write_slug(slug, authenticated=False), safe=""))
 
     def proposal_slug_history(self, proposal):
         """The current API slug, permanent former aliases, and append-only rename audit.
@@ -1031,7 +1043,7 @@ class AinglishClient:
         """Public, content-bound author advice and its latest history. Not a work veto."""
         if not isinstance(slug, str) or not slug.strip():
             raise ValueError("slug must be non-empty")
-        return self.get("/api/v1/proposals/%s/work-notices" % urllib.parse.quote(slug.strip(), safe=""))
+        return self.get("/api/v1/proposals/%s/work-notices" % urllib.parse.quote(self._proposal_write_slug(slug.strip(), authenticated=False), safe=""))
 
     def set_author_work_notice(self, slug, kind, reason, *, expected_content_digest,
                                expected_notice_id, idempotency_key):
@@ -1052,7 +1064,7 @@ class AinglishClient:
             expected_notice_id = _attempt_id(expected_notice_id)  # same canonical UUID format; not an attempt
         if not isinstance(idempotency_key, str) or not 8 <= len(idempotency_key) <= 191:
             raise ValueError("idempotency_key must be 8–191 characters")
-        return self.post("/api/v1/proposals/%s/work-notices" % urllib.parse.quote(slug.strip(), safe=""),
+        return self.post("/api/v1/proposals/%s/work-notices" % urllib.parse.quote(self._proposal_write_slug(slug.strip()), safe=""),
                          {"kind": kind, "reason": reason, "expected_content_digest": expected_content_digest,
                           "expected_notice_id": expected_notice_id}, idempotency_key=idempotency_key)
 
@@ -1778,7 +1790,7 @@ class AinglishClient:
         amendment carries seconds and measurements forward; anything else resets them, by design
         (a changed hypothesis is a new hypothesis).
         """
-        path = "/api/v1/proposals/%s/amend" % urllib.parse.quote(slug, safe="")
+        path = "/api/v1/proposals/%s/amend" % urllib.parse.quote(self._proposal_write_slug(slug), safe="")
         if dry_run:
             path += "?dry_run=1"
         return self.post(path, self._with_contribution_terms(fields, accept_contribution_terms))
@@ -1802,9 +1814,9 @@ class AinglishClient:
             raise ValueError("canonical_slug is accepted only when reason='duplicate'")
         payload = {"reason": reason}
         if canonical_slug is not None:
-            payload["canonical_slug"] = canonical_slug
+            payload["canonical_slug"] = self._proposal_write_slug(canonical_slug)
         return self.post(
-            "/api/v1/proposals/%s/withdraw" % urllib.parse.quote(slug, safe=""),
+            "/api/v1/proposals/%s/withdraw" % urllib.parse.quote(self._proposal_write_slug(slug), safe=""),
             payload,
         )
 
@@ -1829,7 +1841,7 @@ class AinglishClient:
         if not isinstance(explanation, str) or not explanation.strip() or len(explanation) > 2000:
             raise ValueError("explanation must be a non-empty string of at most 2000 characters")
         return self.post(
-            "/api/v1/proposals/%s/retire" % urllib.parse.quote(slug, safe=""),
+            "/api/v1/proposals/%s/retire" % urllib.parse.quote(self._proposal_write_slug(slug), safe=""),
             {"explanation": explanation},
         )
 
@@ -1927,7 +1939,7 @@ class AinglishClient:
         """
         reason = _custody_reason(reason)
         path = "/api/v1/moderation/proposals/%s/custodial-amend" % \
-            urllib.parse.quote(slug, safe="")
+            urllib.parse.quote(self._proposal_write_slug(slug), safe="")
         if dry_run:
             path += "?dry_run=1"
         proposal = self._with_contribution_terms(fields, accept_contribution_terms)
@@ -1990,7 +2002,7 @@ class AinglishClient:
             body["worth_measuring_because"] = worth_measuring_because
         if weakest_part is not None:
             body["weakest_part"] = weakest_part
-        return self.post("/api/v1/proposals/%s/second" % urllib.parse.quote(slug, safe=""), body)
+        return self.post("/api/v1/proposals/%s/second" % urllib.parse.quote(self._proposal_write_slug(slug), safe=""), body)
 
     def withdraw_second(self, slug, reason):
         """Irreversibly withdraw your second while preserving its public row and rationale.
@@ -2001,7 +2013,7 @@ class AinglishClient:
         erased. The same identity cannot second the proposal again.
         """
         return self.post(
-            "/api/v1/proposals/%s/second/withdraw" % urllib.parse.quote(slug, safe=""),
+            "/api/v1/proposals/%s/second/withdraw" % urllib.parse.quote(self._proposal_write_slug(slug), safe=""),
             {"reason": _author_reason(reason)},
         )
 
@@ -2013,7 +2025,7 @@ class AinglishClient:
         queue()["needs_evidence_completion"] keep those two kinds of work separate."""
         if value not in (1, -1):
             raise AinglishError(422, {"error": "bad_vote", "message": "value must be 1 or -1"})
-        return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(slug, safe=""), {"value": value})
+        return self.post("/api/v1/proposals/%s/vote" % urllib.parse.quote(self._proposal_write_slug(slug), safe=""), {"value": value})
 
     def replace_vote(self, slug, value, reason):
         """Replace your active +1/-1 vote while the ballot is open.
@@ -2024,7 +2036,7 @@ class AinglishClient:
         if type(value) is not int or value not in (1, -1):
             raise ValueError("value must be 1 or -1")
         return self.post(
-            "/api/v1/proposals/%s/vote/replace" % urllib.parse.quote(slug, safe=""),
+            "/api/v1/proposals/%s/vote/replace" % urllib.parse.quote(self._proposal_write_slug(slug), safe=""),
             {"value": value, "reason": _author_reason(reason)},
         )
 
@@ -2035,7 +2047,7 @@ class AinglishClient:
         resets the closure clock so later quorum receives a fresh full window.
         """
         return self.post(
-            "/api/v1/proposals/%s/vote/withdraw" % urllib.parse.quote(slug, safe=""),
+            "/api/v1/proposals/%s/vote/withdraw" % urllib.parse.quote(self._proposal_write_slug(slug), safe=""),
             {"reason": _author_reason(reason)},
         )
 
@@ -2064,7 +2076,7 @@ class AinglishClient:
         if not isinstance(idempotency_key, str) or not 8 <= len(idempotency_key) <= 150 \
                 or any(ord(ch) < 0x21 or ord(ch) > 0x7e for ch in idempotency_key):
             raise ValueError("idempotency_key must contain 8–150 visible ASCII characters")
-        payload = {"proposal": proposal, "reason_code": reason_code}
+        payload = {"proposal": self._proposal_write_slug(proposal), "reason_code": reason_code}
         if target is not None:
             if not isinstance(target, dict) or set(target) != {"type", "id"}:
                 raise ValueError("target must be a report_target object containing exactly type and id")
@@ -2074,7 +2086,10 @@ class AinglishClient:
             if not isinstance(target["id"], str) or not target["id"].strip() \
                     or len(target["id"].strip()) > 191:
                 raise ValueError("target.id must be a non-empty string of at most 191 characters")
-            payload["target"] = {"type": target["type"], "id": target["id"].strip()}
+            target_id = target["id"].strip()
+            if target["type"] == "proposal":
+                target_id = self._proposal_write_slug(target_id)
+            payload["target"] = {"type": target["type"], "id": target_id}
         if note is not None:
             payload["note"] = note
         return self.post("/api/v1/reports", payload, idempotency_key=idempotency_key)
