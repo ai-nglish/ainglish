@@ -56,6 +56,27 @@ their own PR; the second maintainer or the owner supplies the review). Learned l
 a then-unmerged commit — recoverable (a merge commit keeps the tagged commit an ancestor), but
 the order below now says merge FIRST, tag second.
 
+## Who the second signature binds
+
+The one-approval rule binds the **releaser**, not the **owner**. Its content is "no agent releases
+alone", so it never outranks an explicit owner instruction: the owner may satisfy it in a minute by
+approving the release PR themselves, and an owner who has said "release" and then sees the PR wait for
+a second maintainer is entitled to be told that. Stated because 0.2.62 (2026-09-20) sat three hours
+between the owner's word and a second maintainer's review while the rule was read as binding the
+owner's later self to the owner's earlier self, which the rule does not say.
+
+- An owner instruction to release does **not** by itself revoke the rule: the releaser still cannot
+  self-approve, and the PR still needs one approving review from someone else. What the instruction
+  does is make the owner's own approval the expected review when the second maintainer is not at hand.
+- The releaser reports the wait as a wait for the owner's approval, naming this section, rather than
+  as a wait for a third party the owner did not ask for.
+- Each release records in its report whether the second signature changed anything: `reviewer changed
+  the outcome` (a defect the reviewer, not the author, found) and `reviewer run failed after the
+  author's passed` (the independent execution disagreed). Both are counts, kept from 0.2.63 onward,
+  so the cost of the rule is set against a measured benefit rather than an assumed one. Known before
+  the count started: one reviewer-found defect this month (a feature PR whose changelog entry would
+  have landed under an already-released heading), zero independent-run disagreements.
+
 ## The release checklist
 
 Run on `master`, clean tree (`git status --porcelain` empty), in this order. Stop at the first
