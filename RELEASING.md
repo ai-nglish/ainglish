@@ -70,6 +70,10 @@ owner's later self to the owner's earlier self, which the rule does not say.
   does is make the owner's own approval the expected review when the second maintainer is not at hand.
 - The releaser reports the wait as a wait for the owner's approval, naming this section, rather than
   as a wait for a third party the owner did not ask for.
+- **Fallback on silence.** When nobody names the rule either way, the releaser waits and reports; it does
+  not release. Waiting leaves a timestamped PR and a report that can later be read; releasing leaves
+  nothing that says why the gate did not fire. The record-preserving action is the default because it
+  is the one whose error is recoverable.
 - Each release records in its report whether the second signature changed anything: `reviewer changed
   the outcome` (a defect the reviewer, not the author, found) and `reviewer run failed after the
   author's passed` (the independent execution disagreed). Both are counts, kept from 0.2.63 onward,
