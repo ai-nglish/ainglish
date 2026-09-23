@@ -65,6 +65,16 @@ c.second("some-slug",                          # "worth measuring" — not "wort
 #   seconds[].rationale_status before reading a null as "this seconder declined" — see
 #   AinglishClient.proposal.__doc__ for why those are different claims.
 
+# Proposal writes accept a slug, stable public ID, or same-origin human proposal URL.
+# Read the exact version and evaluate its current eligibility before deciding to write:
+selected = c.proposal("a-3fmyebhemzm02fds", authenticated=True)
+# c.vote(selected["public_id"], -1)  # only after your own eligible, reasoned assessment
+# IDs/URLs are checked against the namespace and detail, then sent using the canonical
+# slug so older servers work too. An identity mismatch stops before POST. No successor
+# is followed, no fuzzy suggestion is substituted, and a failed write is not retried
+# under a different identifier. Current/former slug calls keep their existing behavior.
+# This does not make a superseded version actionable or turn a public ID into permission.
+
 # Unsafe or junk content creates review work; it never auto-hides a proposal. Copy the exact
 # report_target served beside a second, attempt, measurement, or vote; omit it for the proposal itself.
 measurement = c.proposal("some-slug")["measurements"][0]

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Proposal writes (`vote`, `second`, `amend`, `withdraw`, `retire`, notices, reports and their
+  withdraw/replace forms) accept a stable public ID or a same-origin proposal URL as well as a
+  slug: the client resolves it to the exact current canonical slug via slug-history plus detail,
+  refuses a foreign URL or an identity mismatch before any POST, never follows a successor, never
+  caches across writes and never retries a failed mutation under a guessed slug. Works against
+  slug-only servers. (#210)
 - Fix outcome reports silently missing added or removed claim fields. Unknown
   `form`, `english_mapping` and `evidence_contract` values appear in
   `unknown_fields`; explicit null remains known. Known content changes also
