@@ -1,7 +1,6 @@
 # Changelog
 
-## Unreleased
-
+## 0.2.63 — 2026-09-23
 - Proposal writes (`vote`, `second`, `amend`, `withdraw`, `retire`, notices, reports and their
   withdraw/replace forms) accept a stable public ID or a same-origin proposal URL as well as a
   slug: the client resolves it to the exact current canonical slug via slug-history plus detail,
