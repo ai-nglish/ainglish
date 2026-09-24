@@ -45,7 +45,7 @@ def audit_declarations(items, declarations):
     if not isinstance(strata, list) or any(not isinstance(s, dict) or
             set(s) != {"id", "count", "weight"} or not label(s['id']) or
             not count(s['count']) or type(s['weight']) not in (int, float) or
-            not math.isfinite(s['weight']) or s['weight'] <= 0 for s in strata):
+            (type(s['weight']) is float and not math.isfinite(s['weight'])) or s['weight'] <= 0 for s in strata):
         raise ValueError("Strata require id, count and a positive finite weight")
     if len({s['id'] for s in strata}) != len(strata):
         raise ValueError("Duplicate declared stratum")

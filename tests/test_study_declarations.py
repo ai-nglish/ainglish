@@ -57,6 +57,10 @@ class StudyDeclarationsTest(unittest.TestCase):
     def test_zero_expected_labels_need_not_occur(self):
         self.assertTrue(audit_declarations(rows(), declaration(counts={'settlement_stratum': {'statistical':4, 'practical':4, 'absent':0}}))['count_checks']['settlement_stratum']['matches'])
 
+    def test_arbitrary_precision_positive_integer_weight_does_not_overflow(self):
+        result = audit_declarations(rows(), declaration(strata=[{'id':'statistical','count':4,'weight':10**400}]))
+        self.assertEqual(10**400, result['declared_strata'][0]['weight'])
+
     def test_reference_status_is_explicit_no_fetch_and_aliases_need_bindings(self):
         data = rows(); data[0]['reference_ids'] = ['alias-A', 'B', 'C', 'missing']
         spec = declaration(reference_bindings={
