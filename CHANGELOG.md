@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Extend the offline item auditor with an optional explicit study-declaration
+  sidecar: target/control counts, labelled populations, strata, reference metadata
+  and declared world/template clusters. Mismatches remain review warnings, not new
+  measurement gates. Warn that a metadata-only context is not served by the panel;
+  preserve existing full-input conflicting-gold checks and all historical results.
+
 ## 0.2.63 — 2026-09-23
 - Proposal writes (`vote`, `second`, `amend`, `withdraw`, `retire`, notices, reports and their
   withdraw/replace forms) accept a stable public ID or a same-origin proposal URL as well as a

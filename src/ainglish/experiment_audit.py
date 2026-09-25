@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 import hashlib
 import io
 import json
+import math
 from pathlib import Path
 import re
 
@@ -13,6 +14,125 @@ from . import panel
 
 
 MAX_FILE_BYTES = 20 * 1024 * 1024
+
+
+def audit_declarations(items, declarations):
+    """Compare explicit design metadata, never infer it from the English prose.
+
+    Mismatches are review warnings, not eligibility or semantic judgments. A
+    malformed declaration raises ValueError rather than silently skipping checks.
+    This function neither changes items nor incorporates metadata into prompts.
+    """
+    if not isinstance(declarations, dict) or declarations.get("kind") != "ainglish.study-declarations.v1":
+        raise ValueError("Expected ainglish.study-declarations.v1")
+    allowed = {"kind", "expected_target_rows", "expected_control_rows", "counts", "strata", "reference_bindings"}
+    if set(declarations) - allowed:
+        raise ValueError("Unknown declaration field")
+    def count(value):
+        return type(value) is int and value >= 0
+    def label(value):
+        return isinstance(value, str) and bool(value.strip())
+    for key in ("expected_target_rows", "expected_control_rows"):
+        if key in declarations and not count(declarations[key]):
+            raise ValueError("Invalid expected row count")
+    declared_counts = declarations.get("counts", {})
+    if not isinstance(declared_counts, dict) or any(
+            not label(field) or not isinstance(expected, dict) or not expected or
+            any(not label(value) or not count(n) for value, n in expected.items())
+            for field, expected in declared_counts.items()):
+        raise ValueError("Counts require field names and string-label nonnegative counts")
+    strata = declarations.get("strata", [])
+    if not isinstance(strata, list) or any(not isinstance(s, dict) or
+            set(s) != {"id", "count", "weight"} or not label(s['id']) or
+            not count(s['count']) or type(s['weight']) not in (int, float) or
+            (type(s['weight']) is float and not math.isfinite(s['weight'])) or s['weight'] <= 0 for s in strata):
+        raise ValueError("Strata require id, count and a positive finite weight")
+    if len({s['id'] for s in strata}) != len(strata):
+        raise ValueError("Duplicate declared stratum")
+    bindings = declarations.get("reference_bindings", {})
+    if not isinstance(bindings, dict):
+        raise ValueError("Reference bindings must be an object")
+    for key, binding in bindings.items():
+        if not label(key) or not isinstance(binding, dict) or set(binding) - {"status", "locator", "aliases"}:
+            raise ValueError("Invalid reference binding")
+        if binding.get('status') not in ('resolved', 'deliberately_unresolved', 'unknown'):
+            raise ValueError("Reference status is required")
+        if binding['status'] == 'resolved' and not label(binding.get('locator')):
+            raise ValueError("Resolved reference requires an explicit locator")
+        if 'locator' in binding and not label(binding['locator']):
+            raise ValueError("Invalid locator")
+        aliases = binding.get('aliases', [])
+        if not isinstance(aliases, list) or any(not label(a) for a in aliases):
+            raise ValueError("Invalid reference aliases")
+    report = {"kind": "ainglish.study-declaration-audit.v1", "report_only": True,
+        "reader_calls": 0, "api_calls": 0, "tokenizer_calls": 0,
+        "semantic_equivalence": "not_checked", "status": "not_evaluable",
+        "warnings": [], "count_checks": {}, "reference_status_counts": {},
+        "declared_strata": strata,
+        "interpretation": "Metadata only. No prose parsing, reference retrieval, weight application, semantic certification or eligibility decision. Review warnings do not change the enclosing audit's ok or exit status."}
+    if not isinstance(items, list) or any(not isinstance(i, dict) for i in items):
+        report['warnings'].append({'code': 'labelled_item_objects_required'})
+        return report
+    if any('calibration' in i and type(i['calibration']) is not bool for i in items):
+        report['warnings'].append({'code': 'non_boolean_calibration_flag'})
+        return report
+    targets = [i for i in items if not i.get('calibration', False)]
+    report.update(status='evaluated', target_rows=len(targets), control_rows=len(items)-len(targets))
+    for key, actual in (('expected_target_rows', len(targets)), ('expected_control_rows', len(items)-len(targets))):
+        if key in declarations and declarations[key] != actual:
+            report['warnings'].append({'code': 'declared_row_count_mismatch', 'field': key,
+                                       'expected': declarations[key], 'actual': actual})
+    def compare(field, expected):
+        actual = Counter(i[field] for i in targets if label(i.get(field)))
+        missing = sum(not label(i.get(field)) for i in targets)
+        matches = missing == 0 and dict(actual) == {k: n for k, n in expected.items() if n}
+        result = {'expected': dict(expected), 'actual': dict(actual), 'missing_or_invalid': missing, 'matches': matches}
+        if not matches:
+            report['warnings'].append({'code': 'declared_population_mismatch', 'field': field})
+        return result
+    for field, expected in declared_counts.items():
+        report['count_checks'][field] = compare(field, expected)
+    if strata:
+        report['stratum_check'] = compare('settlement_stratum', {s['id']: s['count'] for s in strata})
+        report['stratum_check']['order_and_weight_semantics'] = 'declaration retained; not inferred from row order or checked against a source manifest'
+    # Alias collisions are explicit, not guessed from similar-looking names.
+    aliases = defaultdict(set)
+    for key, binding in bindings.items():
+        for alias in [key] + binding.get('aliases', []):
+            aliases[alias].add(key)
+    collisions = [alias for alias, ids in aliases.items() if len(ids) > 1]
+    if collisions:
+        report['warnings'].append({'code': 'ambiguous_reference_alias', 'count': len(collisions), 'aliases': collisions[:20]})
+    statuses = Counter()
+    missing_rows = []
+    unserved = []
+    for position, item in enumerate(items, 1):
+        if 'context' in item:
+            unserved.append(position)
+        refs = item.get('reference_ids')
+        if refs is None:
+            missing_rows.append(position)
+            continue
+        if not isinstance(refs, list) or any(not label(r) for r in refs):
+            statuses['invalid_reference_list'] += 1
+            continue
+        for ref in refs:
+            keys = aliases.get(ref, set())
+            status = 'missing_binding' if not keys else 'ambiguous_binding' if len(keys) != 1 else bindings[next(iter(keys))]['status']
+            statuses[status] += 1
+    report['reference_status_counts'] = dict(statuses)
+    report['rows_without_reference_declaration'] = len(missing_rows)
+    if bindings and missing_rows:
+        report['warnings'].append({'code': 'reference_usage_undeclared', 'count': len(missing_rows), 'positions': missing_rows[:20]})
+    unresolved = sum(n for status, n in statuses.items() if status not in ('resolved', 'deliberately_unresolved'))
+    if unresolved:
+        report['warnings'].append({'code': 'unresolved_reference_metadata', 'count': unresolved})
+    if unserved:
+        report['warnings'].append({'code': 'context_metadata_not_served', 'count': len(unserved), 'positions': unserved[:20],
+            'interpretation': 'The standard panel does not render a context metadata field. Put all reader-visible context inside each arm before duplicate/gold checks.'})
+    report['declared_clusters'] = {field: {'distinct_labels': len({i[field] for i in targets if label(i.get(field))}),
+        'rows_without_label': sum(not label(i.get(field)) for i in targets)} for field in ('world_id', 'template_id')}
+    return report
 
 
 def items_digest(items):
@@ -297,6 +417,7 @@ def cli(argv=None):
     parser.add_argument("--items-sha256", help="Optional pinned parsed-items SHA-256, not file-byte SHA-256")
     parser.add_argument("--replication-of", help="Explicit local source item bank; never fetched automatically")
     parser.add_argument("--source-sha256", help="Required source manifest items_sha256 with --replication-of")
+    parser.add_argument("--declarations", help="Optional local study-declarations.v1 JSON sidecar; mismatches are report-only warnings")
     args = parser.parse_args(argv)
     if args.token_pairs and (args.training or args.require_balanced):
         parser.error("--token-pairs cannot be combined with panel training or answer-balance options")
@@ -306,6 +427,8 @@ def cli(argv=None):
         items = _read(args.items, args.items_sha256)
         report = audit_token_pairs(items) if args.token_pairs else audit_items(
             items, _read(args.training) if args.training else None, args.require_balanced)
+        if args.declarations:
+            report['declarations'] = audit_declarations(items, _read(args.declarations))
         if args.replication_of:
             source = _read(args.replication_of, args.source_sha256)
             report['replication_inputs'] = audit_replication_items(source, items)

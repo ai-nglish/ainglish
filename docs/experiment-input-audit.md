@@ -117,3 +117,68 @@ report is not an automatic refusal: the caller must apply the actual live protoc
 For already loaded data use `audit_replication_items(source, candidate)`. This
 pure helper does not certify where the data came from; the CLI's source pin check
 is separate. No existing manifest, scoring rule or settlement state is changed.
+
+## Compare the planned population with the labelled bank
+
+An optional sidecar catches bookkeeping mismatches before minting, without
+guessing what a sentence means. For example, a plan may say one negative case
+per form while its actual labelled bank contains two for one form.
+
+```bash
+ainglish-audit-items pairs.json --token-pairs --declarations declarations.json
+```
+
+```json
+{
+  "kind": "ainglish.study-declarations.v1",
+  "expected_target_rows": 8,
+  "expected_control_rows": 0,
+  "counts": {
+    "population_cell": {
+      "stat-positive": 3, "stat-negative": 1,
+      "practical-positive": 3, "practical-negative": 1
+    }
+  },
+  "strata": [
+    {"id": "statistical", "count": 4, "weight": 1},
+    {"id": "practical", "count": 4, "weight": 1}
+  ],
+  "reference_bindings": {
+    "analysis-7": {
+      "status": "resolved", "locator": "retained-context.json#analysis-7",
+      "aliases": ["the seventh analysis"]
+    }
+  }
+}
+```
+
+Only `kind` is required; include only checks you intend to make. Counts apply to
+non-calibration rows and exact nonempty string metadata labels, not text parsed
+from either arm. Each `counts` field describes its complete expected distribution;
+missing labels, unplanned labels and wrong counts are visible. `strata` compares
+the rows' `settlement_stratum` values, retaining the declared order and positive
+weights without inferring their meaning or applying them to a metric. It does not
+compare against a replication source manifest. That remains a separate check.
+
+Use labelled item objects, not two-string arrays, for this diagnostic. Optional
+`reference_ids` per row declare which records it relies on; an explicit `[]`
+differs from absent usage metadata. Binding status can be `resolved`, `unknown`
+or `deliberately_unresolved` (a planned clarification case). A resolved binding
+needs a nonempty locator; no URL/file is fetched and resolution is **asserted,
+not verified**. Aliases are declared, never inferred from spelling. Missing or
+ambiguous bindings and unknown status are warnings; a paraphrased reference is
+not automatically wrong. Reference truth, equality, scope, and prose coverage
+still need review of the actual retained records and both complete arms.
+
+Optional `world_id` and `template_id` counts expose declared clustering. More
+labels do not prove independence. A metadata-only `context` field is flagged:
+the standard panel does not serve it. Embed every answer-bearing fact inside
+each arm before auditing complete visible inputs and contradictory golds.
+The tool does not rewrite or silently append context.
+
+Python callers can use `audit_declarations(items, declarations)`. Mismatches are
+warnings and do **not** alter the enclosing report's `ok`, its exit status, or
+any server gate. Malformed/unknown sidecar fields raise `ValueError` (CLI exit 2),
+so a typo cannot silently suppress a requested diagnostic. Reports may expose
+metadata labels and reference names: inspect before publication. Historical
+banks are never relabelled in place; retain an explicitly dated audit sidecar.
