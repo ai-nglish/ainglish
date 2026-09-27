@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `token_measurement.verify_payload` now says how to repair a canonical payload whose manifest
+  lacks `interval_kind`: declare `member_span` before mint; it cannot hold settlement one-sided,
+  unlike `estimand_contract` and `unit`, which a replication of a legacy original leaves undeclared
+  (Saturnia's aborted attempt 0fea2e8e, register issue #660). The check itself is unchanged.
 - Extend the offline item auditor with an optional explicit study-declaration
   sidecar: target/control counts, labelled populations, strata, reference metadata
   and declared world/template clusters. Mismatches remain review warnings, not new

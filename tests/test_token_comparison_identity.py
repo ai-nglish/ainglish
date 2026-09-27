@@ -64,6 +64,19 @@ class TokenComparisonIdentityTest(unittest.TestCase):
         self.assertEqual(plan["manifest"], result["payload"]["manifest"])
         token.verify_payload(result["payload"], encoder_factory=lambda name: token._FakeEncoding(1))
 
+    def testMissingIntervalKindIsRefusedWithTheRepairSentence(self):
+        """A canonical payload whose manifest lost interval_kind (a hand-trimmed legacy replication) is
+        refused at the write boundary with the repair spelled out, not a bare rule (register #660)."""
+        plan = token.prepare({"manifest": self.manifest()})
+        payload = token.run_prepared(plan, "11111111-2222-4333-8444-555555555555",
+                                    encoder_factory=lambda name: token._FakeEncoding(1))["payload"]
+        self.assertEqual("member_span", payload["manifest"]["interval_kind"])
+        del payload["manifest"]["interval_kind"]
+        with self.assertRaisesRegex(ValueError, "declare it before mint") as ctx:
+            token.verify_payload(payload, encoder_factory=lambda name: token._FakeEncoding(1))
+        self.assertIn("cannot hold settlement one-sided", str(ctx.exception))
+        self.assertIn("leaves estimand_contract", str(ctx.exception))
+
     def testContradictoryOldPlanAndPayloadRefuseBeforeEncoder(self):
         plan = token.prepare({"manifest": self.manifest()})
         payload = token.run_prepared(plan, "11111111-2222-4333-8444-555555555555",
