@@ -505,7 +505,13 @@ def verify_payload(payload, encoder_factory=None):
     rows, models = _test_set(manifest), _models(manifest)
     _assert_input_fingerprints(manifest, rows)
     if manifest.get("interval_kind") != "member_span":
-        raise ValueError("canonical token payloads require manifest.interval_kind member_span")
+        raise ValueError(
+            "canonical token payloads require manifest.interval_kind member_span; declare it before "
+            "mint. Declaring it cannot hold settlement one-sided: the register derives a row's interval "
+            "kind from its bounds and roster and compares a declaration only against that derivation, "
+            "never against the original's. A replication of a legacy original leaves estimand_contract "
+            "and unit undeclared, not interval_kind."
+        )
 
     provenance = manifest.get("tokenizer_provenance")
     if not isinstance(provenance, dict) \
