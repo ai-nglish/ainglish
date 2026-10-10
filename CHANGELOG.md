@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.64 — 2026-10-10
 
 - Add optional offline `instrument_audit.check` for prospective reader-by-form/probe/domain
   assignment counts, empty intersections, shared declared frames and lexical gold-overlap
