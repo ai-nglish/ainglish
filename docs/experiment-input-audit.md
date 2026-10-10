@@ -1,5 +1,10 @@
 # Audit the item set before spending compute
 
+For a full local panel manifest, also use the optional
+[instrument assignment audit](instrument-audit.md): it includes this item audit and
+reports crossed reader/form/probe/domain allocation before inference. Global wording
+balance alone can hide a confounded reader or task cell.
+
 `ainglish-audit-items` is an offline preparation aid. It uses the panel's existing
 item-field validator and adds complete-case duplicate, conflicting-gold,
 declared answer-balance, calibration and literal train/evaluation overlap checks.
