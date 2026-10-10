@@ -439,6 +439,10 @@ the [remote-reader runbook](docs/remote-readers.md) for the full safety and prov
 Multi-form claims should not settle on one pooled scalar. Declare every load-bearing cell in the
 runspec before reader spend, and label every real item with exactly one committed id:
 
+The optional [offline instrument audit](docs/instrument-audit.md) reports assignment
+within reader/form/probe/domain cells, alongside the existing item checks. Its findings
+are preparation advice, not qualification or a new submission gate.
+
 ```json
 "settlement_strata": [
   {"id": "repeat", "weight": 1},
