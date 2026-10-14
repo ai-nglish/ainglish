@@ -1943,6 +1943,16 @@ def _same_arm_calibration_ids(items):
 MESSAGE_BLIND_FLOOR_RULE_SET = "message-blind-floor-v1"
 
 
+def _fraction_decimal(numerator, denominator, places=4):
+    """Exact fraction -> fixed-point string, rounded half up with integer arithmetic only. No float is formed
+    on either side: the register's MessageBlindFloor::decimal runs the same integers, so a half tie such as
+    17/32 reads 0.5313 in Python and PHP alike (Python's float formatting would give 0.5312, half-even, and
+    the register refused a valid study on that one character; review of #219/#683)."""
+    scale = 10 ** places
+    q = (2 * numerator * scale + denominator) // (2 * denominator)
+    return f"{q // scale}.{q % scale:0{places}d}"
+
+
 def message_blind_floor(real_items):
     """The best score a reader that never reads the message can reach on this bank with four order-free
     rules (constant answer, longest option, shortest option, constant first word), or uniform guessing
@@ -1985,7 +1995,7 @@ def message_blind_floor(real_items):
     return {"rule_set_version": MESSAGE_BLIND_FLOOR_RULE_SET, "n_items": n,
             "rules": {rule: {"hits": hits[rule], "n": n} for rule in order},
             "best_rule": best_rule, "best": frac(best), "uniform": frac(uniform), "floor": frac(floor),
-            "floor_decimal": f"{float(floor):.4f}", "chance_basis": "per_item_uniform_mean"}
+            "floor_decimal": _fraction_decimal(floor.numerator, floor.denominator), "chance_basis": "per_item_uniform_mean"}
 
 
 def _validate_item_block(items, label):
@@ -5751,6 +5761,15 @@ def selftest():
     assert fb["best_rule"] == "constant_answer" and fb["best"] == {"numerator": 1, "denominator": 2}, fb
     assert fb["uniform"] == {"numerator": 5, "denominator": 16} and fb["floor"] == {"numerator": 1, "denominator": 2} and fb["floor_decimal"] == "0.5000", fb
     assert message_blind_floor([]) is None
+    # the decimal is presentation, rendered from the exact fraction by integer half-up rounding on both sides;
+    # these strings are asserted by the register's MessageBlindFloorTest on the same fractions
+    assert [_fraction_decimal(n, d) for n, d in ((17, 32), (1, 32), (3, 32), (5, 16), (1, 3), (2, 3), (1, 2), (0, 1), (1, 1))] == \
+        ["0.5313", "0.0313", "0.0938", "0.3125", "0.3333", "0.6667", "0.5000", "0.0000", "1.0000"]
+    # 32 two-choice items keyed 17 one way and 15 the other: the half tie the review ran against the register
+    half = [{"id": f"h{i}", "options": ["aa", "bb"], "answer": "aa" if i < 17 else "bb"} for i in range(32)]
+    hb = message_blind_floor(half)
+    assert hb["floor"] == {"numerator": 17, "denominator": 32} and hb["floor_decimal"] == "0.5313" \
+        and hb["best_rule"] == "constant_answer" and hb["uniform"] == {"numerator": 1, "denominator": 2}, hb
     assert m["arms"]["english"] is not None and m["arms"]["ainglish"] is not None and 0 < m["arms"]["chance"] < 1, \
         "protocol v2: absolute arm accuracies + chance must ride with the delta"
     resolution = m["accuracy_resolution"]

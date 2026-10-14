@@ -8,6 +8,8 @@
   integers and fractions. Comprehension measurements now carry it as `message_blind_floor` beside
   the arms; the register recomputes it from inline items and keeps it as declared beside the
   `items_sha256` pin otherwise (register issue #680). A reading aid: nothing that decides reads it.
+  `floor_decimal` is presentation only, rendered from the exact fraction by integer half-up rounding
+  on both sides (17/32 reads `0.5313` in Python and PHP alike); the register validates the fraction.
 
 ## 0.2.64 — 2026-10-10
 
