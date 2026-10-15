@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit authenticated methods to inspect, declare and withdraw a caller's
+  off-register ballot-review conflict. Declarations are private, bind to the exact
+  proposal version and affect that caller's review suggestions; they do not cast
+  or remove votes, change evidence, or grant independent-review eligibility.
+
 - `panel.message_blind_floor(real_items)`: the best score a reader that never reads the message can
   reach on a bank with four order-free rules (constant answer, longest option, shortest option,
   constant first word) or uniform guessing (mean over items of 1/options) if higher, as exact

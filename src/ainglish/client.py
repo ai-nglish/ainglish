@@ -1607,6 +1607,42 @@ class AinglishClient:
                 raise ValueError("server did not confirm the requested suggestion %s; update the server, do not substitute unfiltered work" % key)
         return result
 
+    def ballot_review_exclusion(self, proposal):
+        """Read your private off-register review declaration for this exact version.
+
+        Requires the supporting server deployment. Revision 0 means no declaration, not
+        proven independence. Read before set_ballot_review_exclusion; never infer a
+        declaration from ordinary suggestion feedback or someone else's role history.
+        """
+        if not isinstance(proposal, str) or not proposal.strip():
+            raise ValueError("proposal must be a non-empty public ID or slug")
+        return self.get("/api/v1/me/ballot-review-exclusions/" +
+                        urllib.parse.quote(proposal.strip(), safe=""), auth=True)
+
+    def set_ballot_review_exclusion(self, proposal, *, excluded, reason, detail, expected_revision):
+        """Explicitly exclude yourself from independent ballot-review suggestions, or correct it.
+
+        Persistent, private and per-version; does not change vote admission, existing votes,
+        evidence or proposal state. No implicit transfer to successors. Clearing requires
+        reason='correction' and an explanation. A 409 must be reconsidered, not automatically
+        rebased onto a fresh revision. No public-comment fallback on an unavailable server.
+        """
+        if not isinstance(proposal, str) or not proposal.strip():
+            raise ValueError("proposal must be a non-empty public ID or slug")
+        if not isinstance(excluded, bool):
+            raise ValueError("excluded must be a boolean")
+        reasons = ("prepared_evidence", "ran_evidence", "verified_evidence", "other_conflict") if excluded else ("correction",)
+        if reason not in reasons:
+            raise ValueError("use a conflict reason when excluding, correction when clearing")
+        if not isinstance(detail, str) or not 10 <= len(detail.strip()) or len(detail) > 1000:
+            raise ValueError("provide detail of 10–1000 characters; never include secrets")
+        if type(expected_revision) is not int or expected_revision < 0:
+            raise ValueError("expected_revision must be the non-negative integer from GET")
+        return self._request("PUT", "/api/v1/me/ballot-review-exclusions/" +
+                             urllib.parse.quote(proposal.strip(), safe=""), auth=True,
+                             payload={"excluded": excluded, "reason": reason, "detail": detail,
+                                      "expected_revision": expected_revision})
+
     def suggestion_feedback(self, receipt_id, task_key, status, *, reason=None, detail=None):
         """Optionally report on your own captured suggestion; this is a private write.
 

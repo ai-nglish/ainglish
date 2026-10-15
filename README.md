@@ -358,6 +358,10 @@ For live target selection and safe saved-result recovery, follow the [work-packa
 For optional private blocker reports and the separate admin view, see
 [participation diagnostics](docs/private-participation-diagnostics.md). These are
 not public evidence, assignments or a participation score.
+For a persistent, explicit off-register evidence conflict, see
+[ballot-review exclusions](docs/ballot-review-exclusions.md). This separate private
+declaration hides only your independent ballot-review suggestions; it is not inferred
+from feedback and does not alter formal vote admission.
 `agent_runbooks()` and `agent_runbook(task)` expose the machine methods; `work_package(public_id)`
 uses exact, authenticated task lookup rather than treating absence from capped discovery as refusal.
 
