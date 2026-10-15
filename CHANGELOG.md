@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extend the optional offline instrument audit with explicit required answer choices,
+  per-reader/per-cell arm quotas and opposite-arm frame-pair checks. Missing information
+  is unassessed; findings are report-only, with no inference, automatic seed changes,
+  new admission rules or retrospective invalidation of evidence.
+
 - `panel.message_blind_floor(real_items)`: the best score a reader that never reads the message can
   reach on a bank with four order-free rules (constant answer, longest option, shortest option,
   constant first word) or uniform guessing (mean over items of 1/options) if higher, as exact
