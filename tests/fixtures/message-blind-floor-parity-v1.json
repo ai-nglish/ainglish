@@ -1,0 +1,393 @@
+{
+ "kind": "ainglish.message-blind-floor-parity.v1",
+ "generated_by": {
+  "repo": "ai-nglish/ainglish",
+  "commit": "d82b3987cf0acbd8aa791d753a076d27a1cb8b26",
+  "panel_py_sha256": "7fc46275e3c21b279b14760565be4a6b27118f85152b7c4f2d1b27b051fb859c",
+  "function": "ainglish.panel.message_blind_floor"
+ },
+ "note": "Each case is a bank the harness validates (_validate_item_block) and the block message_blind_floor returns for it. The register's MessageBlindFloor::compute must return the same identity (integers and fractions; the decimal is presentation) and the admission route must accept the block as declared beside the inline items.",
+ "cases": [
+  {
+   "name": "integer-keys-reordered-options",
+   "why": "reviewer probe 1 on #683: an integer answer is answer text, never an option index; reordering the options must not move the gold key",
+   "items": [
+    {
+     "id": "1",
+     "english": "E1",
+     "ainglish": "A1",
+     "question": "Q?",
+     "options": [
+      "1",
+      "0"
+     ],
+     "answer": 1
+    },
+    {
+     "id": "2",
+     "english": "E2",
+     "ainglish": "A2",
+     "question": "Q?",
+     "options": [
+      "0",
+      "1"
+     ],
+     "answer": 1
+    }
+   ],
+   "expected": {
+    "rule_set_version": "message-blind-floor-v1",
+    "n_items": 2,
+    "rules": {
+     "constant_answer": {
+      "hits": 2,
+      "n": 2
+     },
+     "longest_option": {
+      "hits": 0,
+      "n": 2
+     },
+     "shortest_option": {
+      "hits": 0,
+      "n": 2
+     },
+     "constant_first_word": {
+      "hits": 2,
+      "n": 2
+     }
+    },
+    "best_rule": "constant_answer",
+    "best": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "uniform": {
+     "numerator": 1,
+     "denominator": 2
+    },
+    "floor": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "floor_decimal": "1.0000",
+    "chance_basis": "per_item_uniform_mean"
+   }
+  },
+  {
+   "name": "no-break-space-key",
+   "why": "reviewer probe 2 on #683: the harness strips Unicode whitespace (str.strip), PHP trim strips ASCII only",
+   "items": [
+    {
+     "id": "1",
+     "english": "E1",
+     "ainglish": "A1",
+     "question": "Q?",
+     "options": [
+      "\u00a0yes",
+      "no"
+     ],
+     "answer": "\u00a0yes"
+    },
+    {
+     "id": "2",
+     "english": "E2",
+     "ainglish": "A2",
+     "question": "Q?",
+     "options": [
+      "yes",
+      "no"
+     ],
+     "answer": "yes"
+    }
+   ],
+   "expected": {
+    "rule_set_version": "message-blind-floor-v1",
+    "n_items": 2,
+    "rules": {
+     "constant_answer": {
+      "hits": 2,
+      "n": 2
+     },
+     "longest_option": {
+      "hits": 2,
+      "n": 2
+     },
+     "shortest_option": {
+      "hits": 0,
+      "n": 2
+     },
+     "constant_first_word": {
+      "hits": 2,
+      "n": 2
+     }
+    },
+    "best_rule": "constant_answer",
+    "best": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "uniform": {
+     "numerator": 1,
+     "denominator": 2
+    },
+    "floor": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "floor_decimal": "1.0000",
+    "chance_basis": "per_item_uniform_mean"
+   }
+  },
+  {
+   "name": "python-whitespace-set",
+   "why": "every member of the str.strip set at both ends of a key, and NUL which str.strip does not strip",
+   "items": [
+    {
+     "id": "1",
+     "english": "E1",
+     "ainglish": "A1",
+     "question": "Q?",
+     "options": [
+      "\fgo\u3000",
+      "stay"
+     ],
+     "answer": "go"
+    },
+    {
+     "id": "2",
+     "english": "E2",
+     "ainglish": "A2",
+     "question": "Q?",
+     "options": [
+      "go",
+      "stay\u2028"
+     ],
+     "answer": "\u1680go\u202f"
+    },
+    {
+     "id": "3",
+     "english": "E3",
+     "ainglish": "A3",
+     "question": "Q?",
+     "options": [
+      "\u0000go",
+      "stay"
+     ],
+     "answer": "\u0000go"
+    },
+    {
+     "id": "4",
+     "english": "E4",
+     "ainglish": "A4",
+     "question": "Q?",
+     "options": [
+      "go",
+      "\u2003stay\u001f"
+     ],
+     "answer": "stay"
+    }
+   ],
+   "expected": {
+    "rule_set_version": "message-blind-floor-v1",
+    "n_items": 4,
+    "rules": {
+     "constant_answer": {
+      "hits": 2,
+      "n": 4
+     },
+     "longest_option": {
+      "hits": 1,
+      "n": 4
+     },
+     "shortest_option": {
+      "hits": 2,
+      "n": 4
+     },
+     "constant_first_word": {
+      "hits": 3,
+      "n": 4
+     }
+    },
+    "best_rule": "constant_first_word",
+    "best": {
+     "numerator": 3,
+     "denominator": 4
+    },
+    "uniform": {
+     "numerator": 1,
+     "denominator": 2
+    },
+    "floor": {
+     "numerator": 3,
+     "denominator": 4
+    },
+    "floor_decimal": "0.7500",
+    "chance_basis": "per_item_uniform_mean"
+   }
+  },
+  {
+   "name": "casefold-not-lowercase",
+   "why": "casefold folds sharp s to ss (MB_CASE_FOLD on the PHP side), lowercase does not",
+   "items": [
+    {
+     "id": "1",
+     "english": "E1",
+     "ainglish": "A1",
+     "question": "Q?",
+     "options": [
+      "STRASSE",
+      "weg"
+     ],
+     "answer": "stra\u00dfe"
+    },
+    {
+     "id": "2",
+     "english": "E2",
+     "ainglish": "A2",
+     "question": "Q?",
+     "options": [
+      "Stra\u00dfe",
+      "Weg"
+     ],
+     "answer": "STRASSE"
+    },
+    {
+     "id": "3",
+     "english": "E3",
+     "ainglish": "A3",
+     "question": "Q?",
+     "options": [
+      "weg",
+      "strasse"
+     ],
+     "answer": "WEG"
+    }
+   ],
+   "expected": {
+    "rule_set_version": "message-blind-floor-v1",
+    "n_items": 3,
+    "rules": {
+     "constant_answer": {
+      "hits": 2,
+      "n": 3
+     },
+     "longest_option": {
+      "hits": 2,
+      "n": 3
+     },
+     "shortest_option": {
+      "hits": 1,
+      "n": 3
+     },
+     "constant_first_word": {
+      "hits": 2,
+      "n": 3
+     }
+    },
+    "best_rule": "constant_answer",
+    "best": {
+     "numerator": 2,
+     "denominator": 3
+    },
+    "uniform": {
+     "numerator": 1,
+     "denominator": 2
+    },
+    "floor": {
+     "numerator": 2,
+     "denominator": 3
+    },
+    "floor_decimal": "0.6667",
+    "chance_basis": "per_item_uniform_mean"
+   }
+  },
+  {
+   "name": "calibration-excluded-integer-and-text-mix",
+   "why": "calibration rows are not in the bank; integer and text keys mix",
+   "items": [
+    {
+     "id": "1",
+     "english": "E1",
+     "ainglish": "A1",
+     "question": "Q?",
+     "options": [
+      "2",
+      "10"
+     ],
+     "answer": 2
+    },
+    {
+     "id": "2",
+     "english": "E2",
+     "ainglish": "A2",
+     "question": "Q?",
+     "options": [
+      "10",
+      "2"
+     ],
+     "answer": "2"
+    },
+    {
+     "id": "3",
+     "english": "E3",
+     "ainglish": "A3",
+     "question": "Q?",
+     "options": [
+      "two",
+      "ten"
+     ],
+     "answer": "ten",
+     "calibration": true
+    },
+    {
+     "id": "4",
+     "english": "E4",
+     "ainglish": "A4",
+     "question": "Q?",
+     "options": [
+      "ten",
+      "2"
+     ],
+     "answer": 2
+    }
+   ],
+   "expected": {
+    "rule_set_version": "message-blind-floor-v1",
+    "n_items": 3,
+    "rules": {
+     "constant_answer": {
+      "hits": 3,
+      "n": 3
+     },
+     "longest_option": {
+      "hits": 0,
+      "n": 3
+     },
+     "shortest_option": {
+      "hits": 3,
+      "n": 3
+     },
+     "constant_first_word": {
+      "hits": 3,
+      "n": 3
+     }
+    },
+    "best_rule": "constant_answer",
+    "best": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "uniform": {
+     "numerator": 1,
+     "denominator": 2
+    },
+    "floor": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "floor_decimal": "1.0000",
+    "chance_basis": "per_item_uniform_mean"
+   }
+  }
+ ]
+}
