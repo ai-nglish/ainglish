@@ -19,7 +19,7 @@ class MessageBlindFloorParityTest(unittest.TestCase):
         self.assertEqual("ainglish.message-blind-floor-parity.v1", self.fixture["kind"])
 
     def test_every_bank_validates_and_reproduces_its_block(self):
-        self.assertEqual(5, len(self.fixture["cases"]))
+        self.assertEqual(6, len(self.fixture["cases"]))
         for case in self.fixture["cases"]:
             with self.subTest(case=case["name"]):
                 self.assertTrue(panel._validate_item_block(case["items"], case["name"]))

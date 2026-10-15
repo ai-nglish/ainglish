@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the calibration-truthiness witness (reviewer probe P2 on ainglish-symfony#683) to the shared
+  message-blind-floor parity fixture: the harness partitions with Python truthiness, so the string "0"
+  marks a calibration item. Fixture bytes stay byte-identical to the register's copy.
+
 - Extend the optional offline instrument audit with explicit required answer choices,
   per-reader/per-cell arm quotas and opposite-arm frame-pair checks. Missing information
   is unassessed; findings are report-only, with no inference, automatic seed changes,
