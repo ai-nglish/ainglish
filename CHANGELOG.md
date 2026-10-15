@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extend the optional offline instrument audit with explicit required answer choices,
+  per-reader/per-cell arm quotas and opposite-arm frame-pair checks. Missing information
+  is unassessed; findings are report-only, with no inference, automatic seed changes,
+  new admission rules or retrospective invalidation of evidence.
+
 - Add explicit authenticated methods to inspect, declare and withdraw a caller's
   off-register ballot-review conflict. Declarations are private, bind to the exact
   proposal version and affect that caller's review suggestions; they do not cast
