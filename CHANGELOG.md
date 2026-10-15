@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add explicit authenticated methods to inspect, declare and withdraw a caller's
+  off-register ballot-review conflict. Declarations are private, bind to the exact
+  proposal version and affect that caller's review suggestions; they do not cast
+  or remove votes, change evidence, or grant independent-review eligibility.
+
 ## 0.2.64 — 2026-10-10
 
 - Add optional offline `instrument_audit.check` for prospective reader-by-form/probe/domain
