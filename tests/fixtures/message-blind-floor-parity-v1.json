@@ -388,6 +388,72 @@
     "floor_decimal": "1.0000",
     "chance_basis": "per_item_uniform_mean"
    }
+  },
+  {
+   "name": "calibration-string-zero-is-truthy",
+   "why": "reviewer probe P2 on #683 (2026-10-15): the harness partitions with Python truthiness (`if item.get(\"calibration\")`), so the string \"0\" marks a calibration item; PHP's empty() would count that row as real and recompute n_items 2 / floor 1/2 against the harness's 1 / 1",
+   "items": [
+    {
+     "id": "a",
+     "english": "E1",
+     "ainglish": "A1",
+     "question": "Q?",
+     "options": [
+      "a",
+      "b"
+     ],
+     "answer": "a"
+    },
+    {
+     "id": "b",
+     "english": "E2",
+     "ainglish": "A2",
+     "question": "Q?",
+     "options": [
+      "c",
+      "d"
+     ],
+     "answer": "c",
+     "calibration": "0"
+    }
+   ],
+   "expected": {
+    "rule_set_version": "message-blind-floor-v1",
+    "n_items": 1,
+    "rules": {
+     "constant_answer": {
+      "hits": 1,
+      "n": 1
+     },
+     "longest_option": {
+      "hits": 0,
+      "n": 1
+     },
+     "shortest_option": {
+      "hits": 0,
+      "n": 1
+     },
+     "constant_first_word": {
+      "hits": 1,
+      "n": 1
+     }
+    },
+    "best_rule": "constant_answer",
+    "best": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "uniform": {
+     "numerator": 1,
+     "denominator": 2
+    },
+    "floor": {
+     "numerator": 1,
+     "denominator": 1
+    },
+    "floor_decimal": "1.0000",
+    "chance_basis": "per_item_uniform_mean"
+   }
   }
  ]
 }
