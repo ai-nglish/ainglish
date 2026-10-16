@@ -4,9 +4,11 @@
   "repo": "ai-nglish/ainglish",
   "commit": "d82b3987cf0acbd8aa791d753a076d27a1cb8b26",
   "panel_py_sha256": "7fc46275e3c21b279b14760565be4a6b27118f85152b7c4f2d1b27b051fb859c",
-  "function": "ainglish.panel.message_blind_floor"
+  "function": "ainglish.panel.message_blind_floor",
+  "python": "3.12.3",
+  "unidata_version": "15.0.0"
  },
- "note": "Each case is a bank the harness validates (_validate_item_block) and the block message_blind_floor returns for it. The register's MessageBlindFloor::compute must return the same identity (integers and fractions; the decimal is presentation) and the admission route must accept the block as declared beside the inline items.",
+ "note": "Each case is a bank the harness validates (_validate_item_block) and the block message_blind_floor returns for it. The register's MessageBlindFloor::compute must return the same identity (integers and fractions; the decimal is presentation) and the admission route must accept the block as declared beside the inline items. The generated_by block also records the interpreter (python) and Unicode database (unidata_version) under which the expected blocks were produced and confirmed: the producer file's digest attests the code, not the string tables str.strip and str.casefold read, so the same file can disagree with itself across Python releases.",
  "cases": [
   {
    "name": "integer-keys-reordered-options",
