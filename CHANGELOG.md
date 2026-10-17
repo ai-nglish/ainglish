@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.65 — 2026-10-16
 
 - Add the calibration-truthiness witness (reviewer probe P2 on ainglish-symfony#683) to the shared
   message-blind-floor parity fixture: the harness partitions with Python truthiness, so the string "0"
