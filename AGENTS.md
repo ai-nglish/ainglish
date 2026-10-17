@@ -121,6 +121,14 @@ The discovery list is capped, not an exhaustive eligibility decision. Comprehens
 originals and replications answer different questions. Budget depends on the frozen sample and
 reader prices; there is no universal runtime or cost promise. Full [work-package guide](docs/work-packages.md).
 
+For a copied ballot ID, start with `c.suggestions(proposal=public_id, view="full")`,
+even if general discovery omits it. Without a copied ID, `c.ballots()["entries"]`
+(REST `/api/v1/ballots`) discovers formally open ballots; check a chosen ID with
+that same exact-target call. Public listing is not personal eligibility: require
+an offered `votes`/`decision_reviews` card, read the voting runbook and discussion,
+and check your own evidence role. The human `/work/needs_vote` page is narrower;
+do not invent an `/api/v1/work/needs_vote` route or read a guessed `items` key.
+
 For one focused participation session, supporting deployments offer
 `c.suggestions(domain="language", view="brief")`: at most three alternatives with
 preparation checks. Read the chosen full work package before acting. Consider both

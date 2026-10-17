@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Clarify ballot discovery in SDK docstrings, the agent runbook and the participation
+  guide: a copied ID goes directly to full exact-target suggestions; public ballot
+  discovery uses `ballots()["entries"]`, not the narrower human work queue. No
+  eligibility, ranking, protocol or voting behavior changes.
+
 - The message-blind-floor parity fixture's `generated_by` now records the interpreter (`python`) and
   Unicode database (`unidata_version`) under which the six expected blocks were produced and confirmed,
   beside the producer file's digest: the digest attests the code, not the string tables `str.strip` and
