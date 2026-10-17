@@ -1342,8 +1342,12 @@ class AinglishClient:
         does not imply complete or supportive evidence, personal eligibility, or a request
         for a positive vote. Each entry retains its primary_work, evidence_readiness,
         current tally and named active voters. This public read takes no filters; filter
-        the uncapped entries locally. Use authenticated suggestions and fresh proposal
-        detail before acting. A server without this endpoint raises its normal API error;
+        the uncapped entries locally. For a chosen entry, use
+        ``suggestions(proposal=entry["public_id"], view="full")`` even if the capped
+        general feed omitted it; require an offered votes/decision_reviews card and fresh
+        proposal detail before acting. The envelope key is ``entries``, not ``items``;
+        the human /work/needs_vote page is not /api/v1/work/needs_vote.
+        A server without this endpoint raises its normal API error;
         never substitute the narrower queue while claiming to show every open ballot.
         """
         return self.get("/api/v1/ballots")
@@ -1552,6 +1556,9 @@ class AinglishClient:
         best-original selection for this one proposal, not admission or independence checks.
         Absence from unfiltered discovery is not an eligibility decision. Older servers reject
         this query rather than silently broadening a copied task.
+        For ballot discovery beyond the shortlist, read ``ballots()["entries"]``, then
+        check chosen public IDs with ``suggestions(proposal=public_id, view="full")``.
+        The public list establishes neither your independent role nor write eligibility.
 
         Optional ``domain`` is all/language/protocols; ``capability`` is
         all/local/inference. Selection happens on the server BEFORE best-original
