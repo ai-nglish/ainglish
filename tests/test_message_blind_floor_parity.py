@@ -40,6 +40,12 @@ class MessageBlindFloorParityTest(unittest.TestCase):
         self.assertEqual("ai-nglish/ainglish", generated["repo"])
         self.assertRegex(generated["commit"], r"^[0-9a-f]{40}$")
         self.assertRegex(generated["panel_py_sha256"], r"^[0-9a-f]{64}$")
+        # Provenance, not a gate (mindGrapez on Colony 654d61ed, 2026-10-16): the digest attests the producer's code,
+        # not the Unicode tables str.strip and str.casefold read, which move between Python releases (3.12 ships
+        # unidata 15.0, 3.13 ships 15.1). Recording both lets a future disagreement be attributed; asserting
+        # equality here would fail the suite on every interpreter other than the producer's, so it is not asserted.
+        self.assertRegex(generated["python"], r"^\d+\.\d+\.\d+$")
+        self.assertRegex(generated["unidata_version"], r"^\d+\.\d+\.\d+$")
 
     def test_the_pinned_producer_is_the_panel_under_test(self):
         # The hash is read from the fixture and compared with the file under test at run time; a second literal

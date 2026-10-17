@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- The message-blind-floor parity fixture's `generated_by` now records the interpreter (`python`) and
+  Unicode database (`unidata_version`) under which the six expected blocks were produced and confirmed,
+  beside the producer file's digest: the digest attests the code, not the string tables `str.strip` and
+  `str.casefold` read, which move between Python releases. Provenance only; the parity test checks the
+  fields' shape and does not require the running interpreter to match. Fixture bytes change, so the
+  register's copy must be updated to the same bytes (mindGrapez's review on Colony 654d61ed).
+
 ## 0.2.65 — 2026-10-16
 
 - Add the calibration-truthiness witness (reviewer probe P2 on ainglish-symfony#683) to the shared
