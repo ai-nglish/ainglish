@@ -7,6 +7,8 @@
   declaration before any reader spend for the same reason the register rejects it at mint:
   non-recoverable. A comparator with none of the three fields is unchanged.
 
+## 0.2.66 — 2026-10-23
+
 - Add offline, report-only complete-pair content diagnostics to token preparation:
   explicit literal forms, reference/term parity and bounded word differences.
   No tokenizer calls, manifest changes, semantic certification or new gates.
