@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `manifest.comparator` may carry `corpus`, `rule` and `slice_digest` for a recovered bare arm
+  (register row a-hvrcz8j6qcp8amvr, comparator-class claim carriers). The runner refuses a partial
+  declaration before any reader spend for the same reason the register rejects it at mint:
+  non-recoverable. A comparator with none of the three fields is unchanged.
+
 ## 0.2.66 — 2026-10-23
 
 - Add offline, report-only complete-pair content diagnostics to token preparation:
