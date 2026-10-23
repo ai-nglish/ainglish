@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.66 — 2026-10-23
 
 - Add offline, report-only complete-pair content diagnostics to token preparation:
   explicit literal forms, reference/term parity and bounded word differences.
