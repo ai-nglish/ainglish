@@ -2235,9 +2235,10 @@ def _validate_panel_declarations(manifest, panel):
 
     comparator = manifest.get("comparator")
     if comparator is not None:
-        if not isinstance(comparator, dict) or set(comparator) - {"kind", "description"}:
-            print("REFUSING to run: comparator must be an object containing kind and optional "
-                  "description only. No reader cell was bought.")
+        if not isinstance(comparator, dict) or set(comparator) - {"kind", "description", "corpus", "rule", "slice_digest"}:
+            print("REFUSING to run: comparator must be an object containing kind, optional description, "
+                  "and for a recovered bare arm the corpus, rule and slice_digest that make it recoverable; "
+                  "nothing else. No reader cell was bought.")
             return None
         kind = comparator.get("kind")
         description = comparator.get("description")
@@ -2251,9 +2252,67 @@ def _validate_panel_declarations(manifest, panel):
             print("REFUSING to run: comparator.description must be a non-empty string of at most "
                   "500 characters when supplied. No reader cell was bought.")
             return None
+        problem = recoverable_bare_arm_problem(comparator)
+        if problem is not None:
+            print(f"REFUSING to run: {problem} No reader cell was bought.")
+            return None
 
     return planted_arm, min_gap, min_recovered, rule
 
+
+
+# Comparator-class claim carriers (register row a-hvrcz8j6qcp8amvr): a bare arm carries only when it is
+# RECOVERABLE, which the register checks at mint. A manifest that content-addresses the source corpus must
+# also state the full selection rule and the slice digest; a partial declaration is refused at write as
+# non-recoverable, so the runner refuses it before any reader spend for the same reason. A comparator
+# with none of the three fields is a proposer-authored arm: served, never carrying, and still runnable.
+RECOVERABLE_RULE_KEYS = ("threshold", "background", "order", "exclude")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _sha256_field(value):
+    if not isinstance(value, str):
+        return None
+    value = value.strip().lower()
+    if value.startswith("sha256:"):
+        value = value[7:]
+    return value if _SHA256.fullmatch(value) else None
+
+
+def recoverable_bare_arm_problem(comparator):
+    """None when the comparator is a plain kind or a complete recoverable declaration; else the reason."""
+    present = [k for k in ("corpus", "rule", "slice_digest") if k in comparator]
+    if not present:
+        return None
+    missing = [k for k in ("corpus", "rule", "slice_digest") if k not in comparator]
+    if missing:
+        return ("comparator names a recovered bare arm but omits " + ", ".join(missing)
+                + "; the register rejects a partial declaration as non-recoverable.")
+    if _sha256_field(comparator["corpus"]) is None:
+        return "comparator.corpus must be the sha256 (64 hex characters) of the frozen source corpus bytes."
+    if _sha256_field(comparator["slice_digest"]) is None:
+        return "comparator.slice_digest must be the sha256 (64 hex characters) of the recovered slice."
+    rule = comparator["rule"]
+    if not isinstance(rule, dict):
+        return "comparator.rule must be an object {threshold, background, order, exclude}."
+    absent = [k for k in RECOVERABLE_RULE_KEYS if k not in rule]
+    if absent:
+        return "comparator.rule is missing " + ", ".join(absent) + "; all four keys are required for a recoverable arm."
+    unknown = sorted(set(rule) - set(RECOVERABLE_RULE_KEYS))
+    if unknown:
+        return "comparator.rule carries unknown key(s): " + ", ".join(unknown) + "."
+    threshold = rule["threshold"]
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or threshold != threshold or threshold < 0:
+        return "comparator.rule.threshold must be a finite non-negative number."
+    if _sha256_field(rule["background"]) is None:
+        return "comparator.rule.background must be the sha256 (64 hex characters) of the background set."
+    if not isinstance(rule["order"], str) or not rule["order"].strip() or len(rule["order"]) > 200:
+        return "comparator.rule.order must name the ordering and tie-break in at most 200 characters."
+    exclude = rule["exclude"]
+    if (not isinstance(exclude, list) or not exclude or any(not isinstance(x, str) or not x.strip() for x in exclude)
+            or "c/ainglish" not in exclude):
+        return "comparator.rule.exclude must be a non-empty list of excluded sources that includes c/ainglish."
+    return None
 
 def _validate_learnability_v2(manifest, real, calibration):
     """Bind one exact register entry and keep the positive control independent of its target.
@@ -3862,9 +3921,14 @@ def selftest():
                                  f"invalid calibration_min_gap {bad_gap!r}")
     assert_pre_spend_refusal(dict(good, planted_arm="baseline"),
                              "planted_arm must name one of the two measured arms")
+    good_rule = {"threshold": 0.5, "background": "c" * 64, "order": "rate ascending, then message id", "exclude": ["c/ainglish"]}
     for bad_comparator in ("careful", {}, {"kind": "not-versioned"},
                            {"kind": "complete-careful-english-v1", "extra": True},
-                           {"kind": "complete-careful-english-v1", "description": ""}):
+                           {"kind": "complete-careful-english-v1", "description": ""},
+                           {"kind": "bare-colony-slice-v1", "slice_digest": "d" * 64, "rule": good_rule},
+                           {"kind": "bare-colony-slice-v1", "corpus": "a" * 64, "slice_digest": "d" * 64,
+                            "rule": {k: v for k, v in good_rule.items() if k != "order"}},
+                           {"kind": "bare-colony-slice-v1", "corpus": "not-hex", "slice_digest": "d" * 64, "rule": good_rule}):
         assert_pre_spend_refusal(
             dict(good, comparator=bad_comparator),
             f"malformed comparator {bad_comparator!r} must not buy reader cells",
