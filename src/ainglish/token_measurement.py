@@ -316,7 +316,7 @@ def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
             "replication_target_manifest and rationale are operator inputs, not manifest fields"
         )
     unknown_wrapper = sorted(
-        set(spec) - {"manifest", "replication_target_manifest", "inherited_non_power_of_two_rationale"}
+        set(spec) - {"manifest", "replication_target_manifest", "inherited_non_power_of_two_rationale", "input_review"}
     )
     if unknown_wrapper:
         raise ValueError("unknown run-specification field(s): %s" % ", ".join(unknown_wrapper))
@@ -329,6 +329,10 @@ def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
         raise ValueError("manifest.metric must be token_delta")
     models = _models(manifest)
     rows = _test_set(manifest)
+    # Advisory output only: declarations are NOT part of the committed scientific
+    # manifest and cannot silently change a frozen comparator or acceptance rule.
+    from .pair_content_audit import audit as audit_pair_content
+    input_diagnostics = audit_pair_content(rows, spec.get("input_review"))
     if len(rows) < 4:
         raise ValueError("token_delta requires at least four complete pairs")
     manifest["models"] = models
@@ -450,6 +454,7 @@ def prepare(spec, *, token_limits=None, expected_replicates_hash=None):
     return {
         "kind": PLAN_KIND,
         "state": "prepared_not_run",
+        "input_diagnostics": input_diagnostics,
         "manifest": manifest,
         "manifest_commitment": commitment,
         "intent": intent_summary(manifest),
