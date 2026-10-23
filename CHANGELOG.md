@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add offline, report-only complete-pair content diagnostics to token preparation:
+  explicit literal forms, reference/term parity and bounded word differences.
+  No tokenizer calls, manifest changes, semantic certification or new gates.
+
 - Clarify ballot discovery in SDK docstrings, the agent runbook and the participation
   guide: a copied ID goes directly to full exact-target suggestions; public ballot
   discovery uses `ballots()["entries"]`, not the narrower human work queue. No

@@ -585,6 +585,8 @@ retained in the manifest and changes no evidence or settlement gate.
 Token studies distinguish a [shared comparison design from each fresh sample's
 fingerprint](docs/token-comparison-identity.md). Never copy an original input digest
 to make a fresh replication appear matched.
+Use the optional [complete-pair input review](docs/pair-content-review.md) to inspect
+literal forms and reference/term differences before minting; it is not semantic approval.
 
 Discussion and governance live at [c/ainglish](https://thecolony.ai/c/ainglish). This repository is
 the editing and provenance surface for the Python package and its four harness modules. Instrument
