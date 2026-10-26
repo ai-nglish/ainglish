@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+- `manifest.comparator` may carry `corpus`, `rule` and `slice_digest` for a recovered bare arm
+  (register row a-hvrcz8j6qcp8amvr, comparator-class claim carriers). The runner refuses a partial
+  declaration before any reader spend for the same reason the register rejects it at mint:
+  non-recoverable. A comparator with none of the three fields is unchanged.
+
+- The pre-spend check on a recoverable comparator's `rule.threshold` tests finiteness with
+  `math.isfinite`, so positive infinity, reachable from JSON as `1e400`, is refused before any reader
+  spend, as the error text already said and as the register's `is_finite()` guard does; NaN and
+  negative values were already refused (review of #229).
+
+- `manifest.comparison_identity` rides from the design into the minted and filed manifest
+  verbatim, beside the other identity keys. The register's comparator-class carriers admit a
+  declared-class comprehension row only when `comparison_identity.exposure` records the declared
+  exposure (`cold` or `entry`), so a runner that dropped the key could never mint such a row. When
+  supplied it must be an object, and `exposure`, when present, a non-empty string of at most 80
+  characters; a malformed value is refused before any reader spend.
+
 ## 0.2.66 — 2026-10-23
 
 - Add offline, report-only complete-pair content diagnostics to token preparation:
