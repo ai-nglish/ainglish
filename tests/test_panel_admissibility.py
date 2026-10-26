@@ -33,6 +33,13 @@ def reader(ep, text, question, options):
     return "no" if text == "control absent" else "yes"
 
 
+def recoverable(threshold=0.5):
+    """A complete recoverable bare-arm declaration (corpus, rule, slice_digest), finite by default."""
+    return {"kind": "bare-recovered-v1", "corpus": "a" * 64, "slice_digest": "b" * 64,
+            "rule": {"threshold": threshold, "background": "c" * 64,
+                     "order": "frequency descending, ties by first occurrence", "exclude": ["c/ainglish"]}}
+
+
 class Client:
     def __init__(self):
         self.events = []
@@ -88,6 +95,28 @@ class AdmissibilityTests(unittest.TestCase):
             with self.assertRaises(SystemExit), contextlib.redirect_stdout(io.StringIO()):
                 panel._run_preregistered_panel(manifest, self.spec(), forbidden, client)
             self.assertEqual(client.events, [])
+
+    def test_non_finite_threshold_refuses_before_any_reader_or_mint(self):
+        # The register rejects a non-finite threshold with is_finite(); the runner must refuse the same
+        # manifest before spend. NaN and -inf were caught by `!= self` and `< 0`; +inf was not, and JSON
+        # reaches it through an overflowing exponent (json.loads("1e400") is positive infinity).
+        for threshold in (float("inf"), float("-inf"), float("nan"), json.loads("1e400"), json.loads("-1e400")):
+            with self.subTest(threshold=repr(threshold)):
+                manifest = design()
+                manifest["comparator"] = recoverable(threshold)
+                self.assertIn("finite", panel.recoverable_bare_arm_problem(manifest["comparator"]))
+                def forbidden(*args):
+                    self.fail("reader called for a non-finite threshold")
+                self.assertIsNone(self.run_panel(manifest, forbidden))
+                client = Client()
+                with self.assertRaises(SystemExit), contextlib.redirect_stdout(io.StringIO()):
+                    panel._run_preregistered_panel(manifest, self.spec(), forbidden, client)
+                self.assertEqual(client.events, [])
+        # Positive control: the same declaration with a finite threshold is accepted and runs to a result.
+        manifest = design()
+        manifest["comparator"] = recoverable(0.5)
+        self.assertIsNone(panel.recoverable_bare_arm_problem(manifest["comparator"]))
+        self.assertFalse(panel._is_panel_refusal(self.run_panel(manifest)))
 
     def test_one_off_option_stops_and_keeps_the_offending_cell(self):
         calls = []

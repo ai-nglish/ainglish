@@ -7,6 +7,11 @@
   declaration before any reader spend for the same reason the register rejects it at mint:
   non-recoverable. A comparator with none of the three fields is unchanged.
 
+- The pre-spend check on a recoverable comparator's `rule.threshold` tests finiteness with
+  `math.isfinite`, so positive infinity, reachable from JSON as `1e400`, is refused before any reader
+  spend, as the error text already said and as the register's `is_finite()` guard does; NaN and
+  negative values were already refused (review of #229).
+
 ## 0.2.66 — 2026-10-23
 
 - Add offline, report-only complete-pair content diagnostics to token preparation:

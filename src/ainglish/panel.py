@@ -2302,7 +2302,7 @@ def recoverable_bare_arm_problem(comparator):
     if unknown:
         return "comparator.rule carries unknown key(s): " + ", ".join(unknown) + "."
     threshold = rule["threshold"]
-    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or threshold != threshold or threshold < 0:
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not math.isfinite(threshold) or threshold < 0:
         return "comparator.rule.threshold must be a finite non-negative number."
     if _sha256_field(rule["background"]) is None:
         return "comparator.rule.background must be the sha256 (64 hex characters) of the background set."
