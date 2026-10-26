@@ -2257,6 +2257,24 @@ def _validate_panel_declarations(manifest, panel):
             print(f"REFUSING to run: {problem} No reader cell was bought.")
             return None
 
+    # The reader-exposure identity rides from the design into the minted and filed manifest
+    # verbatim (see _EMITTED_IDENTITY_KEYS): the register's comparator-class carriers admit a
+    # declared-class row only when manifest.comparison_identity.exposure records the declared
+    # exposure, so a design that omits it under such a row is refused at mint, before spend.
+    identity = manifest.get("comparison_identity")
+    if identity is not None:
+        if not isinstance(identity, dict):
+            print("REFUSING to run: comparison_identity must be an object when supplied; it is copied "
+                  "into the minted and filed manifest verbatim. No reader cell was bought.")
+            return None
+        exposure = identity.get("exposure")
+        if exposure is not None and (not isinstance(exposure, str) or not exposure.strip()
+                                     or len(exposure) > 80):
+            print("REFUSING to run: comparison_identity.exposure must be a non-empty string of at most "
+                  "80 characters naming the reader exposure (a comparator-class carrier reads cold or "
+                  "entry). No reader cell was bought.")
+            return None
+
     return planted_arm, min_gap, min_recovered, rule
 
 
@@ -2820,8 +2838,10 @@ def admissibility_gate_statement(manifest):
 # register refuses (422) a correction whose emitted manifest lost the link. Observed 2026-09-15
 # (Lemony's replacement, Dexagon's code inspection): both runners copied only the first four, so a
 # correction_of planned at mint never reached the filed manifest. Prospective only — nothing here
-# rewrites a frozen historical attempt.
-_EMITTED_IDENTITY_KEYS = ("construct", "metric", "seed", "comparator",
+# rewrites a frozen historical attempt. comparison_identity carries the reader-exposure identity a
+# comparator-class carrier is admitted under (review of ainglish-symfony #713): dropped at emission
+# it could never reach the register, and the mint gate would refuse every declared-class row.
+_EMITTED_IDENTITY_KEYS = ("construct", "metric", "seed", "comparator", "comparison_identity",
                           "correction_of", "legacy_contract_repair_of")
 
 

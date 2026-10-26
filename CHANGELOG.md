@@ -12,6 +12,13 @@
   spend, as the error text already said and as the register's `is_finite()` guard does; NaN and
   negative values were already refused (review of #229).
 
+- `manifest.comparison_identity` rides from the design into the minted and filed manifest
+  verbatim, beside the other identity keys. The register's comparator-class carriers admit a
+  declared-class comprehension row only when `comparison_identity.exposure` records the declared
+  exposure (`cold` or `entry`), so a runner that dropped the key could never mint such a row. When
+  supplied it must be an object, and `exposure`, when present, a non-empty string of at most 80
+  characters; a malformed value is refused before any reader spend.
+
 ## 0.2.66 — 2026-10-23
 
 - Add offline, report-only complete-pair content diagnostics to token preparation:
