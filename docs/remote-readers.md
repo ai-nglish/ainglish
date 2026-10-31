@@ -55,6 +55,16 @@ manifest = reader_qualification.attach(manifest, [run["receipt"]])
 before target item exposure: running controls after viewing target answers is not a qualification
 receipt for that design.
 
+When `manifest.readers` supplies the full sanitized reader receipts, `attach()` also checks each
+qualification's `settings_sha256` against the corresponding reader. A models-only attachment checks
+shape and roster membership; it cannot certify settings it was not given. The panel runner always
+checks the actual prepared instruments before calibration or target calls, and its free manifest
+preview checks the same binding before mint. Changing a seed, bound, sampler or model configuration
+requires a matching qualification; this does not rewrite or invalidate historical measurements.
+The digest uses the qualification runner's exact JSON serialization, including numeric spelling:
+use the same settings representation that was screened. A later `1.0`/`1` wire conversion alone
+is not evidence that a historical instrument changed.
+
 ## Generic OpenAI-compatible service
 
 Put credentials in the environment, never in a runspec:

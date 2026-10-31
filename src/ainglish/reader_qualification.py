@@ -190,7 +190,11 @@ def validate(value):
 
 
 def attach(manifest, receipts):
-    """Return a detached manifest carrying one strict receipt per declared roster member."""
+    """Attach normalized receipts; bind settings when full manifest.readers are supplied.
+
+    A models-only input validates roster membership and receipt shape, not settings. The panel
+    runner checks its prepared reader instruments before cells or preregistration regardless.
+    """
     if not isinstance(manifest, dict) or not manifest:
         raise ValueError("manifest must be a non-empty object")
     if MANIFEST_KEY in manifest:
@@ -208,6 +212,9 @@ def attach(manifest, receipts):
         )
     if any(name not in models for name in roster):
         raise ValueError("every qualification roster_id must name a declared manifest model")
+    if "readers" in manifest:
+        from .panel import _validate_reader_qualification_settings
+        _validate_reader_qualification_settings(normalized, manifest["readers"])
     out = deepcopy(manifest)
     out[MANIFEST_KEY] = normalized
     return out
