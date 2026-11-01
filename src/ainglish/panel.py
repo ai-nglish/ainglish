@@ -270,6 +270,28 @@ def _validate_reader_qualification_settings(receipts, readers):
             raise ValueError("qualification settings_sha256 does not match reader %s" % roster_id)
 
 
+def _check_qualification_binding(manifest, panel, qualified_receipts):
+    """Run the settings binding wherever the instruments are prepared; defer it, aloud, in a dry run
+    on unprepared readers instead of refusing.
+
+    A qualification receipt hashes the PREPARED reader instrument (``run_screen`` prepares before it
+    hashes), so a panel entry read from a runspec file can never match it until it is prepared. The
+    preregistered path prepares before its free preview and the real run prepares before spend, so
+    both check. The CLI ``--dry-run`` prepares nothing by design (zero network, zero cost); refusing
+    there blamed the receipt for a comparison that had not happened yet. A dry run whose entries ARE
+    prepared (the preregistration preview, or a caller that prepared them) still checks.
+    """
+    if qualified_receipts is None:
+        return
+    if manifest.get("_dry_run") and not any(isinstance(p.get(_INSTRUMENT_PREPARATION_KEY), dict) for p in panel):
+        print("DRY-RUN: reader qualification settings binding deferred to spend. The dry run does not "
+              "prepare the instruments and a receipt is hashed over the prepared instrument; receipt "
+              "shape and roster membership were checked, and the real run checks settings before any "
+              "reader cell.")
+        return
+    _validate_reader_qualification_settings(qualified_receipts, [reader_receipt(p) for p in panel])
+
+
 def _panel_refusal(stage, cause, message, calibration_cells_attempted,
                    real_cells_attempted=0, details=None, instrument_preparation=None):
     """Return and print a refusal as data, without making it look like a measurement.
@@ -3005,9 +3027,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
             if ask_fn is ask and not manifest.get("_dry_run"):
                 prepare_reader_instruments(manifest)
-            if qualified_receipts is not None:
-                _validate_reader_qualification_settings(
-                    qualified_receipts, [reader_receipt(p) for p in panel])
+            _check_qualification_binding(manifest, panel, qualified_receipts)
         except SystemExit as exc:
             print(exc)
             return None
@@ -3093,9 +3113,7 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
         if ask_fn is ask and not manifest.get("_dry_run"):
             prepare_reader_instruments(manifest)
-        if qualified_receipts is not None:
-            _validate_reader_qualification_settings(
-                qualified_receipts, [reader_receipt(p) for p in panel])
+        _check_qualification_binding(manifest, panel, qualified_receipts)
     except SystemExit as exc:
         print(exc)
         return None

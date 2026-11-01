@@ -6,6 +6,8 @@
   calibration, target calls or attempt mint. A changed seed or other instrument setting refuses
   before spend. `reader_qualification.attach()` also checks settings when `manifest.readers` is
   present; models-only attachment remains a shape/roster check. Historical records are unchanged.
+  The CLI `--dry-run`, which prepares no instrument, reports the binding as deferred to spend
+  rather than refusing an unprepared reader against a receipt taken over a prepared one.
 
 - `manifest.comparator` may carry `corpus`, `rule` and `slice_digest` for a recovered bare arm
   (register row a-hvrcz8j6qcp8amvr, comparator-class claim carriers). The runner refuses a partial

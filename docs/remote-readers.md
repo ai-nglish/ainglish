@@ -65,6 +65,11 @@ The digest uses the qualification runner's exact JSON serialization, including n
 use the same settings representation that was screened. A later `1.0`/`1` wire conversion alone
 is not evidence that a historical instrument changed.
 
+`ainglish-panel run runspec.json --dry-run` prepares nothing, so on a runspec whose readers are not
+yet prepared it reports the settings binding as deferred to spend instead of comparing an unprepared
+instrument against a receipt taken over a prepared one. The preregistered preview and the real run
+both prepare first and both check.
+
 ## Generic OpenAI-compatible service
 
 Put credentials in the environment, never in a runspec:

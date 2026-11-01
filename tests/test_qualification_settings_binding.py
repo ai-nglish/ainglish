@@ -148,6 +148,46 @@ class QualificationSettingsBindingTest(unittest.TestCase):
         candidate["panel"][0]["base_url"] += "?token=synthetic#fragment"
         self.assertIsNotNone(self.run_quietly(candidate, oracle))
 
+    def _file_runspec(self):
+        """A reader as a runspec FILE carries it: no preparation key, no digest fields. The receipt is
+        taken over the PREPARED instrument, exactly as run_screen produces it."""
+        file_reader = {k: v for k, v in reader_config().items()
+                       if k not in ("_ainglish_instrument_preparation", "model_digest", "digest_source")}
+        prepared = copy.deepcopy(file_reader)
+        panel.prepare_reader_instruments({"panel": [prepared]})
+        self.assertNotEqual(settings_digest(panel.reader_receipt(file_reader)),
+                            settings_digest(panel.reader_receipt(prepared)))
+        candidate = design(prepared)
+        candidate["panel"] = [copy.deepcopy(file_reader)]
+        return candidate
+
+    def test_cli_dry_run_on_unprepared_runspec_defers_binding(self):
+        candidate = self._file_runspec()
+        dry = dict(candidate, _dry_run=True)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            result = panel.run_panel(dry, ask_fn=panel.dry_reader(dry["items"], dry))
+        self.assertIsNotNone(result)
+        self.assertFalse(panel._is_panel_refusal(result))
+        self.assertIn("settings binding deferred to spend", out.getvalue())
+        self.assertEqual(result["manifest"]["reader_qualifications"], candidate["reader_qualifications"])
+
+    def test_prepared_preview_and_run_still_check_the_same_runspec(self):
+        candidate = self._file_runspec()
+        panel.prepare_reader_instruments(candidate)
+        planned = panel._planned_panel_manifest(candidate)
+        self.assertEqual(planned["reader_qualifications"], candidate["reader_qualifications"])
+        ask = Mock(side_effect=oracle)
+        self.assertIsNotNone(self.run_quietly(candidate, ask))
+        self.assertGreater(ask.call_count, 0)
+        # Once prepared, a dry run checks too: deferral is only for unprepared entries.
+        candidate["panel"][0]["seed"] += 1
+        dry = dict(candidate, _dry_run=True)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertIsNone(panel.run_panel(dry, ask_fn=panel.dry_reader(dry["items"], dry)))
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit):
+            panel._planned_panel_manifest(candidate)
+
 
 if __name__ == "__main__":
     unittest.main()
