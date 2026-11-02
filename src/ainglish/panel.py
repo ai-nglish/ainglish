@@ -237,6 +237,61 @@ def _attach_reader_qualifications(models, receipts):
     return normalized
 
 
+def _validate_reader_qualification_settings(receipts, readers):
+    """Bind receipts to the exact sanitized instruments, before any reader cell or mint.
+
+    Use the qualification runner's serialized-settings hash, without normalizing numeric
+    spellings or consulting a round-tripped historical manifest. This check is prospective.
+    """
+    if not isinstance(readers, list) or not readers:
+        raise ValueError("qualification binding requires a non-empty readers list")
+    instruments = {}
+    for reader in readers:
+        if not isinstance(reader, dict) or not isinstance(reader.get("name"), str) \
+                or not reader["name"].strip():
+            raise ValueError("qualification binding requires named reader receipts")
+        precision = reader.get("precision")
+        if precision is not None and not isinstance(precision, str):
+            raise ValueError("reader receipt precision must be text when present")
+        roster_id = reader["name"] + ("@" + precision if precision else "")
+        if roster_id in instruments:
+            raise ValueError("qualification binding requires unique reader roster ids")
+        instruments[roster_id] = reader
+    for receipt in receipts:
+        roster_id = receipt["roster_id"]
+        if roster_id not in instruments:
+            raise ValueError("qualification roster_id has no matching reader receipt: %s" % roster_id)
+        try:
+            settings = json.dumps(instruments[roster_id], sort_keys=True, separators=(",", ":"),
+                                  ensure_ascii=False, allow_nan=False).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("qualification reader settings must be finite JSON") from exc
+        if hashlib.sha256(settings).hexdigest() != receipt["settings_sha256"]:
+            raise ValueError("qualification settings_sha256 does not match reader %s" % roster_id)
+
+
+def _check_qualification_binding(manifest, panel, qualified_receipts):
+    """Run the settings binding wherever the instruments are prepared; defer it, aloud, in a dry run
+    on unprepared readers instead of refusing.
+
+    A qualification receipt hashes the PREPARED reader instrument (``run_screen`` prepares before it
+    hashes), so a panel entry read from a runspec file can never match it until it is prepared. The
+    preregistered path prepares before its free preview and the real run prepares before spend, so
+    both check. The CLI ``--dry-run`` prepares nothing by design (zero network, zero cost); refusing
+    there blamed the receipt for a comparison that had not happened yet. A dry run whose entries ARE
+    prepared (the preregistration preview, or a caller that prepared them) still checks.
+    """
+    if qualified_receipts is None:
+        return
+    if manifest.get("_dry_run") and not any(isinstance(p.get(_INSTRUMENT_PREPARATION_KEY), dict) for p in panel):
+        print("DRY-RUN: reader qualification settings binding deferred to spend. The dry run does not "
+              "prepare the instruments and a receipt is hashed over the prepared instrument; receipt "
+              "shape and roster membership were checked, and the real run checks settings before any "
+              "reader cell.")
+        return
+    _validate_reader_qualification_settings(qualified_receipts, [reader_receipt(p) for p in panel])
+
+
 def _panel_refusal(stage, cause, message, calibration_cells_attempted,
                    real_cells_attempted=0, details=None, instrument_preparation=None):
     """Return and print a refusal as data, without making it look like a measurement.
@@ -2972,8 +3027,12 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
             _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
             if ask_fn is ask and not manifest.get("_dry_run"):
                 prepare_reader_instruments(manifest)
+            _check_qualification_binding(manifest, panel, qualified_receipts)
         except SystemExit as exc:
             print(exc)
+            return None
+        except ValueError as exc:
+            print(f"REFUSING before reader spend: invalid qualification settings ({exc}).")
             return None
         return run_robustness(manifest, ask_fn, planted_arm, calibration_min_gap,
                               calibration_min_recovered, calibration_rule, qualified_receipts)
@@ -3054,8 +3113,12 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         _validate_real_reader_configuration(manifest, ask_fn, "reader spend")
         if ask_fn is ask and not manifest.get("_dry_run"):
             prepare_reader_instruments(manifest)
+        _check_qualification_binding(manifest, panel, qualified_receipts)
     except SystemExit as exc:
         print(exc)
+        return None
+    except ValueError as exc:
+        print(f"REFUSING before reader spend: invalid qualification settings ({exc}).")
         return None
 
     # Cell-yield guard (@ColonistOne, vendored verbatim from claim-audit/empty_cell_guard.py —
@@ -3904,6 +3967,9 @@ def selftest():
             "min_gap_bps": 1250, "min_recovered_bps": 5000, "passed": True,
         },
     }
+    qualified_receipt["settings_sha256"] = hashlib.sha256(json.dumps(
+        reader_receipt(good["panel"][0]), sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False).encode("utf-8")).hexdigest()
     qualified_result = run_panel(
         dict(good, reader_qualifications=[qualified_receipt]), ask_fn=tag_reliant,
     )
