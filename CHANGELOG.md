@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.67 — 2026-11-02
 
 - Bind supplied reader qualifications to the exact sanitized reader settings before panel
   calibration, target calls or attempt mint. A changed seed or other instrument setting refuses
