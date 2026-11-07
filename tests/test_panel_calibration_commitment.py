@@ -70,4 +70,15 @@ class CalibrationCommitmentTests(unittest.TestCase):
         self.assertEqual('0.95', emitted['calibration']['min_recovered'])
         manifest_commitment(emitted)
 
+    def test_robustness_producer_uses_the_same_portable_gate_representation(self):
+        manifest = design(); del manifest['admissibility']
+        manifest.update(metric='robustness_delta', calibration_min_gap=0.1, calibration_min_recovered=0.95)
+        manifest['calibration_items'] = [i for i in manifest['items'] if i.get('calibration')]
+        manifest['items'] = [i for i in manifest['items'] if not i.get('calibration')]
+        with contextlib.redirect_stdout(io.StringIO()):
+            emitted = panel._planned_panel_manifest(manifest)
+        self.assertEqual('0.1', emitted['calibration']['min_gap'])
+        self.assertEqual('0.95', emitted['calibration']['min_recovered'])
+        manifest_commitment(emitted)
+
 if __name__ == '__main__': unittest.main()
