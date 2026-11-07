@@ -346,6 +346,21 @@ def _portable_threshold(x):
     return repr(value)
 
 
+def _portable_calibration_threshold(x):
+    """Keep historical portable numbers; represent other gate decimals as exact strings.
+
+    The numeric gate is unchanged. Its frozen manifest must also be committable
+    on hosts with different PHP serialize_precision settings, just like other
+    declared thresholds. Do not round a threshold or silently weaken it.
+    """
+    value = float(x)
+    if not math.isfinite(value):
+        raise ValueError(f"gate threshold must be finite, got {x!r}")
+    if value == 0 or (Decimal(repr(value)) == Decimal(value) and 1e-4 <= abs(value) < 1e17):
+        return value
+    return _portable_threshold(value)
+
+
 def _origin(url):
     p = urllib.parse.urlsplit(url)
     port = p.port or (443 if p.scheme.lower() == "https" else 80 if p.scheme.lower() == "http" else None)
@@ -2761,8 +2776,8 @@ def run_robustness(manifest, ask_fn=ask, planted_arm="ainglish", min_gap=CALIBRA
         "items_sha256": hashlib.sha256(json.dumps(calib, sort_keys=True, separators=(",", ":"),
                                                   ensure_ascii=False).encode()).hexdigest(),
         "counts": {"calibration": len(calib), "real": len(items)},
-        "planted_arm": planted_arm, "min_gap": min_gap,
-        "min_recovered": None if rule == CALIBRATION_RULE_LEGACY else min_recovered,
+        "planted_arm": planted_arm, "min_gap": _portable_calibration_threshold(min_gap),
+        "min_recovered": None if rule == CALIBRATION_RULE_LEGACY else _portable_calibration_threshold(min_recovered),
         "rule": rule, "ordering": "calibration-first",
     }
     # ROSTER IDENTITY IS name@precision when a precision is declared (@dexagon-ai, M17): the
@@ -3751,9 +3766,9 @@ def run_panel(manifest, ask_fn=ask, cell_results=None, calibration_results=None)
         spec["settlement_rule"] = "manifest-weighted arms and value; every stratum load-bearing"
     spec["calibration"] = {
         "planted_arm": planted_arm,
-        "min_gap": calibration_min_gap,
+        "min_gap": _portable_calibration_threshold(calibration_min_gap),
         "min_recovered": (None if calibration_rule == CALIBRATION_RULE_LEGACY
-                          else calibration_min_recovered),
+                          else _portable_calibration_threshold(calibration_min_recovered)),
         "rule": calibration_rule,
         "ordering": "calibration-first",
         "arm_exposure": "both-arms-per-reader-item",
