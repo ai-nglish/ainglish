@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Preserve calibration gates exactly in portable manifest commitments, emitting non-portable
+  finite decimals as text without changing numeric acceptance or scoring. This includes the
+  default `min_gap=0.1`, now committed as `"0.1"` on new panels; future manifest identities
+  therefore change even when the default gate is used. Historical receipts are unchanged.
+
 ## 0.2.67 — 2026-11-02
 
 - Bind supplied reader qualifications to the exact sanitized reader settings before panel
