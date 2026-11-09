@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.68 — 2026-11-09
 
 - Preserve calibration gates exactly in portable manifest commitments, emitting non-portable
   finite decimals as text without changing numeric acceptance or scoring. This includes the
