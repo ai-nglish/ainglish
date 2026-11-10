@@ -66,6 +66,15 @@ class FamilyTests(unittest.TestCase):
         for row in VECTORS["minimum_per_cell"]:
             self.assertEqual(P.minimum_per_cell(row["family_size"]), row["n"], row)
 
+    def test_shared_inventory_cases_are_judged_as_the_vector_file_says(self):
+        self.assertEqual(len(VECTORS["inventory_cases"]), 15)
+        for case in VECTORS["inventory_cases"]:
+            if case["accepted"]:
+                self.assertEqual(P.family_size(case["inventory"]), case["family_size"], case["name"])
+            else:
+                with self.assertRaises(P.MalformedPreservation, msg=case["name"]):
+                    P.family_size(case["inventory"])
+
     def test_inventory_must_be_complete_and_unique(self):
         good = VECTORS["inventory"]
         for bad in ({}, dict(good, readers=[]), dict(good, forms=["form-a", "form-a"]), dict(good, error_endpoints=[]),
@@ -76,7 +85,7 @@ class FamilyTests(unittest.TestCase):
 
 class CaseTests(unittest.TestCase):
     def test_every_shared_case_reaches_its_expected_outcome(self):
-        self.assertEqual(len(VECTORS["cases"]), 34)
+        self.assertEqual(len(VECTORS["cases"]), 40)
         for case in VECTORS["cases"]:
             actual = P.outcome(VECTORS["inventory"], case["cells"], **case["context"])
             self.assertEqual(actual, case["expected"], case["name"])

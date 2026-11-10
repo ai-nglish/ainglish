@@ -3,7 +3,7 @@
  "analysis": "exact-binomial-preservation-v1",
  "generated_by": {
   "tool": "tools/gen_preservation_vectors.py",
-  "tool_sha256": "106c520e1873655f3546cc70303c077cbf3a42af8a2ccb526d5691a2a7b86ba8",
+  "tool_sha256": "556c91cfe52aa14c543b61379b99512f9b1adba50410d1cb7142fe65ccbfbe02",
   "method": "decimal bisection of the exact binomial tail, 60 digits, 200 halvings; independent of ainglish.preservation",
   "python": "3.12"
  },
@@ -767,6 +767,278 @@
    "false-polarity"
   ]
  },
+ "inventory_cases": [
+  {
+   "name": "the-shared-inventory",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": true,
+   "family_size": 16
+  },
+  {
+   "name": "one-reader-one-form-one-endpoint",
+   "inventory": {
+    "readers": [
+     "r"
+    ],
+    "forms": [
+     "f"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "accepted": true,
+   "family_size": 3
+  },
+  {
+   "name": "no-readers",
+   "inventory": {
+    "readers": [],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "no-error-endpoints",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": []
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "repeated-form",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "form-a"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "repeated-endpoint",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "e",
+     "e"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "non-string-reader",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     2
+    ],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "empty-name",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     ""
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "bare-integer-endpoint-zero",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "0",
+     "1"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "bare-integer-form",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "12"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "negative-integer-reader",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "-5"
+    ],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "leading-zero-is-a-name-not-an-integer",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "007"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": true,
+   "family_size": 16
+  },
+  {
+   "name": "extra-key",
+   "inventory": {
+    "readers": [
+     "reader-a",
+     "reader-b"
+    ],
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ],
+    "extra": 1
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "missing-key",
+   "inventory": {
+    "readers": [
+     "r"
+    ],
+    "forms": [
+     "f"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  },
+  {
+   "name": "readers-as-mapping",
+   "inventory": {
+    "readers": {
+     "a": "reader-a"
+    },
+    "forms": [
+     "form-a",
+     "form-b"
+    ],
+    "error_endpoints": [
+     "false-authority",
+     "false-polarity"
+    ]
+   },
+   "accepted": false,
+   "family_size": null
+  }
+ ],
  "cases": [
   {
    "name": "complete-large-ceiling",
@@ -4002,6 +4274,479 @@
    "expected": "refuse_malformed"
   },
   {
+   "name": "endpoints-as-a-list-are-not-a-mapping",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": [
+      [
+       0,
+       512
+      ],
+      [
+       0,
+       512
+      ]
+     ]
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "empty-endpoint-mapping",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {}
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "three-element-count",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "count-as-text",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": "512/512",
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
    "name": "renamed-reader-is-not-the-inventory-reader",
    "source": "implementer",
    "cells": [
@@ -4865,6 +5610,248 @@
     }
    },
    "expected": "opposes_profile"
+  },
+  {
+   "name": "error-upper-above-cap-while-delta-and-floors-pass",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      3996,
+      4000
+     ],
+     "english": [
+      3996,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       190,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "unresolved"
+  },
+  {
+   "name": "accuracy-lower-below-floor-while-delta-and-caps-pass",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      3640,
+      4000
+     ],
+     "english": [
+      3640,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "unresolved"
   }
  ]
 }

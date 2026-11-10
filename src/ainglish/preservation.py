@@ -25,6 +25,7 @@ math libraries can leave a cell unresolved but can never turn one verdict into a
 from __future__ import annotations
 
 import math
+import re
 
 ANALYSIS = "exact-binomial-preservation-v1"
 FAMILY_ALPHA = 0.05
@@ -55,6 +56,7 @@ class MalformedPreservation(ValueError):
 
 
 _LOG_FACTORIAL = [0.0, 0.0]
+_BARE_INTEGER = re.compile(r"-?(0|[1-9][0-9]*)")
 
 
 def _log_factorial(n):
@@ -124,8 +126,10 @@ def _names(values, what, minimum=1):
     if not isinstance(values, (list, tuple)) or len(values) < minimum:
         raise MalformedPreservation("inventory %s must list at least %d name(s)" % (what, minimum))
     for value in values:
-        if not isinstance(value, str) or value == "":
-            raise MalformedPreservation("inventory %s holds a name that is not a non-empty string" % what)
+        # A canonical integer string would become an integer array key in PHP and stay a string
+        # here; refusing it on both sides keeps the two parsers identical.
+        if not isinstance(value, str) or value == "" or _BARE_INTEGER.fullmatch(value):
+            raise MalformedPreservation("inventory %s holds a name that is empty, not a string, or a bare integer" % what)
     if len(set(values)) != len(values):
         raise MalformedPreservation("inventory %s repeats a name" % what)
     return list(values)

@@ -119,6 +119,10 @@ def cases():
         c = bank(); c[0]["marked"][0] = value
         case("bad-count-" + str(value), c, "refuse_malformed")
     c = bank(); c[0]["english"] = [0, 0]; case("zero-denominator", c, "refuse_malformed")
+    c = bank(); c[0]["errors"] = [[0, 512], [0, 512]]; case("endpoints-as-a-list-are-not-a-mapping", c, "refuse_malformed", source="implementer")
+    c = bank(); c[0]["errors"] = {}; case("empty-endpoint-mapping", c, "refuse_malformed", source="implementer")
+    c = bank(); c[0]["marked"] = [512, 512, 512]; case("three-element-count", c, "refuse_malformed", source="implementer")
+    c = bank(); c[0]["marked"] = "512/512"; case("count-as-text", c, "refuse_malformed", source="implementer")
     # Named-identity cases: the family is the inventory's, never the received cells'.
     c = bank(); c[3]["reader"] = "reader-c"; case("renamed-reader-is-not-the-inventory-reader", c, "refuse_malformed", source="implementer")
     c = bank(); c.append(dict(copy.deepcopy(c[0]), reader="reader-c")); case("extra-reader-form", c, "refuse_malformed", source="implementer")
@@ -131,7 +135,35 @@ def cases():
     case("delta-lower-short-while-floors-and-caps-pass", c, "unresolved", source="implementer")
     c = bank(4000); c[0]["marked"] = [3640, 4000]; c[0]["english"] = [3996, 4000]
     case("delta-upper-below-margin-while-accuracy-upper-clears-the-floor", c, "opposes_profile", source="implementer")
+    # The error cap alone, and the accuracy floor alone: in an all-correct cell the delta rule always fails first,
+    # so without these two a broken cap or floor would go unnoticed.
+    c = bank(4000); c[0]["marked"] = [3996, 4000]; c[0]["english"] = [3996, 4000]; c[0]["errors"]["false-polarity"] = [190, 4000]
+    case("error-upper-above-cap-while-delta-and-floors-pass", c, "unresolved", source="implementer")
+    c = bank(4000); c[0]["marked"] = [3640, 4000]; c[0]["english"] = [3640, 4000]
+    case("accuracy-lower-below-floor-while-delta-and-caps-pass", c, "unresolved", source="implementer")
     return out
+
+
+def inventory_cases():
+    """Inventories both parsers must judge alike. A bare-integer name is refused because PHP would
+    turn it into an integer array key; a JSON list of endpoints must never pass for a mapping."""
+    good = INVENTORY
+    rows = [("the-shared-inventory", good, True, 16),
+            ("one-reader-one-form-one-endpoint", {"readers": ["r"], "forms": ["f"], "error_endpoints": ["e"]}, True, 3),
+            ("no-readers", dict(good, readers=[]), False, None),
+            ("no-error-endpoints", dict(good, error_endpoints=[]), False, None),
+            ("repeated-form", dict(good, forms=["form-a", "form-a"]), False, None),
+            ("repeated-endpoint", dict(good, error_endpoints=["e", "e"]), False, None),
+            ("non-string-reader", dict(good, readers=["reader-a", 2]), False, None),
+            ("empty-name", dict(good, forms=["form-a", ""]), False, None),
+            ("bare-integer-endpoint-zero", dict(good, error_endpoints=["0", "1"]), False, None),
+            ("bare-integer-form", dict(good, forms=["form-a", "12"]), False, None),
+            ("negative-integer-reader", dict(good, readers=["reader-a", "-5"]), False, None),
+            ("leading-zero-is-a-name-not-an-integer", dict(good, forms=["form-a", "007"]), True, 16),
+            ("extra-key", dict(good, extra=1), False, None),
+            ("missing-key", {"readers": ["r"], "forms": ["f"]}, False, None),
+            ("readers-as-mapping", dict(good, readers={"a": "reader-a"}), False, None)]
+    return [{"name": n, "inventory": inv, "accepted": ok, "family_size": m} for n, inv, ok, m in rows]
 
 
 def main():
@@ -160,6 +192,12 @@ def main():
         assert ml >= floor and el >= floor and ml - eu < margin and mu - el >= margin and mu >= floor, (ml, mu, el, eu)
         ml, mu = decimal_lower(3640, 4000, t640d), decimal_upper(3640, 4000, t640d)
         assert mu - el < margin and mu >= floor and eu >= floor, (ml, mu, el, eu)
+        cap = Decimal("0.05")
+        hl, hu = decimal_lower(3996, 4000, t640d), decimal_upper(3996, 4000, t640d)
+        xl, xu = decimal_lower(190, 4000, t640d), decimal_upper(190, 4000, t640d)
+        assert hl - hu >= margin and hl >= floor and xu > cap and xl <= cap and decimal_upper(0, 4000, t640d) <= cap, (hl, hu, xl, xu)
+        fl, fu = decimal_lower(3640, 4000, t640d), decimal_upper(3640, 4000, t640d)
+        assert fl < floor and fu >= floor and fl - fu >= margin and fu - fl >= margin, (fl, fu)
         # The two values the acceptance pack publishes for the 512-observation ceiling at tail 1/640.
         t640 = Decimal(1) / Decimal(640)
         assert abs(decimal_lower(512, 512, t640) - Decimal("0.9874592439262977")) < Decimal("1e-15")
@@ -172,7 +210,8 @@ def main():
                                "python": "%d.%d" % sys.version_info[:2]},
               "note": "Synthetic software vectors. Not language evidence, not a measurement, not a profile pass.",
               "bound_tolerance": "1e-10", "tie_band": "1e-9", "token_encodings": list(ENCODINGS),
-              "bounds": bounds, "minimum_per_cell": minima, "inventory": INVENTORY, "cases": cases()}
+              "bounds": bounds, "minimum_per_cell": minima, "inventory": INVENTORY, "inventory_cases": inventory_cases(),
+              "cases": cases()}
     OUT.write_text(json.dumps(report, indent=1, allow_nan=False) + "\n", encoding="utf-8")
     print("wrote", OUT.relative_to(ROOT), "|", len(bounds), "bounds |", len(report["cases"]), "cases |", hashlib.sha256(OUT.read_bytes()).hexdigest())
 
