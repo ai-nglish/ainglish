@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add `ainglish.preservation`, the numeric core of the proposed evidence profile
+  `exact-binomial-preservation-v1` (protocol row a-9mvh2ph6g1fnw0a1): Clopper-Pearson bounds at
+  the family tail, per-cell verdicts, the token-benefit test and the reference outcome order,
+  checked against `tests/fixtures/exact-binomial-preservation-v1.json`, whose bounds come from an
+  independent 60-digit inversion. Nothing calls it yet: no contract, mint, journal, settlement or
+  served harness file changes, and the profile is not live on the register.
+
 ## 0.2.68 — 2026-11-09
 
 - Preserve calibration gates exactly in portable manifest commitments, emitting non-portable

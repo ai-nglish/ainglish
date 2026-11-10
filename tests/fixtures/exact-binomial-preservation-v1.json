@@ -1,0 +1,4870 @@
+{
+ "kind": "ainglish.exact-binomial-preservation-vectors.v1",
+ "analysis": "exact-binomial-preservation-v1",
+ "generated_by": {
+  "tool": "tools/gen_preservation_vectors.py",
+  "tool_sha256": "106c520e1873655f3546cc70303c077cbf3a42af8a2ccb526d5691a2a7b86ba8",
+  "method": "decimal bisection of the exact binomial tail, 60 digits, 200 halvings; independent of ainglish.preservation",
+  "python": "3.12"
+ },
+ "note": "Synthetic software vectors. Not language evidence, not a measurement, not a profile pass.",
+ "bound_tolerance": "1e-10",
+ "tie_band": "1e-9",
+ "token_encodings": [
+  "cl100k_base",
+  "o200k_base",
+  "p50k_base"
+ ],
+ "bounds": [
+  {
+   "k": 0,
+   "n": 1,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.998437500000000000"
+  },
+  {
+   "k": 1,
+   "n": 1,
+   "tail": "1/640",
+   "lower": "0.001562500000000000",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 2,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.960471529247895258"
+  },
+  {
+   "k": 1,
+   "n": 2,
+   "tail": "1/640",
+   "lower": "0.000781555414432915",
+   "upper": "0.999218444585567085"
+  },
+  {
+   "k": 2,
+   "n": 2,
+   "tail": "1/640",
+   "lower": "0.039528470752104742",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 3,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.883960279159680528"
+  },
+  {
+   "k": 1,
+   "n": 3,
+   "tail": "1/640",
+   "lower": "0.000521104836415152",
+   "upper": "0.977001231248711076"
+  },
+  {
+   "k": 2,
+   "n": 3,
+   "tail": "1/640",
+   "lower": "0.022998768751288924",
+   "upper": "0.999478895163584848"
+  },
+  {
+   "k": 3,
+   "n": 3,
+   "tail": "1/640",
+   "lower": "0.116039720840319472",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 8,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.554110235381251809"
+  },
+  {
+   "k": 1,
+   "n": 8,
+   "tail": "1/640",
+   "lower": "0.000195446144936064",
+   "upper": "0.691223042868054894"
+  },
+  {
+   "k": 4,
+   "n": 8,
+   "tail": "1/640",
+   "lower": "0.072979565181113214",
+   "upper": "0.927020434818886786"
+  },
+  {
+   "k": 7,
+   "n": 8,
+   "tail": "1/640",
+   "lower": "0.308776957131945106",
+   "upper": "0.999804553855063936"
+  },
+  {
+   "k": 8,
+   "n": 8,
+   "tail": "1/640",
+   "lower": "0.445889764618748191",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 20,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.276079289746122181"
+  },
+  {
+   "k": 1,
+   "n": 20,
+   "tail": "1/640",
+   "lower": "0.000078183042355771",
+   "upper": "0.361510867809049570"
+  },
+  {
+   "k": 10,
+   "n": 20,
+   "tail": "1/640",
+   "lower": "0.187575783773194308",
+   "upper": "0.812424216226805692"
+  },
+  {
+   "k": 19,
+   "n": 20,
+   "tail": "1/640",
+   "lower": "0.638489132190950430",
+   "upper": "0.999921816957644229"
+  },
+  {
+   "k": 20,
+   "n": 20,
+   "tail": "1/640",
+   "lower": "0.723920710253877819",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 59,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.103732543300229491"
+  },
+  {
+   "k": 1,
+   "n": 59,
+   "tail": "1/640",
+   "lower": "0.000026503411086577",
+   "upper": "0.138757716023926714"
+  },
+  {
+   "k": 29,
+   "n": 59,
+   "tail": "1/640",
+   "lower": "0.300105512470529984",
+   "upper": "0.684724658145555559"
+  },
+  {
+   "k": 58,
+   "n": 59,
+   "tail": "1/640",
+   "lower": "0.861242283976073286",
+   "upper": "0.999973496588913423"
+  },
+  {
+   "k": 59,
+   "n": 59,
+   "tail": "1/640",
+   "lower": "0.896267456699770509",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 126,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.049988789055645875"
+  },
+  {
+   "k": 1,
+   "n": 126,
+   "tail": "1/640",
+   "lower": "0.000012410414864630",
+   "upper": "0.067254838953875593"
+  },
+  {
+   "k": 63,
+   "n": 126,
+   "tail": "1/640",
+   "lower": "0.367088649783975239",
+   "upper": "0.632911350216024761"
+  },
+  {
+   "k": 125,
+   "n": 126,
+   "tail": "1/640",
+   "lower": "0.932745161046124407",
+   "upper": "0.999987589585135370"
+  },
+  {
+   "k": 126,
+   "n": 126,
+   "tail": "1/640",
+   "lower": "0.950011210944354125",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 512,
+   "tail": "1/640",
+   "lower": "0.000000000000000000",
+   "upper": "0.012540756073702291"
+  },
+  {
+   "k": 1,
+   "n": 512,
+   "tail": "1/640",
+   "lower": "0.000003054139820837",
+   "upper": "0.016936969229542693"
+  },
+  {
+   "k": 256,
+   "n": 512,
+   "tail": "1/640",
+   "lower": "0.434043633339084388",
+   "upper": "0.565956366660915612"
+  },
+  {
+   "k": 511,
+   "n": 512,
+   "tail": "1/640",
+   "lower": "0.983063030770457307",
+   "upper": "0.999996945860179163"
+  },
+  {
+   "k": 512,
+   "n": 512,
+   "tail": "1/640",
+   "lower": "0.987459243926297709",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 1,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.996875000000000000"
+  },
+  {
+   "k": 1,
+   "n": 1,
+   "tail": "1/320",
+   "lower": "0.003125000000000000",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 2,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.944098300562505258"
+  },
+  {
+   "k": 1,
+   "n": 2,
+   "tail": "1/320",
+   "lower": "0.001563722614207091",
+   "upper": "0.998436277385792909"
+  },
+  {
+   "k": 2,
+   "n": 2,
+   "tail": "1/320",
+   "lower": "0.055901699437494742",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 3,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.853799113089356697"
+  },
+  {
+   "k": 1,
+   "n": 3,
+   "tail": "1/320",
+   "lower": "0.001042753623845831",
+   "upper": "0.967368243237470039"
+  },
+  {
+   "k": 2,
+   "n": 3,
+   "tail": "1/320",
+   "lower": "0.032631756762529961",
+   "upper": "0.998957246376154169"
+  },
+  {
+   "k": 3,
+   "n": 3,
+   "tail": "1/320",
+   "lower": "0.146200886910643303",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 8,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.513753763766963484"
+  },
+  {
+   "k": 1,
+   "n": 8,
+   "tail": "1/320",
+   "lower": "0.000391160103047018",
+   "upper": "0.657038372522726738"
+  },
+  {
+   "k": 4,
+   "n": 8,
+   "tail": "1/320",
+   "lower": "0.087890976189702525",
+   "upper": "0.912109023810297475"
+  },
+  {
+   "k": 7,
+   "n": 8,
+   "tail": "1/320",
+   "lower": "0.342961627477273262",
+   "upper": "0.999608839896952982"
+  },
+  {
+   "k": 8,
+   "n": 8,
+   "tail": "1/320",
+   "lower": "0.486246236233036516",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 20,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.250550281031823269"
+  },
+  {
+   "k": 1,
+   "n": 20,
+   "tail": "1/320",
+   "lower": "0.000156482405797323",
+   "upper": "0.335525424933756815"
+  },
+  {
+   "k": 10,
+   "n": 20,
+   "tail": "1/320",
+   "lower": "0.204825741305283281",
+   "upper": "0.795174258694716719"
+  },
+  {
+   "k": 19,
+   "n": 20,
+   "tail": "1/320",
+   "lower": "0.664474575066243185",
+   "upper": "0.999843517594202677"
+  },
+  {
+   "k": 20,
+   "n": 20,
+   "tail": "1/320",
+   "lower": "0.749449718968176731",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 59,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.093140867568588523"
+  },
+  {
+   "k": 1,
+   "n": 59,
+   "tail": "1/320",
+   "lower": "0.000053047626974496",
+   "upper": "0.127251223809735521"
+  },
+  {
+   "k": 29,
+   "n": 59,
+   "tail": "1/320",
+   "lower": "0.312796787796980507",
+   "upper": "0.671807839490418076"
+  },
+  {
+   "k": 58,
+   "n": 59,
+   "tail": "1/320",
+   "lower": "0.872748776190264479",
+   "upper": "0.999946952373025504"
+  },
+  {
+   "k": 59,
+   "n": 59,
+   "tail": "1/320",
+   "lower": "0.906859132431411477",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 126,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.044748216267952450"
+  },
+  {
+   "k": 1,
+   "n": 126,
+   "tail": "1/320",
+   "lower": "0.000024840112185079",
+   "upper": "0.061467619899659272"
+  },
+  {
+   "k": 63,
+   "n": 126,
+   "tail": "1/320",
+   "lower": "0.376417641070764560",
+   "upper": "0.623582358929235440"
+  },
+  {
+   "k": 125,
+   "n": 126,
+   "tail": "1/320",
+   "lower": "0.938532380100340728",
+   "upper": "0.999975159887814921"
+  },
+  {
+   "k": 126,
+   "n": 126,
+   "tail": "1/320",
+   "lower": "0.955251783732047550",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 512,
+   "tail": "1/320",
+   "lower": "0.000000000000000000",
+   "upper": "0.011203025393309207"
+  },
+  {
+   "k": 1,
+   "n": 512,
+   "tail": "1/320",
+   "lower": "0.000006113053598274",
+   "upper": "0.015444000020701474"
+  },
+  {
+   "k": 256,
+   "n": 512,
+   "tail": "1/320",
+   "lower": "0.438861181082927860",
+   "upper": "0.561138818917072140"
+  },
+  {
+   "k": 511,
+   "n": 512,
+   "tail": "1/320",
+   "lower": "0.984555999979298526",
+   "upper": "0.999993886946401726"
+  },
+  {
+   "k": 512,
+   "n": 512,
+   "tail": "1/320",
+   "lower": "0.988796974606690793",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 1,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.975000000000000000"
+  },
+  {
+   "k": 1,
+   "n": 1,
+   "tail": "1/40",
+   "lower": "0.025000000000000000",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 2,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.841886116991581033"
+  },
+  {
+   "k": 1,
+   "n": 2,
+   "tail": "1/40",
+   "lower": "0.012579117093425049",
+   "upper": "0.987420882906574951"
+  },
+  {
+   "k": 2,
+   "n": 2,
+   "tail": "1/40",
+   "lower": "0.158113883008418967",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 3,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.707598226178713393"
+  },
+  {
+   "k": 1,
+   "n": 3,
+   "tail": "1/40",
+   "lower": "0.008403758659612637",
+   "upper": "0.905700675949753923"
+  },
+  {
+   "k": 2,
+   "n": 3,
+   "tail": "1/40",
+   "lower": "0.094299324050246077",
+   "upper": "0.991596241340387363"
+  },
+  {
+   "k": 3,
+   "n": 3,
+   "tail": "1/40",
+   "lower": "0.292401773821286607",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 8,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.369416647552819285"
+  },
+  {
+   "k": 1,
+   "n": 8,
+   "tail": "1/40",
+   "lower": "0.003159723531251906",
+   "upper": "0.526509670875206559"
+  },
+  {
+   "k": 4,
+   "n": 8,
+   "tail": "1/40",
+   "lower": "0.157012770487057972",
+   "upper": "0.842987229512942028"
+  },
+  {
+   "k": 7,
+   "n": 8,
+   "tail": "1/40",
+   "lower": "0.473490329124793441",
+   "upper": "0.996840276468748094"
+  },
+  {
+   "k": 8,
+   "n": 8,
+   "tail": "1/40",
+   "lower": "0.630583352447180715",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 20,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.168433470983085337"
+  },
+  {
+   "k": 1,
+   "n": 20,
+   "tail": "1/40",
+   "lower": "0.001265089497949804",
+   "upper": "0.248732762772027777"
+  },
+  {
+   "k": 10,
+   "n": 20,
+   "tail": "1/40",
+   "lower": "0.271957849560791809",
+   "upper": "0.728042150439208191"
+  },
+  {
+   "k": 19,
+   "n": 20,
+   "tail": "1/40",
+   "lower": "0.751267237227972223",
+   "upper": "0.998734910502050196"
+  },
+  {
+   "k": 20,
+   "n": 20,
+   "tail": "1/40",
+   "lower": "0.831566529016914663",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 59,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.060608900950339847"
+  },
+  {
+   "k": 1,
+   "n": 59,
+   "tail": "1/40",
+   "lower": "0.000429023332723595",
+   "upper": "0.090855932886649285"
+  },
+  {
+   "k": 29,
+   "n": 59,
+   "tail": "1/40",
+   "lower": "0.358912727800532172",
+   "upper": "0.625017450265023562"
+  },
+  {
+   "k": 58,
+   "n": 59,
+   "tail": "1/40",
+   "lower": "0.909144067113350715",
+   "upper": "0.999570976667276405"
+  },
+  {
+   "k": 59,
+   "n": 59,
+   "tail": "1/40",
+   "lower": "0.939391099049660153",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 126,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.028852406856721011"
+  },
+  {
+   "k": 1,
+   "n": 126,
+   "tail": "1/40",
+   "lower": "0.000200914797920455",
+   "upper": "0.043425468045039748"
+  },
+  {
+   "k": 63,
+   "n": 126,
+   "tail": "1/40",
+   "lower": "0.409651483533885175",
+   "upper": "0.590348516466114825"
+  },
+  {
+   "k": 125,
+   "n": 126,
+   "tail": "1/40",
+   "lower": "0.956574531954960252",
+   "upper": "0.999799085202079545"
+  },
+  {
+   "k": 126,
+   "n": 126,
+   "tail": "1/40",
+   "lower": "0.971147593143278989",
+   "upper": "1.000000000000000000"
+  },
+  {
+   "k": 0,
+   "n": 512,
+   "tail": "1/40",
+   "lower": "0.000000000000000000",
+   "upper": "0.007178950026259455"
+  },
+  {
+   "k": 1,
+   "n": 512,
+   "tail": "1/40",
+   "lower": "0.000049447621145395",
+   "upper": "0.010833656944754488"
+  },
+  {
+   "k": 256,
+   "n": 512,
+   "tail": "1/40",
+   "lower": "0.455821674119619939",
+   "upper": "0.544178325880380061"
+  },
+  {
+   "k": 511,
+   "n": 512,
+   "tail": "1/40",
+   "lower": "0.989166343055245512",
+   "upper": "0.999950552378854605"
+  },
+  {
+   "k": 512,
+   "n": 512,
+   "tail": "1/40",
+   "lower": "0.992821049973740545",
+   "upper": "1.000000000000000000"
+  }
+ ],
+ "minimum_per_cell": [
+  {
+   "family_size": 8,
+   "n": 113,
+   "source": "proposal thread, author's packet of 2026-09-25"
+  },
+  {
+   "family_size": 16,
+   "n": 126,
+   "source": "derived here"
+  },
+  {
+   "family_size": 20,
+   "n": 131,
+   "source": "proposal thread, author's packet of 2026-09-25"
+  },
+  {
+   "family_size": 24,
+   "n": 134,
+   "source": "proposal thread, author's packet of 2026-09-25"
+  }
+ ],
+ "inventory": {
+  "readers": [
+   "reader-a",
+   "reader-b"
+  ],
+  "forms": [
+   "form-a",
+   "form-b"
+  ],
+  "error_endpoints": [
+   "false-authority",
+   "false-polarity"
+  ]
+ },
+ "cases": [
+  {
+   "name": "complete-large-ceiling",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "profile_and_benefit_satisfied_not_ratified"
+  },
+  {
+   "name": "two-perfect-is-not-proof",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      2,
+      2
+     ],
+     "english": [
+      2,
+      2
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       2
+      ],
+      "false-polarity": [
+       0,
+       2
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      2,
+      2
+     ],
+     "english": [
+      2,
+      2
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       2
+      ],
+      "false-polarity": [
+       0,
+       2
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      2,
+      2
+     ],
+     "english": [
+      2,
+      2
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       2
+      ],
+      "false-polarity": [
+       0,
+       2
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      2,
+      2
+     ],
+     "english": [
+      2,
+      2
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       2
+      ],
+      "false-polarity": [
+       0,
+       2
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "unresolved"
+  },
+  {
+   "name": "harm-takes-precedence-over-other-unresolved-cell",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      200,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      2,
+      2
+     ],
+     "english": [
+      2,
+      2
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       2
+      ],
+      "false-polarity": [
+       0,
+       2
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "opposes_profile"
+  },
+  {
+   "name": "one-separately-elicited-error-fails",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       150,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "opposes_profile"
+  },
+  {
+   "name": "large-positive-delta-does-not-excuse-poor-english-accuracy",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      200,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "opposes_profile"
+  },
+  {
+   "name": "confirmed-loss-veto",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": true,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "confirmed_loss_veto"
+  },
+  {
+   "name": "legacy-must-stay-legacy",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": false,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "legacy_unchanged"
+  },
+  {
+   "name": "original-unconfirmed",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": false,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "unconfirmed_or_replica_incomplete"
+  },
+  {
+   "name": "fresh-replication-not-passing",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": false,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "unconfirmed_or_replica_incomplete"
+  },
+  {
+   "name": "comparator-mismatch",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": false,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "comparator_mismatch"
+  },
+  {
+   "name": "positive-allowance-not-benefit",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": 4,
+     "o200k_base": 4,
+     "p50k_base": 4
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "no_demonstrated_benefit"
+  },
+  {
+   "name": "overall-cost-too-close-to-zero",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -0.5,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "no_demonstrated_benefit"
+  },
+  {
+   "name": "exactly-one-token-saved",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -1,
+     "o200k_base": -1,
+     "p50k_base": -1
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -1,
+      "o200k_base": -1,
+      "p50k_base": -1
+     },
+     "form-b": {
+      "cl100k_base": -1,
+      "o200k_base": -1,
+      "p50k_base": -1
+     }
+    }
+   },
+   "expected": "profile_and_benefit_satisfied_not_ratified"
+  },
+  {
+   "name": "missing-tokenizer",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "no_demonstrated_benefit"
+  },
+  {
+   "name": "one-form-loses",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": 1,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "no_demonstrated_benefit"
+  },
+  {
+   "name": "missing-form-benefit",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {}
+   },
+   "expected": "no_demonstrated_benefit"
+  },
+  {
+   "name": "declared-cluster-duplicates",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": false,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "invalid_sampling"
+  },
+  {
+   "name": "other-promises-unfinished",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": false,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "other_promises_incomplete"
+  },
+  {
+   "name": "missing-reader-form",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "duplicate-reader-form",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "unasked-endpoint",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "posthoc-endpoint",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ],
+      "posthoc-error": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "bad-count-True",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      true,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "bad-count-1.5",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      1.5,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "bad-count--1",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      -1,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "bad-count-513",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      513,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "zero-denominator",
+   "source": "acceptance-pack-2026-11-10",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      0,
+      0
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "renamed-reader-is-not-the-inventory-reader",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-c",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "extra-reader-form",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-c",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "deleting-an-endpoint-cannot-hide-a-harmful-cell",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      200,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       512
+      ],
+      "false-polarity": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "refuse_malformed"
+  },
+  {
+   "name": "smallest-all-correct-family-that-can-support",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      126,
+      126
+     ],
+     "english": [
+      126,
+      126
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       126
+      ],
+      "false-polarity": [
+       0,
+       126
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      126,
+      126
+     ],
+     "english": [
+      126,
+      126
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       126
+      ],
+      "false-polarity": [
+       0,
+       126
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      126,
+      126
+     ],
+     "english": [
+      126,
+      126
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       126
+      ],
+      "false-polarity": [
+       0,
+       126
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      126,
+      126
+     ],
+     "english": [
+      126,
+      126
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       126
+      ],
+      "false-polarity": [
+       0,
+       126
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "profile_and_benefit_satisfied_not_ratified"
+  },
+  {
+   "name": "one-observation-short-of-support",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      125,
+      125
+     ],
+     "english": [
+      125,
+      125
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       125
+      ],
+      "false-polarity": [
+       0,
+       125
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      125,
+      125
+     ],
+     "english": [
+      125,
+      125
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       125
+      ],
+      "false-polarity": [
+       0,
+       125
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      125,
+      125
+     ],
+     "english": [
+      125,
+      125
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       125
+      ],
+      "false-polarity": [
+       0,
+       125
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      125,
+      125
+     ],
+     "english": [
+      125,
+      125
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       125
+      ],
+      "false-polarity": [
+       0,
+       125
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "unresolved"
+  },
+  {
+   "name": "delta-lower-short-while-floors-and-caps-pass",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      3760,
+      4000
+     ],
+     "english": [
+      3996,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "unresolved"
+  },
+  {
+   "name": "delta-upper-below-margin-while-accuracy-upper-clears-the-floor",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "reader-a",
+     "form": "form-a",
+     "marked": [
+      3640,
+      4000
+     ],
+     "english": [
+      3996,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-a",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-a",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    },
+    {
+     "reader": "reader-b",
+     "form": "form-b",
+     "marked": [
+      4000,
+      4000
+     ],
+     "english": [
+      4000,
+      4000
+     ],
+     "errors": {
+      "false-authority": [
+       0,
+       4000
+      ],
+      "false-polarity": [
+       0,
+       4000
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "form-a": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "form-b": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "opposes_profile"
+  }
+ ]
+}
