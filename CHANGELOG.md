@@ -4,7 +4,9 @@
 
 - Add report-only separate-call paired-study execution and raw-answer replay,
   with complete twin rosters, all-or-nothing pair correctness, distinct point
-  weighting/resampling declarations and durable-call journalling hooks. This
+  weighting/resampling declarations, shared canonical commitments, per-arm
+  duplicate-input checks and durable-call journalling hooks. Reports flag pairs
+  compatible with constant responses instead of implying distinction. This
   does not emit official comprehension evidence or change live scientific gates.
 
 ## 0.2.68 — 2026-11-09

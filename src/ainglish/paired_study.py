@@ -10,7 +10,8 @@ from __future__ import annotations
 from copy import deepcopy
 from fractions import Fraction
 import hashlib
-import json
+
+from .client import _canonical_json
 
 KIND = "ainglish.separate-call-pairs.v1"
 ARMS = ("english", "ainglish")
@@ -24,8 +25,7 @@ _POLICY = {
 
 
 def _bytes(value):
-    return json.dumps(value, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False, allow_nan=False).encode("utf-8")
+    return _canonical_json(value).encode("utf-8")
 
 
 def _digest(value):
@@ -109,8 +109,18 @@ def validate(plan):
                 raise ValueError("options must be distinct and contain the exact gold label")
             # A repeated occurrence is a fresh call, never a reused response. It
             # cannot simultaneously count as a newly independent bootstrap unit.
-            content = _digest({k: twin[k] for k in ("english", "ainglish", "question", "options", "answer")})
-            for index, key in ((worlds, twin["world_id"]), (contents, content)):
+            for arm in ARMS:
+                # Fingerprint what the reader actually sees, not the hidden gold,
+                # the other arm, or author-assigned IDs. Cross-arm repeats count too.
+                content = _digest({"text": twin[arm], "question": twin["question"], "options": options})
+                previous = contents.get(content)
+                if previous is not None:
+                    if previous[2] != twin["answer"]:
+                        raise ValueError("identical reader inputs have conflicting gold answers")
+                    if previous[0] != pair_id and (plan["resampling_unit"] != "family" or previous[1] != family):
+                        raise ValueError("repeated worlds/content across pairs require one shared resampling family")
+                contents[content] = (pair_id, family, twin["answer"])
+            for index, key in ((worlds, twin["world_id"]),):
                 previous = index.get(key)
                 if previous is not None and previous[0] != pair_id:
                     if plan["resampling_unit"] != "family" or previous[1] != family:
@@ -179,7 +189,12 @@ def execute(plan, ask_fn, *, registration, record):
             # Do not include exception text: a transport exception may contain a key.
             row = {"key": key, "status": "fault", "answer": None, "fault": type(exc).__name__}
             rows.append(row)
-            record({"event": "completed", "plan_sha256": digest, **deepcopy(row)})
+            try:
+                record({"event": "completed", "plan_sha256": digest, **deepcopy(row)})
+            except BaseException as journal_error:
+                # Suppress the transport error's potentially secret-bearing context
+                # even when writing its sanitized completion event also fails.
+                raise journal_error from None
             receipt = _receipt(digest, registration, rows, "aborted")
             if isinstance(exc, (KeyboardInterrupt, SystemExit)):
                 exc.paired_study_receipt = receipt
@@ -213,9 +228,14 @@ def replay(plan, receipt):
     per-answer accuracy estimate, or independent replication.
     """
     digest = validate(plan)
+    if not isinstance(receipt, dict):
+        raise ValueError("receipt must be an object")
     if receipt.get("kind") != "ainglish.separate-call-pairs.journal.v1" or receipt.get("state") != "complete":
         raise ValueError("only a complete paired-study journal can be scored")
-    if receipt.get("plan_sha256") != digest or receipt.get("registration", {}).get("plan_sha256") != digest:
+    registration = receipt.get("registration")
+    _closed(registration, ("reference", "plan_sha256"), "registration")
+    _text(registration["reference"], "registration.reference")
+    if receipt.get("plan_sha256") != digest or registration["plan_sha256"] != digest:
         raise ValueError("plan digest mismatch")
     rows = receipt.get("rows")
     if not isinstance(rows, list) or receipt.get("rows_sha256") != _digest(rows):
@@ -251,19 +271,17 @@ def replay(plan, receipt):
     units = sorted(groups)
     samples = []
     # Domain-separated SHA-256 counter stream. Version and draw count are fixed.
-    counter = 0
+    indices = _bootstrap_indices(plan["seed"], len(units))
     for _ in range(2000):
         selected = []
         for _ in units:
-            h = _digest([KIND, "bootstrap", plan["seed"], counter])
-            counter += 1
-            selected.extend(groups[units[int(h, 16) % len(units)]])
+            selected.extend(groups[units[next(indices)]])
         samples.append(sum((by_pair[p] for p in selected), Fraction()) / len(selected))
     samples.sort()
     n = len(samples)
-    # Fixed nearest-rank bounds, not the ordinary harness's interpolated quantile.
-    low, high = samples[(n * 25 + 999) // 1000 - 1], samples[(n * 975 + 999) // 1000 - 1]
+    low, high = _interval(samples)
     point = sum(by_pair.values(), Fraction()) / len(by_pair)
+    constant_pairs = [p["id"] for p in plan["pairs"] if p["twins"][0]["answer"] == p["twins"][1]["answer"]]
     return {"kind": "ainglish.separate-call-pairs.report.v1", "governance_effect": "report_only",
             "plan_sha256": digest, "journal_sha256": receipt["rows_sha256"],
             "pair_accuracy_delta_pp": float(point), "bootstrap_95_percentile_interval_pp": [float(low), float(high)],
@@ -271,8 +289,24 @@ def replay(plan, receipt):
             "resampling_unit": plan["resampling_unit"], "resampling_units": len(units),
             "readers_held_fixed": True, "bootstrap_draws": n, "quantiles": "nearest-rank-0.025-0.975",
             "pairs": len(by_pair), "reader_pair_scores": len(cells), "separate_calls": len(rows),
+            "constant_response_compatible_pairs": constant_pairs,
             "pair_scores": cells, "population_scope": plan["population_scope"],
             "limitations": ["External registration reference is not authenticated by this instrument.",
                             "Sampling/reader independence and semantic golds are author declarations, not verified here.",
+                            "Pairs listed as constant-response-compatible can be correct without distinguishing the twins.",
                             "Percentile bootstrap can degenerate at boundaries; zero width is not zero uncertainty.",
                             "No official comprehension measurement or gate completion is emitted."]}
+
+
+def _bootstrap_indices(seed, unit_count):
+    """Portable stream, with one counter across all draws, not reset per draw."""
+    counter = 0
+    while True:
+        yield int(_digest([KIND, "bootstrap", seed, counter]), 16) % unit_count
+        counter += 1
+
+
+def _interval(sorted_samples):
+    """Fixed nearest-rank 2.5/97.5 percentiles of a nonempty sorted sample."""
+    n = len(sorted_samples)
+    return sorted_samples[(n * 25 + 999) // 1000 - 1], sorted_samples[(n * 975 + 999) // 1000 - 1]

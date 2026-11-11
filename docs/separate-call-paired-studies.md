@@ -28,8 +28,12 @@ The strict `ainglish.separate-call-pairs.v1` schema binds:
   **resampling**. Family bootstrap concatenates all pairs in each sampled family;
   it does not silently switch the point estimate to equal-family weighting.
 - No response reuse: a repeated world appearing in another pair is another call.
-  Repeated worlds or exact repeated content across pairs require a shared family
-  and family resampling. IDs cannot prove that differently worded worlds are IID.
+  Repeated worlds or exact reader inputs across pairs require a shared family
+  and family resampling. Each arm is fingerprinted separately as message,
+  question and options, excluding golds and IDs; changing only the other arm or
+  a hidden answer cannot evade the check. Identical inputs with conflicting
+  golds are refused. IDs and literal uniqueness cannot prove that differently
+  worded worlds are independent.
 - No retries or incomplete-pair deletion. A fault, absent answer or off-option
   response stops the study and leaves every started/completed event visible.
 
@@ -38,6 +42,11 @@ question and option list. The callback must start a fresh conversation each time
 the library cannot inspect a remote provider's hidden state. It receives no gold,
 second twin, previous response or joint prompt. Calls are ordered by a seed/key
 hash independent of the gold labels. A wrong answer does not skip the other twin.
+Twins with the same gold are admitted but listed in the report's
+`constant_response_compatible_pairs`: a constant response can get both right,
+so their pair accuracy alone does not demonstrate distinguishing the worlds.
+The synthetic example uses contrasting golds, on which an all-`x` reader fails
+every pair. Semantic distinctions and answer validity still need review.
 
 ## Execution and durable receipts
 
@@ -47,6 +56,8 @@ requires a registration object containing `reference` and that exact
 `plan_sha256`. This reference is caller-attested, **not authenticated by this
 module**. It is not itself proof of mint-before-spend. Only use real readers after
 the applicable protocol accepts the study and its preregistration is confirmed.
+All hashes use the SDK's shared PHP-compatible canonical JSON bytes, including
+escaped U+2028/U+2029, encoded as UTF-8.
 
 `record(event)` must durably append each event (including flushing/syncing when
 required) before returning. A start is recorded before asking; an outcome is
@@ -66,6 +77,15 @@ readers and nearest-rank 2.5/97.5 percentiles. It explicitly states its resampli
 unit and limitations. Boundary results can have degenerate bootstrap intervals;
 zero width does not establish certainty. This is not the ordinary harness's
 single-item attestation or an exact population guarantee.
+
+For an independent replay, sort unit IDs lexically. For each of 2,000 draws,
+select `number_of_units` indices with replacement. Index `counter` is
+`int(SHA256(canonical_json(["ainglish.separate-call-pairs.v1", "bootstrap",
+seed, counter])), 16) % number_of_units`; the counter starts at zero once and
+continues across draws. Concatenate the pairs in the selected units (including
+repeated selections), average their equal-reader pair contrasts, then sort the
+2,000 draw means. The interval endpoints are zero-based positions 49 and 1949
+(nearest ranks 50 and 1950), not interpolated quantiles or the extreme draws.
 
 ## Remaining admission work
 
