@@ -5,9 +5,16 @@
 - Add `ainglish.preservation`, the numeric core of the proposed evidence profile
   `exact-binomial-preservation-v1` (protocol row a-9mvh2ph6g1fnw0a1): Clopper-Pearson bounds at
   the family tail, per-cell verdicts, the token-benefit test and the reference outcome order,
-  checked against `tests/fixtures/exact-binomial-preservation-v1.json`, whose bounds come from an
-  independent 60-digit inversion. Nothing calls it yet: no contract, mint, journal, settlement or
-  served harness file changes, and the profile is not live on the register.
+  checked against `tests/fixtures/exact-binomial-preservation-v1.json`, whose expectations come
+  from arithmetic written apart from the module. Every inequality of the rule is decided in
+  integers, with no tolerance: a bound against a fixed threshold is one exact comparison of a
+  binomial tail, and two bounds against each other are separated by a fixed halving schedule.
+  An inequality that cannot be certified (a count above 4,096, or 64 halvings that separate
+  nothing) is reported as undecided, and a verdict that hangs on one is `numerically_unresolved`,
+  a label of its own that never hides a certain opposition. The floating-point bounds are for
+  display only. `outcome` requires every context fact and raises `ContextRefused` on a missing or
+  non-boolean one. Nothing calls the module yet: no contract, mint, journal, settlement or served
+  harness file changes, and the profile is not live on the register.
 
 ## 0.2.68 — 2026-11-09
 

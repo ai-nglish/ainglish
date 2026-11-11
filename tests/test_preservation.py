@@ -1,4 +1,9 @@
-"""The exact-binomial preservation core against the shared vector file (protocol row a-9mvh2ph6g1fnw0a1)."""
+"""The exact-binomial preservation core against the shared vector file (protocol row a-9mvh2ph6g1fnw0a1).
+
+Every expectation in the vector file comes from arithmetic written apart from the module: decimal
+bisection for the bounds, integer tail sums for a bound against a threshold, the halving schedule
+followed in decimals for two bounds against each other (see tools/gen_preservation_vectors.py).
+"""
 import copy
 import hashlib
 import json
@@ -6,6 +11,7 @@ import math
 import unittest
 from fractions import Fraction
 from pathlib import Path
+from unittest import mock
 
 from ainglish import preservation as P
 
@@ -19,7 +25,21 @@ def tail_of(text):
     return fraction.numerator / fraction.denominator
 
 
-class BoundTests(unittest.TestCase):
+def case_named(name):
+    return next(c for c in VECTORS["cases"] if c["name"] == name)
+
+
+def sum_arguments(row):
+    """A delta case as the arguments of compare_lower_sum, and the sign that means the rule holds."""
+    (mk, mn), (ek, en), m = row["marked"], row["english"], row["family_size"]
+    if row["rule"] == "supports":  # L(marked) - U(English) >= -1/20
+        return (mk, mn, en - ek, en, m, 19, 20), (lambda sign: sign >= 0)
+    return (mn - mk, mn, ek, en, m, 21, 20), (lambda sign: sign > 0)  # U(marked) - L(English) < -1/20
+
+
+class DisplayBoundTests(unittest.TestCase):
+    """The floating-point bounds a receipt shows. No decision reads them."""
+
     def test_bounds_match_the_independent_high_precision_inversion(self):
         tolerance = float(VECTORS["bound_tolerance"])
         self.assertGreater(len(VECTORS["bounds"]), 90)
@@ -56,18 +76,170 @@ class BoundTests(unittest.TestCase):
                     self.assertAlmostEqual(P.cdf(k, n, p), direct, delta=1e-12)
 
 
+class ThresholdTests(unittest.TestCase):
+    """A bound against a fixed threshold, decided in integers."""
+
+    def test_every_threshold_case_has_the_sign_of_the_integer_tail_sum(self):
+        self.assertGreater(len(VECTORS["threshold_cases"]), 90)
+        for row in VECTORS["threshold_cases"]:
+            t = Fraction(row["threshold"])
+            compare = P.compare_lower if row["bound"] == "lower" else P.compare_upper
+            self.assertEqual(compare(row["k"], row["n"], row["family_size"], t.numerator, t.denominator), row["sign"], row)
+
+    def test_the_vector_file_holds_true_boundaries_and_both_sides_of_them(self):
+        signs = [row["sign"] for row in VECTORS["threshold_cases"]]
+        self.assertEqual(signs.count(0), 4)
+        self.assertGreater(signs.count(1), 20)
+        self.assertGreater(signs.count(-1), 20)
+
+    def test_a_bound_exactly_on_its_threshold_is_neither_above_nor_below(self):
+        # 2 of 2 at a family of 10: the lower bound is (1/400)^(1/2) = 1/20, the error cap itself.
+        self.assertEqual(P.compare_lower(2, 2, 10, 1, 20), 0)
+        # 0 of 3 at a family of 25: the upper bound is 1 - (1/1000)^(1/3) = 9/10, the accuracy floor itself.
+        self.assertEqual(P.compare_upper(0, 3, 25, 9, 10), 0)
+        # In the rule: "above the cap" opposes, and equal is not above. One endpoint more or less in the
+        # family moves the tail and with it the answer.
+        cell = {"reader": "r", "form": "f", "marked": [2, 2], "english": [2, 2]}
+        at_ten = {"readers": ["r", "s"], "forms": ["f"], "error_endpoints": ["e1", "e2", "e3"]}
+        at_eight = {"readers": ["r", "s"], "forms": ["f"], "error_endpoints": ["e1", "e2"]}
+        self.assertEqual((P.family_size(at_ten), P.family_size(at_eight)), (10, 8))
+        for inventory, expected in ((at_ten, False), (at_eight, True)):
+            cells = [dict(cell, reader=reader, errors={e: [2, 2] if e == "e1" else [0, 2] for e in inventory["error_endpoints"]})
+                     for reader in inventory["readers"]]
+            result = P.evaluate(inventory, cells)
+            self.assertIs(result["cells"][0]["decisions"]["opposes"]["error_cap"], expected, inventory)
+            self.assertEqual(result["profile_state"], "opposes" if expected else "unresolved")
+        # The floor likewise: "below the floor" opposes, and an upper bound of exactly 9/10 is not below it.
+        at_twenty_five = {"readers": ["r1", "r2", "r3", "r4", "r5"], "forms": ["f"], "error_endpoints": ["e1", "e2", "e3"]}
+        # A smaller family has a larger tail and so a tighter bound: at 20 the same upper bound is below 9/10.
+        at_twenty = dict(at_twenty_five, readers=["r1", "r2", "r3", "r4"])
+        self.assertEqual((P.family_size(at_twenty_five), P.family_size(at_twenty)), (25, 20))
+        for inventory, expected in ((at_twenty_five, False), (at_twenty, True)):
+            cells = [{"reader": reader, "form": "f", "marked": [0, 3], "english": [3, 3], "errors": {e: [0, 3] for e in inventory["error_endpoints"]}}
+                     for reader in inventory["readers"]]
+            result = P.evaluate(inventory, cells)
+            self.assertIs(result["cells"][0]["decisions"]["opposes"]["accuracy_floor"], expected, inventory)
+            self.assertEqual(result["profile_state"], "opposes" if expected else "unresolved")
+
+    def test_thresholds_outside_the_unit_interval_and_empty_counts_need_no_arithmetic(self):
+        self.assertEqual([P.compare_lower(0, 5, 3, num, 7) for num in (-1, 0, 1)], [1, 0, -1])
+        self.assertEqual([P.compare_lower(3, 5, 3, num, 7) for num in (-1, 0, 7, 9)], [1, 1, -1, -1])
+        self.assertEqual([P.compare_upper(5, 5, 3, num, 7) for num in (6, 7, 8)], [1, 0, -1])
+        self.assertEqual([P.compare_upper(2, 5, 3, num, 7) for num in (-1, 0, 7, 9)], [1, 1, -1, -1])
+
+    def test_a_reducible_threshold_is_the_same_threshold(self):
+        for k in range(0, 21):
+            self.assertEqual(P.compare_lower(k, 20, 16, 9, 10), P.compare_lower(k, 20, 16, 900, 1000))
+            self.assertEqual(P.compare_upper(k, 20, 16, 1, 20), P.compare_upper(k, 20, 16, 64, 1280))
+
+    def test_counts_above_the_ceiling_are_not_compared(self):
+        top = P.MAX_OBSERVATIONS
+        self.assertEqual(top, VECTORS["precision"]["max_observations"])
+        self.assertEqual(P.compare_lower(top, top, 16, 9, 10), 1)
+        self.assertIsNone(P.compare_lower(top + 1, top + 1, 16, 9, 10))
+        self.assertIsNone(P.compare_upper(0, top + 1, 16, 1, 20))
+        self.assertIsNone(P.compare_lower_sum(top + 1, top + 1, 5, 9, 16, 19, 20))
+        self.assertIsNone(P.compare_lower_sum(5, 9, 0, top + 1, 16, 19, 20))
+
+    def test_malformed_comparisons_are_refused(self):
+        for arguments in ((True, 2, 3, 1, 2), (1, 2, True, 1, 2), (1, 2, 0, 1, 2), (3, 2, 3, 1, 2), (1, 2, 3, 0.5, 2),
+                          (1, 2, 3, 1, 0), (1, 2, 3, 1, -2), (1, 2, 3, "1", 2)):
+            with self.assertRaises(P.MalformedPreservation, msg=arguments):
+                P.compare_lower(*arguments)
+            with self.assertRaises(P.MalformedPreservation, msg=arguments):
+                P.compare_upper(*arguments)
+        for arguments in ((1, 2, 1, 2, 3, -1, 20), (1, 2, 1, 2, 3, 41, 20), (1, 2, 1, 2, 3, 19, 20, -1), (1, 2, 1, 2, 3, 19, 20, 2.0)):
+            with self.assertRaises(P.MalformedPreservation, msg=arguments):
+                P.compare_lower_sum(*arguments)
+
+
+class DeltaTests(unittest.TestCase):
+    """Two bounds against each other: the fixed halving schedule, and the edge where it stops short."""
+
+    def test_every_delta_case_is_undecided_until_its_halving_and_right_from_then_on(self):
+        self.assertGreater(max(row["decided_at"] for row in VECTORS["delta_cases"]), 20)
+        for row in VECTORS["delta_cases"]:
+            arguments, holds = sum_arguments(row)
+            at = row["decided_at"]
+            self.assertIsNone(P.compare_lower_sum(*arguments, at - 1), row)
+            for limit in (at, at + 1, P.MAX_HALVINGS):
+                self.assertIs(holds(P.compare_lower_sum(*arguments, limit)), row["holds"], (row, limit))
+            self.assertIs(holds(P.compare_lower_sum(*arguments)), row["holds"], row)
+
+    def test_an_estimate_buys_speed_and_never_an_answer(self):
+        nonsense = [(0.25, 0.75), (0.9, 0.05), (2.5, -1.0), (float("nan"), 0.5), (0.5, float("inf")), (0.5, 0.5),
+                    (1, 0), ("0.9", "0.05"), (0.9,), None, "nearly", [0.97, 0.0003]]
+        for row in VECTORS["delta_cases"]:
+            arguments, _ = sum_arguments(row)
+            tail = P.family_tail(row["family_size"])
+            real = (P.lower(arguments[0], arguments[1], tail), P.lower(arguments[2], arguments[3], tail))
+            plain = P.compare_lower_sum(*arguments)
+            for estimates in [real, real[::-1]] + nonsense:
+                self.assertEqual(P.compare_lower_sum(*arguments, P.MAX_HALVINGS, estimates), plain, (row, estimates))
+            # Nor does it reach past a halving limit that the schedule alone cannot reach past.
+            for limit in range(0, row["decided_at"] + 2):
+                self.assertEqual(P.compare_lower_sum(*arguments, limit, real), P.compare_lower_sum(*arguments, limit), (row, limit))
+
+    def test_a_good_estimate_settles_every_case_at_its_first_point(self):
+        for row in VECTORS["delta_cases"]:
+            arguments, _ = sum_arguments(row)
+            tail = P.family_tail(row["family_size"])
+            real = (P.lower(arguments[0], arguments[1], tail), P.lower(arguments[2], arguments[3], tail))
+            with mock.patch.object(P, "compare_lower", wraps=P.compare_lower) as counted:
+                P.compare_lower_sum(*arguments, P.MAX_HALVINGS, real)
+                self.assertEqual(counted.call_count, 2, row)
+                counted.reset_mock()
+                P.compare_lower_sum(*arguments)
+                self.assertEqual(counted.call_count, 2 * row["decided_at"], row)
+
+    def test_an_estimate_that_is_right_still_cannot_reach_past_the_halving_limit(self):
+        # Aim an estimate exactly at the midpoint the schedule finds at its halving D. Asked there the answer is
+        # certain, but at a limit of D - 1 the schedule cannot reach that point, so the estimate may not either.
+        for row in VECTORS["delta_cases"]:
+            arguments, _ = sum_arguments(row)
+            at, point = row["decided_at"], Fraction(row["point"])
+            places = at - 2
+            self.assertEqual(point.denominator, 2 ** places, row)
+            spread = 3.0 / 2 ** places
+            aimed = (float(point) + spread, arguments[5] / arguments[6] - (float(point) - spread))
+            self.assertEqual(P._shortcut(aimed, arguments[5], arguments[6], P.MAX_HALVINGS), (point.numerator, point.denominator), row)
+            self.assertIsNone(P._shortcut(aimed, arguments[5], arguments[6], at - 1), row)
+            self.assertIsNone(P.compare_lower_sum(*arguments, at - 1, aimed), row)
+            self.assertEqual(P.compare_lower_sum(*arguments, at, aimed), P.compare_lower_sum(*arguments, at), row)
+
+    def test_a_sum_with_an_empty_count_is_a_plain_threshold_test(self):
+        self.assertEqual(P.compare_lower_sum(0, 9, 126, 126, 16, 19, 20, 0), P.compare_lower(126, 126, 16, 19, 20))
+        self.assertEqual(P.compare_lower_sum(125, 125, 0, 9, 16, 19, 20, 0), P.compare_lower(125, 125, 16, 19, 20))
+
+    def test_depth_cases_reach_the_verdicts_the_vector_file_names(self):
+        self.assertEqual(len(VECTORS["depth_cases"]), 8)
+        for case in VECTORS["depth_cases"]:
+            result = P.evaluate(case["inventory"], case["cells"], case["max_halvings"])
+            self.assertEqual([cell["verdict"] for cell in result["cells"]], case["verdicts"], case["name"])
+            self.assertEqual(result["profile_state"], case["profile_state"], case["name"])
+            self.assertEqual(result["precision"]["max_halvings"], case["max_halvings"])
+
+    def test_an_undecided_inequality_is_reported_as_none_beside_the_decided_ones(self):
+        case = next(c for c in VECTORS["depth_cases"] if c["name"] == "one-halving-short-of-settling-the-delta")
+        decisions = P.evaluate(case["inventory"], case["cells"], case["max_halvings"])["cells"][0]["decisions"]
+        self.assertEqual(decisions["supports"], {"accuracy_floor": True, "error_cap": True, "delta_margin": None})
+        self.assertEqual(decisions["opposes"], {"accuracy_floor": False, "error_cap": False, "delta_margin": False})
+
+
 class FamilyTests(unittest.TestCase):
     def test_family_size_and_tail_come_from_the_inventory(self):
         self.assertEqual(P.family_size(VECTORS["inventory"]), 16)
         self.assertEqual(P.tail_fraction(16), "1/640")
         self.assertAlmostEqual(P.family_tail(16), 1 / 640, delta=1e-18)
+        both_arms = case_named("both-arms-family-of-24-at-its-minimum")["inventory"]
+        self.assertEqual((P.family_size(both_arms), P.tail_fraction(24)), (24, "1/960"))
 
     def test_minimum_per_cell_matches_the_published_minima(self):
         for row in VECTORS["minimum_per_cell"]:
             self.assertEqual(P.minimum_per_cell(row["family_size"]), row["n"], row)
 
     def test_shared_inventory_cases_are_judged_as_the_vector_file_says(self):
-        self.assertEqual(len(VECTORS["inventory_cases"]), 15)
+        self.assertEqual(len(VECTORS["inventory_cases"]), 16)
         for case in VECTORS["inventory_cases"]:
             if case["accepted"]:
                 self.assertEqual(P.family_size(case["inventory"]), case["family_size"], case["name"])
@@ -85,51 +257,79 @@ class FamilyTests(unittest.TestCase):
 
 class CaseTests(unittest.TestCase):
     def test_every_shared_case_reaches_its_expected_outcome(self):
-        self.assertEqual(len(VECTORS["cases"]), 40)
+        self.assertEqual(len(VECTORS["cases"]), 52)
         for case in VECTORS["cases"]:
-            actual = P.outcome(VECTORS["inventory"], case["cells"], **case["context"])
+            actual = P.outcome(case.get("inventory", VECTORS["inventory"]), case["cells"], **case["context"])
             self.assertEqual(actual, case["expected"], case["name"])
 
+    def test_no_decision_reads_a_display_bound(self):
+        # Replace both display bounds with nonsense: every outcome and every verdict must stay where it was.
+        expected = [P.evaluate(c["inventory"], c["cells"], c["max_halvings"])["profile_state"] for c in VECTORS["depth_cases"]]
+        for wrong in (lambda k, n, tail: 0.5, lambda k, n, tail: float("nan"), lambda k, n, tail: 1.0 - k / n):
+            with mock.patch.object(P, "lower", wrong), mock.patch.object(P, "upper", wrong):
+                for case in VECTORS["cases"]:
+                    actual = P.outcome(case.get("inventory", VECTORS["inventory"]), case["cells"], **case["context"])
+                    self.assertEqual(actual, case["expected"], case["name"])
+                self.assertEqual([P.evaluate(c["inventory"], c["cells"], c["max_halvings"])["profile_state"]
+                                  for c in VECTORS["depth_cases"]], expected)
+
+    def test_a_missing_or_non_boolean_context_fact_is_refused_never_passed(self):
+        cells = case_named("complete-large-ceiling")["cells"]
+        self.assertEqual(len(VECTORS["context_cases"]), 19)
+        for case in VECTORS["context_cases"]:
+            with self.assertRaises(TypeError, msg=case["name"]):
+                P.outcome(VECTORS["inventory"], cells, **case["context"])
+        full = case_named("complete-large-ceiling")["context"]
+        self.assertEqual(set(full), set(P.CONTEXT_FLAGS) | {"token_means", "token_form_means"})
+        with self.assertRaises(P.ContextRefused):
+            P.outcome(VECTORS["inventory"], cells, **dict(full, confirmed=1))
+        with self.assertRaises(TypeError):
+            P.outcome(VECTORS["inventory"], cells)
+
+    def test_no_token_evidence_is_no_benefit(self):
+        case = case_named("complete-large-ceiling")
+        context = dict(case["context"], token_means=None, token_form_means=None)
+        self.assertEqual(P.outcome(VECTORS["inventory"], case["cells"], **context), P.NO_DEMONSTRATED_BENEFIT)
+
     def test_non_finite_and_boolean_token_means_are_no_benefit(self):
-        case = next(c for c in VECTORS["cases"] if c["name"] == "complete-large-ceiling")
+        case = case_named("complete-large-ceiling")
         for bad in (float("nan"), float("inf"), float("-inf"), True, "-2"):
             context = copy.deepcopy(case["context"])
             context["token_means"]["o200k_base"] = bad
             self.assertEqual(P.outcome(VECTORS["inventory"], case["cells"], **context), P.NO_DEMONSTRATED_BENEFIT, bad)
 
-    def test_evaluation_exposes_counts_and_bounds_for_every_cell(self):
-        case = next(c for c in VECTORS["cases"] if c["name"] == "complete-large-ceiling")
-        result = P.evaluate(VECTORS["inventory"], case["cells"])
+    def test_evaluation_exposes_counts_bounds_decisions_and_the_precision_policy(self):
+        result = P.evaluate(VECTORS["inventory"], case_named("complete-large-ceiling")["cells"])
         self.assertEqual((result["analysis"], result["family_size"], result["tail_fraction"], result["profile_state"]),
                          (P.ANALYSIS, 16, "1/640", "supports"))
+        self.assertEqual((result["precision"]["max_halvings"], result["precision"]["max_observations"]),
+                         (P.MAX_HALVINGS, P.MAX_OBSERVATIONS))
         self.assertEqual([(c["reader"], c["form"]) for c in result["cells"]],
                          [("reader-a", "form-a"), ("reader-a", "form-b"), ("reader-b", "form-a"), ("reader-b", "form-b")])
         cell = result["cells"][0]
         self.assertEqual((cell["marked"]["events"], cell["marked"]["observations"]), (512, 512))
         self.assertAlmostEqual(100 * cell["delta_lower"], -1.2540756073702308, delta=1e-10)
         self.assertEqual(set(cell["errors"]), {"false-authority", "false-polarity"})
+        self.assertEqual(cell["decisions"], {"supports": {"accuracy_floor": True, "error_cap": True, "delta_margin": True},
+                                             "opposes": {"accuracy_floor": False, "error_cap": False, "delta_margin": False}})
+
+    def test_a_cell_above_the_ceiling_shows_counts_and_no_bounds(self):
+        cells = case_named("observations-above-the-ceiling-are-not-judged")["cells"]
+        result = P.evaluate(VECTORS["inventory"], cells)
+        cell = result["cells"][0]
+        self.assertEqual(cell["marked"], {"events": P.MAX_OBSERVATIONS + 1, "observations": P.MAX_OBSERVATIONS + 1, "lower": None, "upper": None})
+        self.assertIsNone(cell["delta_lower"])
+        self.assertEqual(set(cell["decisions"]["supports"].values()) | set(cell["decisions"]["opposes"].values()), {None})
+        self.assertEqual((cell["verdict"], result["profile_state"]), ("numerically_unresolved", "numerically_unresolved"))
 
     def test_a_harmful_cell_opposes_whatever_the_pooled_rate_says(self):
-        cells = copy.deepcopy(next(c for c in VECTORS["cases"] if c["name"] == "complete-large-ceiling")["cells"])
+        cells = copy.deepcopy(case_named("complete-large-ceiling")["cells"])
         cells[2]["marked"] = [200, 512]
         pooled = sum(c["marked"][0] for c in cells) / sum(c["marked"][1] for c in cells)
         self.assertGreater(pooled, 0.84)
         result = P.evaluate(VECTORS["inventory"], cells)
         self.assertEqual([c["verdict"] for c in result["cells"]], ["supports", "supports", "opposes", "supports"])
         self.assertEqual(result["profile_state"], "opposes")
-
-    def test_a_bound_inside_the_tie_band_is_unresolved_not_a_verdict(self):
-        inventory = {"readers": ["r"], "forms": ["f"], "error_endpoints": ["e"]}
-        cells = [{"reader": "r", "form": "f", "marked": [400, 400], "english": [400, 400], "errors": {"e": [0, 400]}}]
-        original = P.ERROR_CAP
-        exact_upper = P.evaluate(inventory, cells)["cells"][0]["errors"]["e"]["upper"]
-        try:
-            P.ERROR_CAP = exact_upper + P.TIE_BAND / 2  # the bound now sits inside the band below the cap
-            self.assertEqual(P.evaluate(inventory, cells)["cells"][0]["verdict"], "unresolved")
-            P.ERROR_CAP = exact_upper + 3 * P.TIE_BAND  # clear of the band
-            self.assertEqual(P.evaluate(inventory, cells)["cells"][0]["verdict"], "supports")
-        finally:
-            P.ERROR_CAP = original
 
 
 class FixtureTests(unittest.TestCase):
@@ -138,7 +338,17 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(tool.read_bytes()).hexdigest(), VECTORS["generated_by"]["tool_sha256"])
         self.assertEqual(VECTORS["analysis"], P.ANALYSIS)
         self.assertEqual(tuple(VECTORS["token_encodings"]), P.TOKEN_ENCODINGS)
-        self.assertEqual(float(VECTORS["tie_band"]), P.TIE_BAND)
+
+    def test_fixture_declares_the_thresholds_and_the_precision_policy_the_module_uses(self):
+        self.assertEqual(VECTORS["thresholds"], {"delta_margin": "%d/%d" % P.EXACT_DELTA_MARGIN, "accuracy_floor": "%d/%d" % P.EXACT_ACCURACY_FLOOR,
+                                                 "error_cap": "%d/%d" % P.EXACT_ERROR_CAP})
+        # The plain numbers a contract carries are the same thresholds, and are never what a decision reads.
+        for plain, exact in ((P.DELTA_MARGIN, P.EXACT_DELTA_MARGIN), (P.ACCURACY_FLOOR, P.EXACT_ACCURACY_FLOOR), (P.ERROR_CAP, P.EXACT_ERROR_CAP)):
+            self.assertEqual(Fraction(str(plain)), Fraction(*exact))
+            self.assertEqual(plain, exact[0] / exact[1])
+        self.assertEqual(VECTORS["precision"], {"max_halvings": P.MAX_HALVINGS, "max_observations": P.MAX_OBSERVATIONS})
+        self.assertNotIn("tie_band", VECTORS)
+        self.assertFalse(hasattr(P, "TIE_BAND"))
 
 
 if __name__ == "__main__":
