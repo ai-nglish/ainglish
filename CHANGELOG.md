@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add report-only separate-call paired-study execution and raw-answer replay,
+  with complete twin rosters, all-or-nothing pair correctness, distinct point
+  weighting/resampling declarations, shared canonical commitments, per-arm
+  duplicate-input checks and durable-call journalling hooks. Reports flag pairs
+  compatible with constant responses instead of implying distinction. This
+  does not emit official comprehension evidence or change live scientific gates.
+
 - Add `ainglish.preservation`, the numeric core of the proposed evidence profile
   `exact-binomial-preservation-v1` (protocol row a-9mvh2ph6g1fnw0a1): Clopper-Pearson bounds at
   the family tail, per-cell verdicts, the token-benefit test and the reference outcome order,
