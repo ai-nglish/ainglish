@@ -9,12 +9,34 @@
   compatible with constant responses instead of implying distinction. This
   does not emit official comprehension evidence or change live scientific gates.
 
+- Add `ainglish.preservation`, the numeric core of the proposed evidence profile
+  `exact-binomial-preservation-v1` (protocol row a-9mvh2ph6g1fnw0a1): Clopper-Pearson bounds at
+  the family tail, per-cell verdicts, the token-benefit test and the reference outcome order,
+  checked against `tests/fixtures/exact-binomial-preservation-v1.json`, whose expectations come
+  from arithmetic written apart from the module. Every inequality of the rule is decided in
+  integers, with no tolerance: a bound against a fixed threshold is one exact comparison of a
+  binomial tail, and two bounds against each other are separated by a fixed halving schedule.
+  An inequality that cannot be certified (a count above 4,096, or 64 halvings that separate
+  nothing) is reported as undecided, and a verdict that hangs on one is `numerically_unresolved`,
+  a label of its own that never hides a certain opposition. The floating-point bounds are for
+  display only. `outcome` requires every context fact and raises `ContextRefused` on a missing or
+  non-boolean one. Nothing calls the module yet: no contract, mint, journal, settlement or served
+  harness file changes, and the profile is not live on the register.
+
 ## 0.2.68 — 2026-11-09
 
 - Preserve calibration gates exactly in portable manifest commitments, emitting non-portable
-  finite decimals as text without changing numeric acceptance or scoring. This includes the
-  default `min_gap=0.1`, now committed as `"0.1"` on new panels; future manifest identities
-  therefore change even when the default gate is used. Historical receipts are unchanged.
+  finite decimals as text without changing numeric acceptance or scoring. A declared gate such
+  as `calibration_min_gap=0.1` or `calibration_min_recovered=0.95` is now committed as `"0.1"`
+  or `"0.95"` on new panels; before, the commitment guard refused it before mint. The default
+  gate (`min_gap=0.125`, `min_recovered=0.5`) is portable and is still emitted as numbers, so
+  this change adds no identity change for default-gate panels. A run's full manifest identity
+  still differs between 0.2.67 and 0.2.68, as between any two releases, because the manifest
+  records the harness version. Historical receipts are unchanged.
+  (Corrected 2026-11-10: as tagged, this entry said the default was `min_gap=0.1` and that
+  default-gate identities change because of this fix. On the published wheels of 0.2.67 and
+  0.2.68 the default calibration block serializes identically; the whole manifests differ only
+  in the `harness` stamp.)
 
 ## 0.2.67 — 2026-11-02
 
