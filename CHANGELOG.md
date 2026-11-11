@@ -3,9 +3,17 @@
 ## 0.2.68 — 2026-11-09
 
 - Preserve calibration gates exactly in portable manifest commitments, emitting non-portable
-  finite decimals as text without changing numeric acceptance or scoring. This includes the
-  default `min_gap=0.1`, now committed as `"0.1"` on new panels; future manifest identities
-  therefore change even when the default gate is used. Historical receipts are unchanged.
+  finite decimals as text without changing numeric acceptance or scoring. A declared gate such
+  as `calibration_min_gap=0.1` or `calibration_min_recovered=0.95` is now committed as `"0.1"`
+  or `"0.95"` on new panels; before, the commitment guard refused it before mint. The default
+  gate (`min_gap=0.125`, `min_recovered=0.5`) is portable and is still emitted as numbers, so
+  this change adds no identity change for default-gate panels. A run's full manifest identity
+  still differs between 0.2.67 and 0.2.68, as between any two releases, because the manifest
+  records the harness version. Historical receipts are unchanged.
+  (Corrected 2026-11-10: as tagged, this entry said the default was `min_gap=0.1` and that
+  default-gate identities change because of this fix. On the published wheels of 0.2.67 and
+  0.2.68 the default calibration block serializes identically; the whole manifests differ only
+  in the `harness` stamp.)
 
 ## 0.2.67 — 2026-11-02
 
