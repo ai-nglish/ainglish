@@ -121,6 +121,9 @@ failure — nothing before the tag push has spent anything.
    change, not just the version string: run the assertion that passed at step 3 against the
    published wheel, `python3 tools/rehearse_release.py assertion.py --candidate X.Y.Z`. Same
    file, unedited; if it needs editing to pass here, that is a finding.
+   The receipt's `assertion_sha256` is the digest of the bytes that ran, so the two receipts
+   (step 3 and this one) must show the same value. The control is always an earlier release:
+   run again later, after newer tags exist, the tool still takes the newest tag below X.Y.Z.
 7. **Register fixture sync** (ai-nglish/ainglish-symfony): byte-copy the four served files from
    the tag (`git show vX.Y.Z:src/ainglish/<f>.py`), update `TAG` + the changed sha256 constants
    in `tests/HarnessFixtureParityTest.php`, and move the `.htaccess` redirect pin — all three

@@ -1,11 +1,13 @@
 """Offline checks of tools/rehearse_release.py: the decision table, the default control, and the
 isolated assertion runner. The network half (PyPI, wheel build) is exercised by running the tool."""
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 _SPEC = importlib.util.spec_from_file_location(
     "rehearse_release", Path(__file__).resolve().parent.parent / "tools" / "rehearse_release.py")
@@ -33,6 +35,19 @@ class DefaultControlTest(unittest.TestCase):
         self.assertEqual(rehearse_release.default_control(tags, "0.2.68"), "0.2.67")
         self.assertEqual(rehearse_release.default_control(tags, "0.2.69"), "0.2.68")
         self.assertEqual(rehearse_release.default_control(["v0.2.9", "v0.2.10"], "0.3.0"), "0.2.10")
+
+    def test_a_later_tag_is_never_the_control(self):
+        # Found in review: with a newer release tagged, a rerun of step 6 for an older one took the
+        # newer release as its "previous" one.
+        tags = ["v0.2.67", "v0.2.68", "v0.2.69"]
+        self.assertEqual(rehearse_release.default_control(tags, "0.2.68"), "0.2.67")
+        self.assertEqual(rehearse_release.default_control(tags, "0.2.69"), "0.2.68")
+        self.assertEqual(rehearse_release.default_control(tags, "0.2.70"), "0.2.69")
+        self.assertIsNone(rehearse_release.default_control(tags, "0.2.67"))
+        self.assertIsNone(rehearse_release.default_control(["v0.2.68", "v0.2.69"], "0.2.68"))
+        # A pre-release of .69 is still controlled by .68, and a version with no numbers by nothing.
+        self.assertEqual(rehearse_release.default_control(tags, "0.2.69rc1"), "0.2.68")
+        self.assertIsNone(rehearse_release.default_control(tags, "unversioned"))
 
     def test_no_earlier_tag_is_none_not_a_guess(self):
         self.assertIsNone(rehearse_release.default_control(["v0.2.68"], "0.2.68"))
@@ -83,6 +98,80 @@ class RunAssertionTest(unittest.TestCase):
             code, tail = self._run("import planted_rehearsal_module\n", env={"PYTHONPATH": planted})
         self.assertEqual(code, 1)
         self.assertIn("ModuleNotFoundError", tail[-1])
+
+
+class ReceiptTest(unittest.TestCase):
+    """rehearse() with the network half replaced: no venv is built, nothing is installed. What is
+    under test is which bytes the receipt names and which release may stand as the control."""
+
+    def _rehearse(self, body, runner, versions=("0.2.67", "0.2.68"), candidate="0.2.68"):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "assertion.py"
+            source.write_text(body, encoding="utf-8")
+            seen = {"control": versions[0], "candidate": versions[1]}
+            with mock.patch.object(rehearse_release, "_make_venv", lambda root, name: Path(root) / name / "python"), \
+                 mock.patch.object(rehearse_release, "_install", lambda *a, **k: None), \
+                 mock.patch.object(rehearse_release, "_probe", lambda python, cwd, venv_root: seen[Path(venv_root).name]), \
+                 mock.patch.object(rehearse_release, "run_assertion", lambda python, script, cwd: runner(Path(python).parent.name, Path(script), source)):
+                return rehearse_release.rehearse(source, versions[0], candidate), source.read_bytes() if source.exists() else None
+
+    def test_the_receipt_names_the_bytes_that_ran_and_an_unchanged_source_passes(self):
+        ran = []
+
+        def runner(side, script, source):
+            ran.append(script.read_bytes())
+            return (1 if side == "control" else 0), [side]
+
+        receipt, _ = self._rehearse("assert True\n", runner)
+        self.assertEqual(ran, [b"assert True\n", b"assert True\n"])
+        self.assertEqual(receipt["assertion_sha256"], hashlib.sha256(b"assert True\n").hexdigest())
+        self.assertEqual((receipt["rehearsal"], receipt["assertion_source"]), ("passed", "unchanged since it was read"))
+
+    def test_a_source_edited_during_the_run_fails_and_is_never_what_the_receipt_names(self):
+        # The reviewer's reproducer: the copy that runs says `assert True`; while it runs, the
+        # file it was copied from is rewritten to `assert False`.
+        ran = []
+
+        def runner(side, script, source):
+            ran.append(script.read_bytes())
+            source.write_text("assert False\n", encoding="utf-8")
+            return (1 if side == "control" else 0), [side]
+
+        receipt, on_disk = self._rehearse("assert True\n", runner)
+        self.assertEqual(on_disk, b"assert False\n")
+        self.assertEqual(ran, [b"assert True\n", b"assert True\n"])            # the edit never reached what ran
+        self.assertEqual(receipt["assertion_sha256"], hashlib.sha256(b"assert True\n").hexdigest())
+        self.assertNotEqual(receipt["assertion_sha256"], hashlib.sha256(on_disk).hexdigest())
+        self.assertEqual((receipt["rehearsal"], receipt["assertion_source"]), ("FAILED", "CHANGED during the run"))
+        self.assertIn("changed while the rehearsal ran", receipt["reason"])
+
+    def test_a_source_deleted_during_the_run_fails_too(self):
+        def runner(side, script, source):
+            if source.exists():
+                source.unlink()
+            return (1 if side == "control" else 0), [side]
+
+        receipt, on_disk = self._rehearse("assert True\n", runner)
+        self.assertIsNone(on_disk)
+        self.assertEqual((receipt["rehearsal"], receipt["assertion_source"]), ("FAILED", "CHANGED during the run"))
+
+    def test_a_copy_tampered_with_between_the_two_runs_stops_the_rehearsal(self):
+        def runner(side, script, source):
+            script.write_text("assert False\n", encoding="utf-8")
+            return 1, [side]
+
+        with self.assertRaises(SystemExit) as stopped:
+            self._rehearse("assert True\n", runner)
+        self.assertIn("copy of the assertion changed", str(stopped.exception))
+
+    def test_a_control_that_is_not_an_earlier_release_is_refused(self):
+        runner = lambda side, script, source: ((1 if side == "control" else 0), [side])
+        for control, candidate in (("0.2.69", "0.2.68"), ("0.2.68", "0.2.68"), ("0.3.0", "0.2.99"), ("nightly", "0.2.68")):
+            with self.assertRaises(SystemExit, msg=(control, candidate)) as stopped:
+                self._rehearse("assert True\n", runner, versions=(control, candidate), candidate=candidate)
+            self.assertIn("not an earlier release", str(stopped.exception))
+        receipt, _ = self._rehearse("assert True\n", runner, versions=("0.2.9", "0.2.10"), candidate="0.2.10")
+        self.assertEqual(receipt["rehearsal"], "passed")                       # compared as numbers: 9 is below 10
 
 
 if __name__ == "__main__":

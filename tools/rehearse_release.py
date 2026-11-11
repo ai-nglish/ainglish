@@ -7,8 +7,8 @@
 ASSERTION.py is a script that exits 0 only when the behaviour the changelog entry describes is
 present. It is run twice, each time by a clean virtual environment outside the checkout:
 
-  control    the previous release, installed from PyPI (default: the newest tag that is not the
-             version pyproject.toml declares)
+  control    the previous release, installed from PyPI (default: the newest tag BELOW the
+             candidate's version, never a later one)
   candidate  the wheel built from this tree, or with --candidate a published version or a wheel
 
 The rehearsal passes only when the control FAILS and the candidate PASSES. Both halves matter.
@@ -23,6 +23,10 @@ changelog sentence and first run against the published wheel, where it failed: t
 right and the sentence was wrong (it named a default the code does not have). Run before the
 merge, the same failure costs one edit to the release commit.
 
+The receipt's assertion_sha256 is the digest of the bytes that RAN: the file is read once, that
+copy is executed, and that copy is hashed. If the file on disk changes while the rehearsal runs,
+the rehearsal fails, because what is on disk afterwards is not what was rehearsed.
+
 Needs the network (PyPI for the control and for the build backend). Exits non-zero unless the
 rehearsal passes. Prints one JSON receipt for the release PR description.
 """
@@ -33,7 +37,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -72,13 +75,28 @@ def declared_version(repo=REPO):
     return match.group(1)
 
 
-def default_control(tags, declared):
-    """The newest vX.Y.Z tag that is not the declared version; None when there is none."""
+def version_numbers(version):
+    """The leading X.Y.Z of a version as three integers, or None when it does not start with one."""
+    match = re.match(r"(\d+)\.(\d+)\.(\d+)", str(version))
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def default_control(tags, candidate):
+    """The newest vX.Y.Z tag strictly BELOW the candidate's version; None when there is none.
+
+    Previous means earlier, not different. With tags .67, .68 and .69, a rehearsal of 0.2.68 is
+    controlled by .67: taking .69 would compare the candidate with a release that came after it.
+    """
+    ceiling = version_numbers(candidate)
+    if ceiling is None:
+        return None
     versions = []
     for tag in tags:
         name = tag.strip()
-        if name.startswith("v") and VERSION.fullmatch(name[1:]) and name[1:] != declared:
-            versions.append(tuple(int(part) for part in name[1:].split(".")))
+        if name.startswith("v") and VERSION.fullmatch(name[1:]):
+            numbers = version_numbers(name[1:])
+            if numbers < ceiling:
+                versions.append(numbers)
     return ".".join(str(part) for part in max(versions)) if versions else None
 
 
@@ -139,10 +157,14 @@ def rehearse(assertion, control, candidate=None, extras="", repo=REPO):
     assertion = Path(assertion).resolve()
     if not assertion.is_file():
         raise SystemExit("no assertion file at %s" % assertion)
+    # Read once. These bytes are what runs and what the receipt names; the file is not trusted to
+    # stay as it is while two environments are built and installed.
+    payload = assertion.read_bytes()
+    assertion_sha = hashlib.sha256(payload).hexdigest()
     with tempfile.TemporaryDirectory(prefix="ainglish-rehearsal-") as tmp:
         root = Path(tmp)
         script = root / "assertion.py"
-        shutil.copyfile(assertion, script)  # run from outside the checkout, like everything else here
+        script.write_bytes(payload)  # run from outside the checkout, like everything else here
         if candidate is None:
             candidate_spec = build_wheel(repo, root)
             candidate_label = "built from this tree: %s" % candidate_spec.name
@@ -158,33 +180,44 @@ def rehearse(assertion, control, candidate=None, extras="", repo=REPO):
             python = _make_venv(root, name)
             _install(python, spec, extras, root)
             version = _probe(python, root, root / name)
+            if script.read_bytes() != payload:
+                raise SystemExit("the copy of the assertion changed before the %s run" % name)
             code, tail = run_assertion(python, script, root)
             sides[name] = {"version": version, "exit": code, "output_tail": tail}
-    if sides["control"]["version"] == sides["candidate"]["version"]:
-        raise SystemExit("control and candidate are both %s; the control must be the previous release"
-                         % sides["control"]["version"])
+    earlier, later = version_numbers(sides["control"]["version"]), version_numbers(sides["candidate"]["version"])
+    if earlier is None or later is None or earlier >= later:
+        raise SystemExit("control %s is not an earlier release than candidate %s; the control must be the previous release"
+                         % (sides["control"]["version"], sides["candidate"]["version"]))
     passed, reason = verdict(sides["control"]["exit"], sides["candidate"]["exit"])
+    try:
+        unchanged = assertion.read_bytes() == payload
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        passed, reason = False, ("the assertion file changed while the rehearsal ran. The receipt names the bytes "
+                                 "that ran; the file now on disk was not rehearsed. Run it again.")
     sides["candidate"]["source"] = candidate_label
     if candidate_sha:
         sides["candidate"]["wheel_sha256"] = candidate_sha
     sides["control"]["source"] = "published: ainglish==%s" % control if not str(control).endswith(".whl") else "wheel: %s" % Path(control).name
     return {"rehearsal": "passed" if passed else "FAILED", "reason": reason,
-            "assertion_sha256": hashlib.sha256(assertion.read_bytes()).hexdigest(),
+            "assertion_sha256": assertion_sha,
+            "assertion_source": "unchanged since it was read" if unchanged else "CHANGED during the run",
             "control": sides["control"], "candidate": sides["candidate"]}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Rehearse a release's behaviour assertion against the previous release and the candidate.")
     parser.add_argument("assertion", help="script that exits 0 only when the release's behaviour change is present")
-    parser.add_argument("--control", help="previous release: a version on PyPI or a wheel file (default: newest other tag)")
+    parser.add_argument("--control", help="previous release: a version on PyPI or a wheel file (default: the newest tag below the candidate)")
     parser.add_argument("--candidate", help="a published version or a wheel file (default: build this tree)")
     parser.add_argument("--extras", default="", help="comma-separated optional extras to install on both sides, e.g. tokens")
     args = parser.parse_args(argv)
     control = args.control
     if control is None:
         tags = subprocess.run(["git", "tag", "--list", "v*"], cwd=str(REPO), check=True, text=True, stdout=subprocess.PIPE).stdout.splitlines()
-        skip = args.candidate if args.candidate and VERSION.fullmatch(args.candidate) else declared_version()
-        control = default_control(tags, skip)
+        ceiling = args.candidate if args.candidate and VERSION.fullmatch(args.candidate) else declared_version()
+        control = default_control(tags, ceiling)
         if control is None:
             raise SystemExit("no earlier release tag found; name the control with --control")
     receipt = rehearse(args.assertion, control, args.candidate, args.extras)
