@@ -227,6 +227,81 @@ class PairedStudyTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "shared resampling family"):
             paired.validate(p)
 
+    def test_same_text_with_different_question_or_options_is_not_identical_input(self):
+        for field, value in (("question", "Choose a different interpretation."), ("options", ["y", "x"])):
+            p = plan()
+            source, target = p["pairs"][0]["twins"][0], p["pairs"][1]["twins"][0]
+            target["english"] = source["english"]
+            target[field] = value
+            paired.validate(p)
+
+    def test_renaming_twin_id_cannot_evade_repeated_input_check(self):
+        p = plan()
+        source, target = p["pairs"][0]["twins"][0], p["pairs"][1]["twins"][0]
+        target["english"] = source["english"]
+        target["id"] = "renamed-twin"
+        with self.assertRaisesRegex(ValueError, "shared resampling family"):
+            paired.validate(p)
+
+    def test_surrounding_option_whitespace_is_refused(self):
+        for value in (" x", "x ", "\tx", "x\n"):
+            p = plan()
+            p["pairs"][0]["twins"][0].update(options=[value, "y"], answer=value)
+            with self.assertRaisesRegex(ValueError, "surrounding whitespace"):
+                paired.validate(p)
+
+    def test_response_key_must_be_a_list_even_if_tuple_hash_matches(self):
+        p = plan(); result, _ = run(p)
+        result["rows"][0]["key"] = tuple(result["rows"][0]["key"])
+        result["rows_sha256"] = paired._digest(result["rows"])
+        with self.assertRaisesRegex(ValueError, "invalid response key"):
+            paired.replay(p, result)
+
+    def test_constant_position_diagnostic_does_not_require_same_gold_label(self):
+        for index in (0, 1):
+            p = plan()
+            for pair in p["pairs"]:
+                for twin in pair["twins"]:
+                    other = "y" if twin["answer"] == "x" else "x"
+                    twin["options"] = [twin["answer"], other] if index == 0 else [other, twin["answer"]]
+            result, _ = run(p, lambda _r, _t, _q, options: options[index])
+            report = result["report"]
+            self.assertEqual(report["constant_response_compatible_pairs"], [])
+            self.assertEqual(report["constant_position_compatible_pairs"], [pair["id"] for pair in p["pairs"]])
+            self.assertTrue(all(all(cell["correct"].values()) for cell in report["pair_scores"]))
+            self.assertEqual(report["pair_accuracy_delta_pp"], 0)
+        clean, _ = run()
+        self.assertEqual(clean["report"]["constant_position_compatible_pairs"], [])
+
+    def test_identical_arms_are_admitted_but_reported_per_twin(self):
+        p = plan()
+        for pair, twin in ((p["pairs"][0], p["pairs"][0]["twins"][0]),
+                           (p["pairs"][2], p["pairs"][2]["twins"][1])):
+            twin["ainglish"] = twin["english"]
+        result, _ = run(p)
+        self.assertEqual(result["report"]["identical_arm_twins"],
+                         [{"pair": "pair-0", "twin": "twin-0"}, {"pair": "pair-2", "twin": "twin-1"}])
+        self.assertEqual(result["report"]["identical_arm_twin_count"], 2)
+        self.assertEqual(len(result["rows"]), 32, "identical arms still require fresh calls")
+        clean, _ = run()
+        self.assertEqual(clean["report"]["identical_arm_twins"], [])
+        self.assertEqual(clean["report"]["identical_arm_twin_count"], 0)
+
+    def test_resampling_unit_order_is_lexical_not_plan_insertion(self):
+        for unit in ("pair", "family"):
+            p = plan(unit)
+            # Unit zero must mean lexical first even when plan insertion is reversed.
+            # Distinct unit outcomes make an unsorted-unit mutant observable.
+            def reader(_r, text, *_):
+                i = int(text.split("secret-")[1].split("-")[0])
+                return label(text, text.startswith("E") or i % 2 == 0)
+            with mock.patch.object(paired, "_bootstrap_indices", side_effect=lambda *_: itertools.repeat(0)):
+                forward, _ = run(p, reader)
+                p["pairs"].reverse()
+                backward, _ = run(p, reader)
+            self.assertEqual(forward["report"]["bootstrap_95_percentile_interval_pp"], [0, 0])
+            self.assertEqual(backward["report"]["bootstrap_95_percentile_interval_pp"], [0, 0])
+
     def test_size_and_cluster_minima(self):
         p = plan(); p["pairs"] = p["pairs"][:1]
         with self.assertRaisesRegex(ValueError, "2..4096"): paired.validate(p)
@@ -283,6 +358,20 @@ class PairedStudyTest(unittest.TestCase):
         except OSError:
             self.assertNotIn("SECRET-TRANSPORT-TEXT",traceback.format_exc())
         else: self.fail("journal error swallowed")
+
+    def test_normal_abort_suppresses_transport_context_in_formatted_traceback(self):
+        p = plan()
+        def fault(*_): raise RuntimeError("SECRET-TRANSPORT-TEXT")
+        try:
+            run(p, fault)
+        except paired.StudyAborted as exc:
+            self.assertNotIn("SECRET-TRANSPORT-TEXT", traceback.format_exc())
+            self.assertNotIn("SECRET-TRANSPORT-TEXT", str(exc.receipt))
+            self.assertTrue(exc.__suppress_context__)
+            # Suppression is not erasure: custom exception serializers must not
+            # walk this private context unconditionally.
+            self.assertIsInstance(exc.__context__, RuntimeError)
+        else: self.fail("transport fault did not abort")
 
 
 if __name__ == "__main__": unittest.main()
