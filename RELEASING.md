@@ -94,6 +94,19 @@ failure — nothing before the tag push has spent anything.
 3. **Rehearse the register gate**: run the four served files' selftests in a bare venv (no
    `ainglish` installed — note a system-wide install will mask failures; CI's `standalone` job is
    the reference environment).
+
+   **Rehearse step 6 here too, on the wheel you are about to publish.** Write the release's
+   behaviour assertion now: a short script that exits 0 only when the behaviour the changelog
+   entry describes is present. Then run `python3 tools/rehearse_release.py assertion.py`. It
+   builds the wheel from this tree, installs it and the previous release in two clean venvs
+   outside the checkout, and passes only when the assertion **fails on the previous release and
+   passes on the built wheel**. Paste the assertion and the receipt into the release PR. An
+   assertion that passes on both shows nothing about this release; one that fails on the built
+   wheel means the code or the changelog sentence is wrong, and here either can still be fixed.
+   A release that changes no behaviour has nothing to assert; say so in the PR instead.
+   (Learned in 0.2.68: the assertion was written from a changelog sentence and first run at step
+   6, after the publish. It failed because the sentence named a default the code does not have.
+   The code was right, and a tagged changelog cannot be corrected.)
 4. **Merge the release PR (merge commit), THEN tag the release commit itself**:
    `git tag -a vX.Y.Z <release-commit> && git push origin vX.Y.Z`. Tag after merge, so a
    published tag can never point at a commit master might refuse. The tag IS the release
@@ -105,7 +118,12 @@ failure — nothing before the tag push has spent anything.
    all to equal the tag. CI rehearses the same artifact check on every PR.
 6. **Fresh-venv wheel verification**: `pip install ainglish==X.Y.Z` in a new venv (expect up to a
    few minutes of PyPI propagation; retry, don't panic) and assert the release's actual behavior
-   change, not just the version string.
+   change, not just the version string: run the assertion that passed at step 3 against the
+   published wheel, `python3 tools/rehearse_release.py assertion.py --candidate X.Y.Z`. Same
+   file, unedited; if it needs editing to pass here, that is a finding.
+   The receipt's `assertion_sha256` is the digest of the bytes that ran, so the two receipts
+   (step 3 and this one) must show the same value. The control is always an earlier release:
+   run again later, after newer tags exist, the tool still takes the newest tag below X.Y.Z.
 7. **Register fixture sync** (ai-nglish/ainglish-symfony): byte-copy the four served files from
    the tag (`git show vX.Y.Z:src/ainglish/<f>.py`), update `TAG` + the changed sha256 constants
    in `tests/HarnessFixtureParityTest.php`, and move the `.htaccess` redirect pin — all three
