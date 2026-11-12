@@ -15,6 +15,9 @@ arithmetic written separately, so the file can catch an error in the module inst
   expected outcomes are written down here by hand, never computed by the module under test.
 * `depth_cases` and `context_cases`: written by hand; the halvings the depth cases rest on are
   asserted from the decimal schedule.
+* `identity_cases`: written by hand. Names chosen so that a parser which joins a reader and a form
+  with a separator, or compares number-like names as numbers, judges them differently from one
+  that compares the two names as they are. Complete families and families one cell short.
 
 Run from the repository root:  python3 tools/gen_preservation_vectors.py
 The register carries a byte copy of the output (tests/Fixtures/exact-binomial-preservation-v1.json).
@@ -239,6 +242,14 @@ def cases():
     case("an-unjudged-cell-could-still-oppose-so-the-profile-is-not-called-unresolved", c, "numerically_unresolved", source="implementer")
     case("an-unfinished-confirmation-is-reported-before-a-numerical-doubt", bank(over), "unconfirmed_or_replica_incomplete",
          source="implementer", confirmed=False)
+    # Number-like FORM names, where the per-form token means are a mapping keyed by form. "1e1" and "10.0" are two
+    # forms and one number; a parser that sorts them as numbers cannot match the mapping against the inventory when
+    # the two are listed in another order. See identity_cases for the same names on the cells.
+    numbered = {"readers": ["r"], "forms": ["1e1", "10.0"], "error_endpoints": ["e"]}
+    case("number-like-forms-with-token-means-listed-in-another-order", bank(512, numbered), "profile_and_benefit_satisfied_not_ratified",
+         source="implementer", inventory=numbered, token_form_means={"10.0": means((-2, -2, -2)), "1e1": means((-2, -2, -2))})
+    case("number-like-forms-with-token-means-for-an-equal-number", bank(512, numbered), "no_demonstrated_benefit",
+         source="implementer", inventory=numbered, token_form_means={"1e1": means((-2, -2, -2)), "10.00": means((-2, -2, -2))})
     return out
 
 
@@ -403,6 +414,60 @@ def inventory_cases():
     return [{"name": n, "inventory": inv, "accepted": ok, "family_size": m} for n, inv, ok, m in rows]
 
 
+def identity_cases():
+    """Families whose NAMES are the test. Every name is a legal name; what differs between a right and a
+    wrong parser is whether two different (reader, form) pairs, or two different endpoint names, are
+    kept apart. Each family comes complete (accepted, every cell evaluated) and damaged (refused).
+
+    * nul: ("a", "b\\0c") and ("a\\0b", "c") are one string when the pair is joined with a NUL.
+    * colon: ("x", "y:z") and ("x:y", "z") are one string when the pair is joined with a colon.
+    * length: ("1c", 20 d's + "f") and ("c" + 20 d's, "f") are one string when the reader's length is written
+      in front of the two names with nothing after it: 2 then "1c..." reads the same as 21 then "c...".
+    * number-like: "1e1", "10.0" and " 10" are three names and one number. A sort that compares them
+      as numbers leaves them in the order they came, so two equal sets can look different.
+    Reported on register pull request 745 for the NUL join (review of 2026-11-11)."""
+    def cells(inventory, pairs=None, order=None, n=512):
+        endpoints = order or inventory["error_endpoints"]
+        pairs = pairs if pairs is not None else [(r, f) for r in inventory["readers"] for f in inventory["forms"]]
+        return [{"reader": r, "form": f, "marked": [n, n], "english": [n, n], "errors": {e: [0, n] for e in endpoints}} for r, f in pairs]
+
+    nul = {"readers": ["a", "a\x00b"], "forms": ["b\x00c", "c"], "error_endpoints": ["e"]}
+    colon = {"readers": ["x", "x:y"], "forms": ["y:z", "z"], "error_endpoints": ["e"]}
+    length = {"readers": ["1c", "c" + "d" * 20], "forms": ["d" * 20 + "f", "f"], "error_endpoints": ["e"]}
+    numbers = {"readers": ["1e1", "10.0"], "forms": ["f"], "error_endpoints": ["1e1", "10.0", " 10"]}
+    for inventory, m in ((nul, 12), (colon, 12), (length, 12), (numbers, 10)):
+        assert size(inventory) == m, (inventory, size(inventory))
+    rows = []
+
+    def row(name, inventory, given, accepted, note):
+        rows.append({"name": name, "note": note, "inventory": inventory, "cells": given, "accepted": accepted,
+                     "family_size": size(inventory) if accepted else None,
+                     "cells_evaluated": len(inventory["readers"]) * len(inventory["forms"]) if accepted else None,
+                     "profile_state": "supports" if accepted else None})
+
+    for label, inv, first, second in (("nul", nul, ("a", "b\x00c"), ("a\x00b", "c")), ("colon", colon, ("x", "y:z"), ("x:y", "z")),
+                                      ("length", length, ("1c", "d" * 20 + "f"), ("c" + "d" * 20, "f"))):
+        every = [(r, f) for r in inv["readers"] for f in inv["forms"]]
+        assert first in every and second in every and first != second
+        row(label + "-names-complete", inv, cells(inv), True, "four different cells; a joined key would call two of them one")
+        row(label + "-names-without-the-first-of-the-pair", inv, cells(inv, [p for p in every if p != first]), False,
+            "three cells; a joined key cannot see that %r is missing" % (first,))
+        row(label + "-names-without-the-second-of-the-pair", inv, cells(inv, [p for p in every if p != second]), False,
+            "three cells; a joined key cannot see that %r is missing" % (second,))
+        row(label + "-names-one-of-the-pair-twice", inv, cells(inv, [p for p in every if p != second] + [first]), False,
+            "four cells, one of them given twice and one missing")
+    row("number-like-names-complete", numbers, cells(numbers), True, "endpoints in the inventory's order")
+    row("number-like-endpoints-in-another-order", numbers, cells(numbers, order=["10.0", " 10", "1e1"]), True,
+        "the same three endpoint names, listed in another order in every cell")
+    row("number-like-endpoints-one-missing", numbers, cells(numbers, order=["1e1", "10.0"]), False, "two of the three endpoints")
+    row("number-like-endpoints-one-replaced-by-an-equal-number", numbers, cells(numbers, order=["1e1", "10.0", "10.00"]), False,
+        "10.00 is the same number as the missing name and a different name")
+    row("number-like-readers-one-twice", numbers, cells(numbers, [("1e1", "f"), ("1e1", "f")]), False, "one reader given twice, the other missing")
+    # 512 of 512 with no errors supports any family this small: the published minimum per cell for 16 is 126.
+    assert all(c["marked"] == [512, 512] for r in rows for c in r["cells"])
+    return rows
+
+
 def main():
     with localcontext() as context:
         context.prec = PRECISION
@@ -459,11 +524,12 @@ def main():
               "token_encodings": list(ENCODINGS),
               "bounds": bounds, "minimum_per_cell": minima, "threshold_cases": threshold_cases(), "delta_cases": deltas,
               "depth_cases": depths, "inventory": INVENTORY, "inventory_cases": inventory_cases(),
+              "identity_cases": identity_cases(),
               "context_cases": context_cases(), "cases": cases()}
     OUT.write_text(json.dumps(report, indent=1, allow_nan=False) + "\n", encoding="utf-8")
     print("wrote", OUT.relative_to(ROOT), "|", len(bounds), "bounds |", len(report["threshold_cases"]), "threshold cases |",
           len(deltas), "delta cases |", len(depths), "depth cases |", len(report["context_cases"]), "context cases |",
-          len(report["cases"]), "cases |", hashlib.sha256(OUT.read_bytes()).hexdigest())
+          len(report["cases"]), "cases |", len(report["identity_cases"]), "identity cases |", hashlib.sha256(OUT.read_bytes()).hexdigest())
 
 
 if __name__ == "__main__":

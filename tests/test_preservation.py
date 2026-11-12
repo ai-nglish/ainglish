@@ -255,9 +255,58 @@ class FamilyTests(unittest.TestCase):
                 P.family_size(bad)
 
 
+class IdentityTests(unittest.TestCase):
+    """Two cells are one cell only when both of their names are the same names. Found in review of
+    the register's twin (pull request 745): a parser that joins a reader and a form into one key can
+    lose a cell, and one that compares number-like names as numbers can lose an endpoint."""
+
+    def test_identity_cases_are_judged_as_the_vector_file_says(self):
+        rows = VECTORS["identity_cases"]
+        self.assertEqual((len(rows), sum(row["accepted"] for row in rows)), (17, 5))
+        for case in rows:
+            if case["accepted"]:
+                result = P.evaluate(case["inventory"], case["cells"])
+                self.assertEqual((result["family_size"], len(result["cells"]), result["profile_state"]),
+                                 (case["family_size"], case["cells_evaluated"], case["profile_state"]), case["name"])
+                self.assertEqual([(cell["reader"], cell["form"]) for cell in result["cells"]],
+                                 [(r, f) for r in case["inventory"]["readers"] for f in case["inventory"]["forms"]], case["name"])
+                self.assertEqual({tuple(cell["errors"]) for cell in result["cells"]}, {tuple(case["inventory"]["error_endpoints"])}, case["name"])
+            else:
+                with self.assertRaises(P.MalformedPreservation, msg=case["name"]):
+                    P.evaluate(case["inventory"], case["cells"])
+
+    def test_the_names_in_the_identity_cases_really_do_collide_for_a_careless_parser(self):
+        # These cases test nothing unless a join or a numeric comparison would merge the names; pin that here.
+        by_name = {row["name"]: row for row in VECTORS["identity_cases"]}
+        for name, key in (("nul-names-complete", lambda r, f: r + "\x00" + f), ("colon-names-complete", lambda r, f: r + ":" + f),
+                          ("length-names-complete", lambda r, f: str(len(r)) + r + f)):
+            inventory = by_name[name]["inventory"]
+            pairs = [(r, f) for r in inventory["readers"] for f in inventory["forms"]]
+            self.assertEqual((len(set(pairs)), len({key(*pair) for pair in pairs})), (4, 3), name)
+            # The key the register uses: the reader's length, a colon, then the two names.
+            self.assertEqual(len({"%d:%s%s" % (len(r.encode("utf-8")), r, f) for r, f in pairs}), 4, name)
+        endpoints = by_name["number-like-names-complete"]["inventory"]["error_endpoints"]
+        self.assertEqual((len(set(endpoints)), {float(e) for e in endpoints}), (3, {10.0}))
+        swapped = by_name["number-like-endpoints-one-replaced-by-an-equal-number"]["cells"][0]["errors"]
+        self.assertEqual(({float(e) for e in swapped}, set(swapped) == set(endpoints)), ({10.0}, False))
+        reordered = [list(cell["errors"]) for cell in by_name["number-like-endpoints-in-another-order"]["cells"]]
+        self.assertTrue(all(order != endpoints and sorted(order) == sorted(endpoints) for order in reordered))
+        swapped_forms = case_named("number-like-forms-with-token-means-listed-in-another-order")
+        self.assertEqual((list(swapped_forms["context"]["token_form_means"]), swapped_forms["inventory"]["forms"]), (["10.0", "1e1"], ["1e1", "10.0"]))
+
+    def test_a_family_one_cell_short_is_refused_whatever_the_names(self):
+        # The reviewer's own reproducer: three of four cells, 200 of 200 on both arms, no errors.
+        inventory = {"readers": ["a", "a\x00b"], "forms": ["b\x00c", "c"], "error_endpoints": ["e"]}
+        cell = lambda r, f: {"reader": r, "form": f, "marked": [200, 200], "english": [200, 200], "errors": {"e": [0, 200]}}
+        with self.assertRaises(P.MalformedPreservation):
+            P.evaluate(inventory, [cell("a", "c"), cell("a\x00b", "b\x00c"), cell("a\x00b", "c")])
+        whole = P.evaluate(inventory, [cell(r, f) for r in inventory["readers"] for f in inventory["forms"]])
+        self.assertEqual((whole["family_size"], len(whole["cells"]), whole["profile_state"]), (12, 4, "supports"))
+
+
 class CaseTests(unittest.TestCase):
     def test_every_shared_case_reaches_its_expected_outcome(self):
-        self.assertEqual(len(VECTORS["cases"]), 52)
+        self.assertEqual(len(VECTORS["cases"]), 54)
         for case in VECTORS["cases"]:
             actual = P.outcome(case.get("inventory", VECTORS["inventory"]), case["cells"], **case["context"])
             self.assertEqual(actual, case["expected"], case["name"])

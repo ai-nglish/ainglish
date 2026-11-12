@@ -3,7 +3,7 @@
  "analysis": "exact-binomial-preservation-v1",
  "generated_by": {
   "tool": "tools/gen_preservation_vectors.py",
-  "tool_sha256": "1e46e9b58754a3646b2ae536ca8ab2c132056ec7add281fb0bc10337eb9ef977",
+  "tool_sha256": "a192c1a8f44b7092926bf4ef198e21582de093a41b32c6f1ad24e315a91f19ca",
   "method": "bounds: decimal bisection of the exact binomial tail, 60 digits, 200 halvings; threshold signs: integer tail sums; delta cases: the halving schedule followed in decimals; all independent of ainglish.preservation",
   "python": "3.12"
  },
@@ -2388,6 +2388,1412 @@
    },
    "accepted": false,
    "family_size": null
+  }
+ ],
+ "identity_cases": [
+  {
+   "name": "nul-names-complete",
+   "note": "four different cells; a joined key would call two of them one",
+   "inventory": {
+    "readers": [
+     "a",
+     "a\u0000b"
+    ],
+    "forms": [
+     "b\u0000c",
+     "c"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "a",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a",
+     "form": "c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a\u0000b",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a\u0000b",
+     "form": "c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": true,
+   "family_size": 12,
+   "cells_evaluated": 4,
+   "profile_state": "supports"
+  },
+  {
+   "name": "nul-names-without-the-first-of-the-pair",
+   "note": "three cells; a joined key cannot see that ('a', 'b\\x00c') is missing",
+   "inventory": {
+    "readers": [
+     "a",
+     "a\u0000b"
+    ],
+    "forms": [
+     "b\u0000c",
+     "c"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "a",
+     "form": "c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a\u0000b",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a\u0000b",
+     "form": "c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "nul-names-without-the-second-of-the-pair",
+   "note": "three cells; a joined key cannot see that ('a\\x00b', 'c') is missing",
+   "inventory": {
+    "readers": [
+     "a",
+     "a\u0000b"
+    ],
+    "forms": [
+     "b\u0000c",
+     "c"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "a",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a",
+     "form": "c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a\u0000b",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "nul-names-one-of-the-pair-twice",
+   "note": "four cells, one of them given twice and one missing",
+   "inventory": {
+    "readers": [
+     "a",
+     "a\u0000b"
+    ],
+    "forms": [
+     "b\u0000c",
+     "c"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "a",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a",
+     "form": "c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a\u0000b",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "a",
+     "form": "b\u0000c",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "colon-names-complete",
+   "note": "four different cells; a joined key would call two of them one",
+   "inventory": {
+    "readers": [
+     "x",
+     "x:y"
+    ],
+    "forms": [
+     "y:z",
+     "z"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "x",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x",
+     "form": "z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x:y",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x:y",
+     "form": "z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": true,
+   "family_size": 12,
+   "cells_evaluated": 4,
+   "profile_state": "supports"
+  },
+  {
+   "name": "colon-names-without-the-first-of-the-pair",
+   "note": "three cells; a joined key cannot see that ('x', 'y:z') is missing",
+   "inventory": {
+    "readers": [
+     "x",
+     "x:y"
+    ],
+    "forms": [
+     "y:z",
+     "z"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "x",
+     "form": "z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x:y",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x:y",
+     "form": "z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "colon-names-without-the-second-of-the-pair",
+   "note": "three cells; a joined key cannot see that ('x:y', 'z') is missing",
+   "inventory": {
+    "readers": [
+     "x",
+     "x:y"
+    ],
+    "forms": [
+     "y:z",
+     "z"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "x",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x",
+     "form": "z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x:y",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "colon-names-one-of-the-pair-twice",
+   "note": "four cells, one of them given twice and one missing",
+   "inventory": {
+    "readers": [
+     "x",
+     "x:y"
+    ],
+    "forms": [
+     "y:z",
+     "z"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "x",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x",
+     "form": "z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x:y",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "x",
+     "form": "y:z",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "length-names-complete",
+   "note": "four different cells; a joined key would call two of them one",
+   "inventory": {
+    "readers": [
+     "1c",
+     "cdddddddddddddddddddd"
+    ],
+    "forms": [
+     "ddddddddddddddddddddf",
+     "f"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1c",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "1c",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "cdddddddddddddddddddd",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "cdddddddddddddddddddd",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": true,
+   "family_size": 12,
+   "cells_evaluated": 4,
+   "profile_state": "supports"
+  },
+  {
+   "name": "length-names-without-the-first-of-the-pair",
+   "note": "three cells; a joined key cannot see that ('1c', 'ddddddddddddddddddddf') is missing",
+   "inventory": {
+    "readers": [
+     "1c",
+     "cdddddddddddddddddddd"
+    ],
+    "forms": [
+     "ddddddddddddddddddddf",
+     "f"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1c",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "cdddddddddddddddddddd",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "cdddddddddddddddddddd",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "length-names-without-the-second-of-the-pair",
+   "note": "three cells; a joined key cannot see that ('cdddddddddddddddddddd', 'f') is missing",
+   "inventory": {
+    "readers": [
+     "1c",
+     "cdddddddddddddddddddd"
+    ],
+    "forms": [
+     "ddddddddddddddddddddf",
+     "f"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1c",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "1c",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "cdddddddddddddddddddd",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "length-names-one-of-the-pair-twice",
+   "note": "four cells, one of them given twice and one missing",
+   "inventory": {
+    "readers": [
+     "1c",
+     "cdddddddddddddddddddd"
+    ],
+    "forms": [
+     "ddddddddddddddddddddf",
+     "f"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1c",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "1c",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "cdddddddddddddddddddd",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "1c",
+     "form": "ddddddddddddddddddddf",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "number-like-names-complete",
+   "note": "endpoints in the inventory's order",
+   "inventory": {
+    "readers": [
+     "1e1",
+     "10.0"
+    ],
+    "forms": [
+     "f"
+    ],
+    "error_endpoints": [
+     "1e1",
+     "10.0",
+     " 10"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1e1",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ],
+      " 10": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "10.0",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ],
+      " 10": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": true,
+   "family_size": 10,
+   "cells_evaluated": 2,
+   "profile_state": "supports"
+  },
+  {
+   "name": "number-like-endpoints-in-another-order",
+   "note": "the same three endpoint names, listed in another order in every cell",
+   "inventory": {
+    "readers": [
+     "1e1",
+     "10.0"
+    ],
+    "forms": [
+     "f"
+    ],
+    "error_endpoints": [
+     "1e1",
+     "10.0",
+     " 10"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1e1",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "10.0": [
+       0,
+       512
+      ],
+      " 10": [
+       0,
+       512
+      ],
+      "1e1": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "10.0",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "10.0": [
+       0,
+       512
+      ],
+      " 10": [
+       0,
+       512
+      ],
+      "1e1": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": true,
+   "family_size": 10,
+   "cells_evaluated": 2,
+   "profile_state": "supports"
+  },
+  {
+   "name": "number-like-endpoints-one-missing",
+   "note": "two of the three endpoints",
+   "inventory": {
+    "readers": [
+     "1e1",
+     "10.0"
+    ],
+    "forms": [
+     "f"
+    ],
+    "error_endpoints": [
+     "1e1",
+     "10.0",
+     " 10"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1e1",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "10.0",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "number-like-endpoints-one-replaced-by-an-equal-number",
+   "note": "10.00 is the same number as the missing name and a different name",
+   "inventory": {
+    "readers": [
+     "1e1",
+     "10.0"
+    ],
+    "forms": [
+     "f"
+    ],
+    "error_endpoints": [
+     "1e1",
+     "10.0",
+     " 10"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1e1",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ],
+      "10.00": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "10.0",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ],
+      "10.00": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
+  },
+  {
+   "name": "number-like-readers-one-twice",
+   "note": "one reader given twice, the other missing",
+   "inventory": {
+    "readers": [
+     "1e1",
+     "10.0"
+    ],
+    "forms": [
+     "f"
+    ],
+    "error_endpoints": [
+     "1e1",
+     "10.0",
+     " 10"
+    ]
+   },
+   "cells": [
+    {
+     "reader": "1e1",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ],
+      " 10": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "1e1",
+     "form": "f",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "1e1": [
+       0,
+       512
+      ],
+      "10.0": [
+       0,
+       512
+      ],
+      " 10": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "accepted": false,
+   "family_size": null,
+   "cells_evaluated": null,
+   "profile_state": null
   }
  ],
  "context_cases": [
@@ -9322,6 +10728,168 @@
     }
    },
    "expected": "unconfirmed_or_replica_incomplete"
+  },
+  {
+   "name": "number-like-forms-with-token-means-listed-in-another-order",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "r",
+     "form": "1e1",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "r",
+     "form": "10.0",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "10.0": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "1e1": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "profile_and_benefit_satisfied_not_ratified",
+   "inventory": {
+    "readers": [
+     "r"
+    ],
+    "forms": [
+     "1e1",
+     "10.0"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   }
+  },
+  {
+   "name": "number-like-forms-with-token-means-for-an-equal-number",
+   "source": "implementer",
+   "cells": [
+    {
+     "reader": "r",
+     "form": "1e1",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    },
+    {
+     "reader": "r",
+     "form": "10.0",
+     "marked": [
+      512,
+      512
+     ],
+     "english": [
+      512,
+      512
+     ],
+     "errors": {
+      "e": [
+       0,
+       512
+      ]
+     }
+    }
+   ],
+   "context": {
+    "prospective": true,
+    "unique_worlds": true,
+    "confirmed": true,
+    "fresh_replica_pass": true,
+    "confirmed_loss": false,
+    "matched_comparator": true,
+    "all_other_promises": true,
+    "token_means": {
+     "cl100k_base": -2,
+     "o200k_base": -2,
+     "p50k_base": -2
+    },
+    "token_form_means": {
+     "1e1": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     },
+     "10.00": {
+      "cl100k_base": -2,
+      "o200k_base": -2,
+      "p50k_base": -2
+     }
+    }
+   },
+   "expected": "no_demonstrated_benefit",
+   "inventory": {
+    "readers": [
+     "r"
+    ],
+    "forms": [
+     "1e1",
+     "10.0"
+    ],
+    "error_endpoints": [
+     "e"
+    ]
+   }
   }
  ]
 }

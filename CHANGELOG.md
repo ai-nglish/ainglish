@@ -22,6 +22,11 @@
   display only. `outcome` requires every context fact and raises `ContextRefused` on a missing or
   non-boolean one. Nothing calls the module yet: no contract, mint, journal, settlement or served
   harness file changes, and the profile is not live on the register.
+  The shared vector file also holds 17 identity cases and two more outcome cases, families whose
+  names are the test: a reader and a form that a joined key would merge with another pair, and
+  endpoint and form names that are one number and several names. This module judged all 19
+  correctly as written; they were added because the register's twin did not, and the two must
+  read one file.
 
 ## 0.2.68 — 2026-11-09
 
