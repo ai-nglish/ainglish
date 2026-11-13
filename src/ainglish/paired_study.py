@@ -282,6 +282,11 @@ def replay(plan, receipt):
     low, high = _interval(samples)
     point = sum(by_pair.values(), Fraction()) / len(by_pair)
     constant_pairs = [p["id"] for p in plan["pairs"] if p["twins"][0]["answer"] == p["twins"][1]["answer"]]
+    constant_positions = [p["id"] for p in plan["pairs"]
+                          if p["twins"][0]["options"].index(p["twins"][0]["answer"])
+                          == p["twins"][1]["options"].index(p["twins"][1]["answer"])]
+    identical_arms = [{"pair": p["id"], "twin": t["id"]} for p in plan["pairs"] for t in p["twins"]
+                      if t["english"] == t["ainglish"]]
     return {"kind": "ainglish.separate-call-pairs.report.v1", "governance_effect": "report_only",
             "plan_sha256": digest, "journal_sha256": receipt["rows_sha256"],
             "pair_accuracy_delta_pp": float(point), "bootstrap_95_percentile_interval_pp": [float(low), float(high)],
@@ -290,10 +295,14 @@ def replay(plan, receipt):
             "readers_held_fixed": True, "bootstrap_draws": n, "quantiles": "nearest-rank-0.025-0.975",
             "pairs": len(by_pair), "reader_pair_scores": len(cells), "separate_calls": len(rows),
             "constant_response_compatible_pairs": constant_pairs,
+            "constant_position_compatible_pairs": constant_positions,
+            "identical_arm_twins": identical_arms, "identical_arm_twin_count": len(identical_arms),
             "pair_scores": cells, "population_scope": plan["population_scope"],
             "limitations": ["External registration reference is not authenticated by this instrument.",
                             "Sampling/reader independence and semantic golds are author declarations, not verified here.",
                             "Pairs listed as constant-response-compatible can be correct without distinguishing the twins.",
+                            "Pairs listed as constant-position-compatible have both golds at the same option index; selecting that index can succeed without reading either message.",
+                            "Identical-arm twins have no textual treatment contrast; these diagnostics do not establish semantic validity or independence.",
                             "Percentile bootstrap can degenerate at boundaries; zero width is not zero uncertainty.",
                             "No official comprehension measurement or gate completion is emitted."]}
 

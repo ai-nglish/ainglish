@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extend report-only paired-study diagnostics with constant-option-position pairs
+  and identical-arm twins. Add regression coverage for input fingerprints,
+  bootstrap unit ordering, strict replay keys/options and suppressed transport
+  traces; document Python's retained exception context. Scoring, study identity,
+  abort policy and admission rules are unchanged.
+
 - Add report-only separate-call paired-study execution and raw-answer replay,
   with complete twin rosters, all-or-nothing pair correctness, distinct point
   weighting/resampling declarations, shared canonical commitments, per-arm

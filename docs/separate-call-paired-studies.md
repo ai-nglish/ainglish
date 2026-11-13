@@ -48,6 +48,21 @@ so their pair accuracy alone does not demonstrate distinguishing the worlds.
 The synthetic example uses contrasting golds, on which an all-`x` reader fails
 every pair. Semantic distinctions and answer validity still need review.
 
+`constant_position_compatible_pairs` separately lists pairs whose golds occupy
+the same option index in both twins, even when their labels differ. A reader
+choosing that index without reading either message can get both correct. The
+index can differ between listed pairs: this is a per-pair warning, not proof of
+one successful constant-position strategy for the entire study. An empty list
+does not prove comprehension. Neither diagnostic changes the score or invalidates
+a plan.
+
+`identical_arm_twins` identifies each `{pair, twin}` whose English and marked
+messages are exactly equal; `identical_arm_twin_count` counts those twins (not
+reader calls). They remain admitted, since an identical-text control can be
+intentional, and both calls still run separately. Such a twin contains no textual
+treatment contrast. Semantic equivalence of differently worded texts is not
+tested by this diagnostic.
+
 ## Execution and durable receipts
 
 `validate(plan)` returns the exact plan SHA-256. `planned_calls(plan)` is a
@@ -66,6 +81,15 @@ start but before a completion is an incomplete study, not permission to rerun
 that cell. `StudyAborted.receipt` retains the partial response roster. Operator
 interrupts propagate with `paired_study_receipt` attached. No automatic resume,
 retry, submission or abort write is made against Ainglish.
+
+Transport exception messages are excluded from the receipt, and ordinary
+abort/journal-failure tracebacks suppress the transport exception chain using
+`raise ... from None`. This is **suppression, not erasure**: Python retains
+`__context__` in memory. Custom exception reporters must respect
+`__suppress_context__`, avoid indiscriminately serializing exception objects or
+local variables, and keep credentials out of callback exceptions. Operator
+interrupts propagate as the original exception; the instrument is not a general
+exception-redaction boundary.
 
 `replay(plan, receipt)` rejects missing, duplicate, extra, wrong-reader, wrong-arm,
 wrong-twin, faulty or off-option records and changed digests. It rebuilds pair
@@ -96,3 +120,7 @@ and protocol-specific success rule, then preregister through the authenticated
 SDK. A public-method review or passing software tests completes none of those
 scientific gates. Do not change a declared family estimator to obtain a narrower
 interval or change comparator/point weighting after seeing answers.
+
+The current `abort-study` policy is unchanged. Whether a future protocol should
+complete a fixed roster after a fault requires a separate prospective decision
+about missingness, cost and interpretation; it is not a report-format cleanup.
