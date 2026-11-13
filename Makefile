@@ -1,4 +1,4 @@
-.PHONY: help preflight selftest smoke test
+.PHONY: help preflight rehearse selftest smoke test
 
 help: ## Show targets
 	@grep -E '^[a-z][a-z-]*:.*##' $(MAKEFILE_LIST) | sed 's/:.*## /\t/' | expand -t24
@@ -37,3 +37,9 @@ preflight: ## Checks a green suite cannot see (untracked, tag/version, index, mi
 	@python3 tools/preflight.py
 
 test: selftest smoke preflight ## Everything
+
+# RELEASING.md step 3: the release note's claim, run against the previous release (must fail) and
+# the wheel built from this tree (must pass), each in its own clean venv. Network.
+rehearse: ## make rehearse ASSERTION=path/to/assertion.py [CONTROL=X.Y.Z]
+	@test -n "$(ASSERTION)" || { echo "usage: make rehearse ASSERTION=path/to/assertion.py [CONTROL=X.Y.Z]"; exit 2; }
+	@python3 tools/rehearse_release.py "$(ASSERTION)" $(if $(CONTROL),--control $(CONTROL),)
