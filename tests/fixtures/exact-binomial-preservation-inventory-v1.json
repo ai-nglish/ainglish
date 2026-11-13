@@ -2,8 +2,8 @@
  "kind": "ainglish.preservation-inventory-vectors.v1",
  "analysis": "exact-binomial-preservation-v1",
  "note": "Hand-written expectations for the mint-time inventory check. `codes` is the exact set of problem codes; `family` is null where the feasibility check is skipped. Shared by the register and the SDK.",
- "valid": 9,
- "refused": 58,
+ "valid": 10,
+ "refused": 67,
  "cases": [
   {
    "name": "complete_family_of_24",
@@ -5970,6 +5970,799 @@
    "valid": false,
    "codes": [
     "sampling_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "stratum_weight_a_401_digit_integer",
+   "why": "valid JSON, and no finite weight: refused, never a crash",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "stratum_weight_a_309_digit_integer",
+   "why": "a long integer that is still a finite float is a weight like any other",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "stratum_weights_whose_sum_is_not_finite",
+   "why": "each weight is finite and their sum is not",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1e+308
+     },
+     {
+      "id": "form-b",
+      "weight": 1e+308
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "stratum_weight_a_negative_401_digit_integer",
+   "why": "no finite positive weight either way",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_largest_portable_integer",
+   "why": "9007199254740991 is still an integer everywhere, and far above the ceiling",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9007199254740991
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_above_ceiling"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_one_past_the_portable_integers",
+   "why": "past 2^53 - 1 a JSON reader may round it: not an integer for this check",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9007199254740992
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_largest_64_bit_integer",
+   "why": "an integer in PHP and in Python, and still past the portable range",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9223372036854775807
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_one_past_64_bits",
+   "why": "PHP decodes this to a float; Python must not call it merely too large",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9223372036854775808
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_a_401_digit_integer",
+   "why": "the case that crashed nothing and still disagreed: one code on both sides",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_a_negative_401_digit_integer",
+   "why": "negative and unbounded",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
    ],
    "family": null
   },

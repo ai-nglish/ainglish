@@ -27,6 +27,12 @@ that is itself malformed is skipped on both sides:
 - the feasibility of ``per_cell`` is checked when the readers, forms and error endpoints reported no
   problem at all and ``per_cell`` is an integer from 1 to the ceiling, whatever else sampling holds.
 
+Numbers. JSON admits integers of any length and a reader does not: PHP decodes one past 2^63 - 1 to
+a float, Python keeps it exact. So that both sides answer with the same code, ``per_cell`` is an
+integer only up to ``PORTABLE_INTEGER_MAX``; a longer one is ``per_cell_type``, never merely above
+the ceiling. A stratum weight is whatever finite positive number it is as a float, so an integer too
+long to be one is not a weight. No input makes ``check`` raise.
+
 What this cannot know, and does not pretend to: that two lineage names are two base models, that the
 sampled worlds are independent, that the English comparator is the shortest complete one. Those are
 three independently reviewed declarations. Nothing here reads them, and a field or flag that
@@ -54,6 +60,7 @@ MIN_LINEAGES = 2
 MAX_READERS = 16  # a manifest names at most 16 models; a reader is one of them
 MAX_FORMS = 64  # a form is a settlement stratum, and a manifest admits at most this many
 MAX_ERROR_ENDPOINTS = 64  # bounds the family and the exact search for the smallest feasible cell
+PORTABLE_INTEGER_MAX = 2**53 - 1  # the largest integer every JSON reader carries exactly (RFC 7493); past it, not an integer here
 
 _BARE_INTEGER = re.compile(r"-?(0|[1-9][0-9]*)")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -91,6 +98,21 @@ def _manifest_reader_names(manifest):
     return names if len(set(names)) == len(names) else None
 
 
+def _as_float(value):
+    """A JSON number as the float the register reads it as, or None when it is not a number.
+
+    JSON admits integers of any length. PHP decodes one too long for a float to INF, which the
+    register refuses as not finite; Python keeps the integer exact and ``float()`` raises on it. The
+    answer here is the register's: not a finite number, so not a weight. It never raises.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        return float(value)
+    except OverflowError:
+        return math.inf
+
+
 def _stratum_ids(manifest):
     """The ids of ``manifest.settlement_strata`` when it is a contract the register accepts, else None.
 
@@ -108,10 +130,11 @@ def _stratum_ids(manifest):
         ident, weight = row["id"], row["weight"]
         if not isinstance(ident, str) or not _STRATUM_ID.fullmatch(ident) or ident in ids:
             return None
-        if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(float(weight)) or float(weight) <= 0:
+        value = _as_float(weight)
+        if value is None or not math.isfinite(value) or value <= 0:
             return None
         ids.append(ident)
-        total += float(weight)
+        total += value
     return ids if math.isfinite(total) and total > 0 else None
 
 
@@ -232,8 +255,10 @@ def _sampling(raw, add):
     if not isinstance(raw["cluster_field"], str) or raw["cluster_field"] == "":
         add("sampling_cluster_field", "inventory.sampling.cluster_field must name the item field that carries the event or template cluster.")
     per_cell = raw["per_cell"]
-    if type(per_cell) is not int or per_cell < 1:  # True is an int in Python and is not a count
-        add("per_cell_type", "inventory.sampling.per_cell must be a JSON integer of at least 1: the fixed number of independent worlds in every reader, form and arm denominator.")
+    # True is an int in Python and is not a count. Past the portable range PHP holds a float where
+    # Python holds an integer, so there it is not an integer for either side.
+    if type(per_cell) is not int or per_cell < 1 or per_cell > PORTABLE_INTEGER_MAX:
+        add("per_cell_type", "inventory.sampling.per_cell must be a JSON integer of at least 1 (and no longer than %d, the largest every JSON reader carries exactly): the fixed number of independent worlds in every reader, form and arm denominator." % PORTABLE_INTEGER_MAX)
         return None
     if per_cell > _core.MAX_OBSERVATIONS:
         add("per_cell_above_ceiling", "inventory.sampling.per_cell is %d; the exact evaluation admits at most %d observations in a count." % (per_cell, _core.MAX_OBSERVATIONS))

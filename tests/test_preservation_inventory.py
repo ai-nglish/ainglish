@@ -18,7 +18,7 @@ from ainglish import preservation_inventory as I
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = ROOT / "tests" / "fixtures" / "exact-binomial-preservation-inventory-v1.json"
 # The register pins the same digest (tests/PreservationInventoryTest.php): one file, two readers.
-FIXTURE_SHA256 = "5dd38076448fa0c65482a2f95ed48e85425763937f2b80bcdc26e3a6f54140ae"
+FIXTURE_SHA256 = "497a962670619c2ad56cf0e15dd69513990e1abc3b45e15aee6be109c7fa6975"
 VECTORS = json.loads(FIXTURE.read_text(encoding="utf-8"))
 # Written out here and not collected from the module, so a code the module never emits is noticed.
 CODES = {
@@ -164,6 +164,65 @@ class PythonSideTests(unittest.TestCase):
             edit(m)
             self.assertIsNone(I._stratum_ids(m))
             self.assertEqual(codes_of(I.check(m)), ["manifest_strata"])
+
+    def test_no_value_anywhere_in_the_manifest_makes_the_check_raise(self):
+        """Dexagon's review of pull request 240: a 401-digit integer weight raised OverflowError.
+
+        Every node of the complete manifest below its root is replaced in turn by each odd value, and
+        the answer must be the envelope every time. The long integers are valid JSON; the non-finite
+        floats are what Python's own ``json`` hands over for ``1e400`` and for ``NaN``.
+        """
+        odd = [None, True, False, 0, -1, 1, 1.5, 512.0, 1e308, float("inf"), float("-inf"), float("nan"),
+               2**53 - 1, 2**53, 2**63 - 1, 2**63, 10**400, -(10**400), "", "x", "7", "form-a", [], [[]], {}, {"k": "v"},
+               [10**400], {"id": "form-a", "weight": 10**400}]
+
+        def paths(node, at=()):
+            if at:
+                yield at
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    yield from paths(value, at + (key,))
+            elif isinstance(node, list):
+                for index, value in enumerate(node):
+                    yield from paths(value, at + (index,))
+
+        every = list(paths(self.base()))
+        self.assertGreater(len(every), 40)
+        checks = 0
+        for at in every:
+            for value in odd:
+                m = self.base()
+                target = m
+                for step in at[:-1]:
+                    target = target[step]
+                target[at[-1]] = copy.deepcopy(value)
+                try:
+                    result = I.check(m)
+                except Exception as error:  # the finding: an exception where an answer was promised
+                    self.fail("%r at %r raised %r" % (value, at, error))
+                self.assertEqual(set(result), {"problems", "inventory", "family"}, (at, value))
+                for problem in result["problems"]:
+                    self.assertIn(problem["code"], CODES, (at, value))
+                self.assertEqual(result["inventory"] is None, bool(result["problems"]), (at, value))
+                checks += 1
+        self.assertEqual(checks, len(every) * len(odd))
+
+    def test_a_long_integer_is_refused_with_the_registers_code(self):
+        m = self.base()
+        m["settlement_strata"][0]["weight"] = 10**400
+        self.assertIsNone(I._stratum_ids(m))
+        self.assertEqual(codes_of(I.check(m)), ["manifest_strata"])
+        self.assertIsNone(I.check(m)["family"])
+        m = self.base()
+        m["settlement_strata"][0]["weight"] = 10**308  # long, and still a finite float: a weight like any other
+        self.assertEqual(I._stratum_ids(m), ["form-a", "form-b"])
+        self.assertEqual(I.check(m)["problems"], [])
+        for value, code in ((I.PORTABLE_INTEGER_MAX, "per_cell_above_ceiling"), (I.PORTABLE_INTEGER_MAX + 1, "per_cell_type"),
+                            (2**63 - 1, "per_cell_type"), (2**63, "per_cell_type"), (10**400, "per_cell_type")):
+            m = self.base()
+            m["preservation_inventory"]["sampling"]["per_cell"] = value
+            self.assertEqual(codes_of(I.check(m)), [code], value)
+        self.assertEqual(I.PORTABLE_INTEGER_MAX, 9007199254740991)
 
 
 if __name__ == "__main__":
