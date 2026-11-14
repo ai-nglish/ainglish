@@ -1,0 +1,6852 @@
+{
+ "kind": "ainglish.preservation-inventory-vectors.v1",
+ "analysis": "exact-binomial-preservation-v1",
+ "note": "Hand-written expectations for the mint-time inventory check. `codes` is the exact set of problem codes; `family` is null where the feasibility check is skipped. Shared by the register and the SDK.",
+ "valid": 10,
+ "refused": 67,
+ "cases": [
+  {
+   "name": "complete_family_of_24",
+   "why": "two readers of two lineages, two forms, two error families on both arms: M = 2 x 2 x (2 + 4) = 24",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "per_cell_134_is_the_floor",
+   "why": "134 is the smallest cell at which an all-correct family of 24 can support the profile",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 134
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 134
+   }
+  },
+  {
+   "name": "per_cell_133_cannot_support",
+   "why": "one below the floor is refused before any reader is asked",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 133
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_infeasible"
+   ],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 133
+   }
+  },
+  {
+   "name": "per_cell_at_the_ceiling",
+   "why": "the largest count the exact evaluation admits",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 4096
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 4096
+   }
+  },
+  {
+   "name": "per_cell_above_the_ceiling",
+   "why": "above the ceiling a cell could only ever be numerically unresolved",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 4097
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_above_ceiling"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_as_a_float",
+   "why": "512.0 is not a JSON integer",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512.0
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_as_text",
+   "why": "text is not a number",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": "512"
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_as_a_boolean",
+   "why": "true is not the integer 1",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": true
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_zero",
+   "why": "a denominator of nothing",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 0
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_negative",
+   "why": "a negative denominator",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": -134
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "analysis_of_another_version",
+   "why": "only the one reading exists",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v2",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "analysis"
+   ],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "analysis_not_text",
+   "why": "a flag is not the reading's name",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": true,
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "analysis"
+   ],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "inventory_absent",
+   "why": "the name of the analysis without the frozen inventory",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ]
+   },
+   "valid": false,
+   "codes": [
+    "inventory_missing"
+   ],
+   "family": null
+  },
+  {
+   "name": "inventory_a_list",
+   "why": "a list is not the object",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": [
+     {
+      "kind": "ainglish.preservation-inventory.v1",
+      "readers": [
+       {
+        "name": "reader-a",
+        "lineage": "lineage-x"
+       },
+       {
+        "name": "reader-b",
+        "lineage": "lineage-y"
+       }
+      ],
+      "forms": [
+       "form-a",
+       "form-b"
+      ],
+      "error_endpoints": [
+       {
+        "id": "false-authority@english",
+        "family": "false-authority",
+        "arm": "english",
+        "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+       },
+       {
+        "id": "false-authority@ainglish",
+        "family": "false-authority",
+        "arm": "ainglish",
+        "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+       },
+       {
+        "id": "false-polarity@english",
+        "family": "false-polarity",
+        "arm": "english",
+        "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+       },
+       {
+        "id": "false-polarity@ainglish",
+        "family": "false-polarity",
+        "arm": "ainglish",
+        "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+       }
+      ],
+      "sampling": {
+       "unit": "world",
+       "cluster_field": "template_cluster",
+       "per_cell": 512
+      }
+     }
+    ]
+   },
+   "valid": false,
+   "codes": [
+    "inventory_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "inventory_empty",
+   "why": "an empty object freezes nothing",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {}
+   },
+   "valid": false,
+   "codes": [
+    "inventory_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "inventory_text",
+   "why": "a pointer is not the inventory",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": "see the thread"
+   },
+   "valid": false,
+   "codes": [
+    "inventory_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "a_reviews_key_is_not_a_review",
+   "why": "a review cannot be asserted by adding a field to a closed object",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     },
+     "reviews": {
+      "lineage": "reviewed"
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "inventory_keys"
+   ],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "sampling_left_out",
+   "why": "all five keys are required",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ]
+    }
+   },
+   "valid": false,
+   "codes": [
+    "inventory_keys"
+   ],
+   "family": null
+  },
+  {
+   "name": "kind_of_another_version",
+   "why": "the kind is spelled exactly",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v2",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "kind"
+   ],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "one_reader",
+   "why": "delete a reader: one lineage is not two",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "lineages_fewer_than_two"
+   ],
+   "family": null
+  },
+  {
+   "name": "two_endpoints_of_one_lineage",
+   "why": "two names of one base model are one lineage",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-x"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "lineages_fewer_than_two"
+   ],
+   "family": null
+  },
+  {
+   "name": "three_readers_two_lineages",
+   "why": "a third reader of a lineage already present is counted: M = 3 x 2 x 6 = 36",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     },
+     {
+      "name": "reader-c"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-c",
+       "lineage": "lineage-x"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 36,
+    "tail_fraction": "1/1440",
+    "minimum_per_cell": 142,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "reader_named_twice",
+   "why": "one reader cannot fill two cells",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-a",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "reader_duplicate"
+   ],
+   "family": null
+  },
+  {
+   "name": "reader_name_a_bare_integer",
+   "why": "a bare integer name is a different object in the two languages",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "7"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "7",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "reader_name"
+   ],
+   "family": null
+  },
+  {
+   "name": "reader_name_empty",
+   "why": "an empty name",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "reader_name"
+   ],
+   "family": null
+  },
+  {
+   "name": "lineage_not_text",
+   "why": "a lineage is a name",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": 3
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "lineage_name"
+   ],
+   "family": null
+  },
+  {
+   "name": "reader_row_with_a_review_flag",
+   "why": "a caller's reviewed flag is refused, not believed",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x",
+       "reviewed": true
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "readers_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "reader_row_without_lineage",
+   "why": "every reader declares its lineage",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "readers_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "readers_a_bare_name_list",
+   "why": "names alone carry no lineage",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      "reader-a",
+      "reader-b"
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "readers_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "readers_not_those_of_the_manifest",
+   "why": "the family counts a reader that is not asked",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-z"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "readers_differ_from_manifest"
+   ],
+   "family": null
+  },
+  {
+   "name": "manifest_asks_an_uncounted_reader",
+   "why": "a reader is asked that the family does not count",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     },
+     {
+      "name": "reader-c"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "readers_differ_from_manifest"
+   ],
+   "family": null
+  },
+  {
+   "name": "manifest_readers_absent",
+   "why": "nothing to hold the inventory to",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_readers"
+   ],
+   "family": null
+  },
+  {
+   "name": "manifest_names_a_reader_twice",
+   "why": "a manifest that asks one reader twice does not say which readers are asked",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_readers"
+   ],
+   "family": null
+  },
+  {
+   "name": "manifest_reader_row_without_a_name",
+   "why": "a reader row with no name cannot be matched",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "model": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_readers"
+   ],
+   "family": null
+  },
+  {
+   "name": "manifest_readers_not_a_list",
+   "why": "an object keyed by name is not the list the journal uses",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": {
+     "first": {
+      "name": "reader-a"
+     },
+     "second": {
+      "name": "reader-b"
+     }
+    },
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_readers"
+   ],
+   "family": null
+  },
+  {
+   "name": "number_like_names_in_another_order",
+   "why": "1e1 and 10.0 are two names; compared as numbers they would be one, and the same two in another order would stop matching",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "10.0"
+     },
+     {
+      "name": "1e1"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "1e1",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "10.0",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "reader_names_holding_a_nul",
+   "why": "names may hold any byte and still be two readers",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "a"
+     },
+     {
+      "name": "a\u0000b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "a\u0000b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "sixteen_readers_at_the_cap",
+   "why": "the most readers a manifest may name: M = 16 x 2 x 6 = 192",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-00"
+     },
+     {
+      "name": "reader-01"
+     },
+     {
+      "name": "reader-02"
+     },
+     {
+      "name": "reader-03"
+     },
+     {
+      "name": "reader-04"
+     },
+     {
+      "name": "reader-05"
+     },
+     {
+      "name": "reader-06"
+     },
+     {
+      "name": "reader-07"
+     },
+     {
+      "name": "reader-08"
+     },
+     {
+      "name": "reader-09"
+     },
+     {
+      "name": "reader-10"
+     },
+     {
+      "name": "reader-11"
+     },
+     {
+      "name": "reader-12"
+     },
+     {
+      "name": "reader-13"
+     },
+     {
+      "name": "reader-14"
+     },
+     {
+      "name": "reader-15"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-00",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-01",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-02",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-03",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-04",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-05",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-06",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-07",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-08",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-09",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-10",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-11",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-12",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-13",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-14",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-15",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 192,
+    "tail_fraction": "1/7680",
+    "minimum_per_cell": 175,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "seventeen_readers",
+   "why": "one more than a manifest may name",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-00"
+     },
+     {
+      "name": "reader-01"
+     },
+     {
+      "name": "reader-02"
+     },
+     {
+      "name": "reader-03"
+     },
+     {
+      "name": "reader-04"
+     },
+     {
+      "name": "reader-05"
+     },
+     {
+      "name": "reader-06"
+     },
+     {
+      "name": "reader-07"
+     },
+     {
+      "name": "reader-08"
+     },
+     {
+      "name": "reader-09"
+     },
+     {
+      "name": "reader-10"
+     },
+     {
+      "name": "reader-11"
+     },
+     {
+      "name": "reader-12"
+     },
+     {
+      "name": "reader-13"
+     },
+     {
+      "name": "reader-14"
+     },
+     {
+      "name": "reader-15"
+     },
+     {
+      "name": "reader-16"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-00",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-01",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-02",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-03",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-04",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-05",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-06",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-07",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-08",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-09",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-10",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-11",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-12",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-13",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-14",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-15",
+       "lineage": "lineage-y"
+      },
+      {
+       "name": "reader-16",
+       "lineage": "lineage-x"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "readers_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "form_not_a_stratum",
+   "why": "a form that is not a settlement stratum cannot be replayed",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-c"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "forms_differ_from_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "one_form_of_two_strata",
+   "why": "delete a form: the stratum left out would be pooled away",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "forms_differ_from_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "form_named_twice",
+   "why": "one form cannot fill two cells",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-a"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "form_duplicate"
+   ],
+   "family": null
+  },
+  {
+   "name": "strata_absent",
+   "why": "under this reading each form is a settlement stratum",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "strata_malformed",
+   "why": "a stratum contract the register refuses cannot carry forms",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 0
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "form_not_text",
+   "why": "a form is a name, and 7 is a number",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      7,
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "form_name"
+   ],
+   "family": null
+  },
+  {
+   "name": "forms_empty",
+   "why": "at least one form",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "forms_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "one_family_on_both_arms",
+   "why": "one error family on both arms: M = 2 x 2 x (2 + 2) = 16",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 16,
+    "tail_fraction": "1/640",
+    "minimum_per_cell": 126,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "a_family_on_one_arm",
+   "why": "delete an arm: the family of 20 that remains is not the design",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "family_one_armed"
+   ],
+   "family": null
+  },
+  {
+   "name": "both_families_on_one_arm_only",
+   "why": "the marked arm alone evaluates as a valid-looking family of 16",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "family_one_armed"
+   ],
+   "family": null
+  },
+  {
+   "name": "arm_called_marked",
+   "why": "the journal's arms are english and ainglish",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "marked",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_arm"
+   ],
+   "family": null
+  },
+  {
+   "name": "a_family_twice_on_one_arm",
+   "why": "two endpoints for one family on one arm, and none on the other",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_pair_duplicate",
+    "family_one_armed"
+   ],
+   "family": null
+  },
+  {
+   "name": "endpoint_id_twice",
+   "why": "an id names one endpoint",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_duplicate"
+   ],
+   "family": null
+  },
+  {
+   "name": "endpoint_id_empty",
+   "why": "an endpoint is addressed by its id",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_id"
+   ],
+   "family": null
+  },
+  {
+   "name": "scoring_key_too_short",
+   "why": "63 characters is not a digest",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a488"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_key"
+   ],
+   "family": null
+  },
+  {
+   "name": "scoring_key_in_capitals",
+   "why": "lowercase, so one key has one spelling",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "2D711642B726B04401627CA9FBAC32F5C8530FB1903CC4DB02258717921A4881"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_key"
+   ],
+   "family": null
+  },
+  {
+   "name": "scoring_key_absent",
+   "why": "an endpoint without a frozen key",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoints_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "endpoint_row_with_an_extra_key",
+   "why": "a closed row",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b",
+       "pooled": true
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoints_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "no_error_endpoints",
+   "why": "the reading bounds semantic errors; a design that asks none cannot show them bounded",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoints_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "endpoints_as_bare_names",
+   "why": "a name carries neither arm nor key",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      "false-authority",
+      "false-polarity"
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoints_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "family_a_bare_integer",
+   "why": "a family is a name",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "12",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "12",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_family"
+   ],
+   "family": null
+  },
+  {
+   "name": "sixty_six_error_endpoints",
+   "why": "33 families on both arms is 66 endpoints, two more than the inventory admits",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "family-00@english",
+       "family": "family-00",
+       "arm": "english",
+       "scoring_key_sha256": "8a7d75dcb7ddba46a41025754c1ca1838dbc9bab591675a952bc3eb523835715"
+      },
+      {
+       "id": "family-00@ainglish",
+       "family": "family-00",
+       "arm": "ainglish",
+       "scoring_key_sha256": "4fccf8b46246dc86f7e6ce8c77d9109d7af6c4748781ef5738de40a516dfbaf7"
+      },
+      {
+       "id": "family-01@english",
+       "family": "family-01",
+       "arm": "english",
+       "scoring_key_sha256": "ced555eb120f44b3998f5807dd3e964b928e95a555f9024bd34da1887adeb841"
+      },
+      {
+       "id": "family-01@ainglish",
+       "family": "family-01",
+       "arm": "ainglish",
+       "scoring_key_sha256": "87c5791ac267f1f34c9958354d6b7c1220fb4a4e7a4727a9607fd07decd866bc"
+      },
+      {
+       "id": "family-02@english",
+       "family": "family-02",
+       "arm": "english",
+       "scoring_key_sha256": "ecb19273a5a71c48c85d14b0df2425c588102b0c545c1ef140c74b57d57d7f6f"
+      },
+      {
+       "id": "family-02@ainglish",
+       "family": "family-02",
+       "arm": "ainglish",
+       "scoring_key_sha256": "499e6aa57a24f003006056c7b66a732d1ca853f221a12a0b9870e708cb11f545"
+      },
+      {
+       "id": "family-03@english",
+       "family": "family-03",
+       "arm": "english",
+       "scoring_key_sha256": "edb54e799714778d751841078e130f86cd0913ac0a449c61f5e19dc10e0b5274"
+      },
+      {
+       "id": "family-03@ainglish",
+       "family": "family-03",
+       "arm": "ainglish",
+       "scoring_key_sha256": "459924b546e6e55c78de58d3daab00465abba2fd1c4718db4b6c6b770349eb41"
+      },
+      {
+       "id": "family-04@english",
+       "family": "family-04",
+       "arm": "english",
+       "scoring_key_sha256": "d5bda0792de87d189b5f89fb2d857d596dedaa68ad53df1560fc9fc720212055"
+      },
+      {
+       "id": "family-04@ainglish",
+       "family": "family-04",
+       "arm": "ainglish",
+       "scoring_key_sha256": "d5d544a45dbc26b0e3b8abeb1a789fac38017b36006bec39acb580a26ac72b80"
+      },
+      {
+       "id": "family-05@english",
+       "family": "family-05",
+       "arm": "english",
+       "scoring_key_sha256": "cbee73dd5ef6d63c71d23cd1f8b2d6a39fd991c45c71908e08227c3d5ce35356"
+      },
+      {
+       "id": "family-05@ainglish",
+       "family": "family-05",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f3a553beb65955d3887d9376e8f95934f19f759bbddee8a0acb36382dc85eee9"
+      },
+      {
+       "id": "family-06@english",
+       "family": "family-06",
+       "arm": "english",
+       "scoring_key_sha256": "82a3c1b97f3dbab165e8d7a2a606445eb27fb3c617e0dd99a80263fd8f2300e6"
+      },
+      {
+       "id": "family-06@ainglish",
+       "family": "family-06",
+       "arm": "ainglish",
+       "scoring_key_sha256": "016738abee982fb934380f43cd4b5a9499d23a2f1e252c84410b1009b9ff3e20"
+      },
+      {
+       "id": "family-07@english",
+       "family": "family-07",
+       "arm": "english",
+       "scoring_key_sha256": "dbad839d835354bae68b1bc081fa5444cfb544a346a9064d95039199d735b7ab"
+      },
+      {
+       "id": "family-07@ainglish",
+       "family": "family-07",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f963c68889c9f9850009f964f16d0336a9f16731f3623f64253b65af694ba8de"
+      },
+      {
+       "id": "family-08@english",
+       "family": "family-08",
+       "arm": "english",
+       "scoring_key_sha256": "8ac936134a653ce4a2b45b2efdd553789ee31e1de07ef67a9d80db36d184a838"
+      },
+      {
+       "id": "family-08@ainglish",
+       "family": "family-08",
+       "arm": "ainglish",
+       "scoring_key_sha256": "b21feaa8b90de34b32748e07d3a112fe5274421ef59fc8698aecb346e660e694"
+      },
+      {
+       "id": "family-09@english",
+       "family": "family-09",
+       "arm": "english",
+       "scoring_key_sha256": "ad3461da97411637164ad6a25b101f4fe85ab6f04dbeaa1497eb25de768ed2cf"
+      },
+      {
+       "id": "family-09@ainglish",
+       "family": "family-09",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f3ed4086a120229ecd084d311eb30561ca0b7b784d49e8c17c4fea96515ea305"
+      },
+      {
+       "id": "family-10@english",
+       "family": "family-10",
+       "arm": "english",
+       "scoring_key_sha256": "89725ea8266b80fdd4cde0d23bcbd29fc8e06a60dc083e061cd3d37ba3c6f857"
+      },
+      {
+       "id": "family-10@ainglish",
+       "family": "family-10",
+       "arm": "ainglish",
+       "scoring_key_sha256": "b42c0abedfff5c7ae5e875bae47265c11b8ec4644e379fa4b9d7147fabf2fe92"
+      },
+      {
+       "id": "family-11@english",
+       "family": "family-11",
+       "arm": "english",
+       "scoring_key_sha256": "eba4f52cd501ecd4bff8a4b0eaa5f9d7d8a6b9e28d924e3ff07b681269ed03d5"
+      },
+      {
+       "id": "family-11@ainglish",
+       "family": "family-11",
+       "arm": "ainglish",
+       "scoring_key_sha256": "d8a72c3347f8eb161c47a522a0884afe2a8fb16911f9fd8c81771fad42a33e1a"
+      },
+      {
+       "id": "family-12@english",
+       "family": "family-12",
+       "arm": "english",
+       "scoring_key_sha256": "3a80516c32e5a488401904f55778346dd364e7b0423e967514592088dfa36a8e"
+      },
+      {
+       "id": "family-12@ainglish",
+       "family": "family-12",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fb7f53b1c3c50f9881b93aa1dd3317105fe58e1434e8b1942939dcbd2b211016"
+      },
+      {
+       "id": "family-13@english",
+       "family": "family-13",
+       "arm": "english",
+       "scoring_key_sha256": "2ed0b3771b408e78aa86e07166ee535376e6c1e336d04f5e33d713f30ca97e87"
+      },
+      {
+       "id": "family-13@ainglish",
+       "family": "family-13",
+       "arm": "ainglish",
+       "scoring_key_sha256": "83c3ed624f52dc9067c0c060f357fa09bfb2ff11f8fcb69ae6827a6576790e2e"
+      },
+      {
+       "id": "family-14@english",
+       "family": "family-14",
+       "arm": "english",
+       "scoring_key_sha256": "2bb2a19358944e65abaf376ab04cbc7c9d995d183e89731ba8b467e9d0df5699"
+      },
+      {
+       "id": "family-14@ainglish",
+       "family": "family-14",
+       "arm": "ainglish",
+       "scoring_key_sha256": "8624a367ade23ad9810683168147efbfabaa7669a4459a9e50bfa5f8947e62e8"
+      },
+      {
+       "id": "family-15@english",
+       "family": "family-15",
+       "arm": "english",
+       "scoring_key_sha256": "0a9cbe085752736cef10ab85cf0bc0321169adbc81439383eee5599b0d7f7895"
+      },
+      {
+       "id": "family-15@ainglish",
+       "family": "family-15",
+       "arm": "ainglish",
+       "scoring_key_sha256": "ea4150d2ed55439337b2eca246bf5adbfc0b1fcbed72ed9a8e461184fbc5eae0"
+      },
+      {
+       "id": "family-16@english",
+       "family": "family-16",
+       "arm": "english",
+       "scoring_key_sha256": "b626e2db2b0658a59623ca3b9e5ca9f997c7c99c3efef533defc73524c132695"
+      },
+      {
+       "id": "family-16@ainglish",
+       "family": "family-16",
+       "arm": "ainglish",
+       "scoring_key_sha256": "2f2bf6f721a5ae9c95e1309bcec77ef58442048356e7bf78ac7c14bf70c742b0"
+      },
+      {
+       "id": "family-17@english",
+       "family": "family-17",
+       "arm": "english",
+       "scoring_key_sha256": "01944520b1e982df8a73c68d984109ecdc37b4a228eecc7211f194d9032789cd"
+      },
+      {
+       "id": "family-17@ainglish",
+       "family": "family-17",
+       "arm": "ainglish",
+       "scoring_key_sha256": "937f170739b97d52575e0881bb41c51a7d4df07773855d889113d447ea2125a2"
+      },
+      {
+       "id": "family-18@english",
+       "family": "family-18",
+       "arm": "english",
+       "scoring_key_sha256": "a13ecb33e2dc38249e1bfc94457f76dc596f159efcaa5c94e720cdfa0153fa6e"
+      },
+      {
+       "id": "family-18@ainglish",
+       "family": "family-18",
+       "arm": "ainglish",
+       "scoring_key_sha256": "3a119bbf579732fe275431bc2d687cada96e44910a82e94bec09fddc917b2f4a"
+      },
+      {
+       "id": "family-19@english",
+       "family": "family-19",
+       "arm": "english",
+       "scoring_key_sha256": "97fe70f76aab897059dda2bc832cfc9bd549d4b13fe1e1988d21e9a0ba9f7658"
+      },
+      {
+       "id": "family-19@ainglish",
+       "family": "family-19",
+       "arm": "ainglish",
+       "scoring_key_sha256": "be4dc323560aaf8336f9ebd2572ae74944728c526498c7b542408535d7e5e1d9"
+      },
+      {
+       "id": "family-20@english",
+       "family": "family-20",
+       "arm": "english",
+       "scoring_key_sha256": "cebcd6e4680426e5b6cdf8e85fd2ed40b1cf9f0171e8470a0daf8a835abd4662"
+      },
+      {
+       "id": "family-20@ainglish",
+       "family": "family-20",
+       "arm": "ainglish",
+       "scoring_key_sha256": "7a3d67ebc3674b25a7df678f8c32d3ff66b5ef3ee8b0255e8ead3b6e4dfe7d2b"
+      },
+      {
+       "id": "family-21@english",
+       "family": "family-21",
+       "arm": "english",
+       "scoring_key_sha256": "fde6010cc1a9107cab4d0d7381f0d23b429fb1ed90734240d8dfc848b7103348"
+      },
+      {
+       "id": "family-21@ainglish",
+       "family": "family-21",
+       "arm": "ainglish",
+       "scoring_key_sha256": "34ceb9f487a87ed74c9fff7d53430cb1be4bad76d4c077b885770ac25a135283"
+      },
+      {
+       "id": "family-22@english",
+       "family": "family-22",
+       "arm": "english",
+       "scoring_key_sha256": "6889a1b1b82102c55961e9cafa891f843c2839ec4c40a372a62e73b29dabead6"
+      },
+      {
+       "id": "family-22@ainglish",
+       "family": "family-22",
+       "arm": "ainglish",
+       "scoring_key_sha256": "3deca392cd430d230ec9f9d45728c03c0e2db558c2b01efaf4d1a50148621af5"
+      },
+      {
+       "id": "family-23@english",
+       "family": "family-23",
+       "arm": "english",
+       "scoring_key_sha256": "ee56bb1634053371ad57cc0c149bbacce9b8be0ac89d35500f80974ebf21ea6e"
+      },
+      {
+       "id": "family-23@ainglish",
+       "family": "family-23",
+       "arm": "ainglish",
+       "scoring_key_sha256": "b0b7514e497a72262279505fc4197eaa5cb0fef165d4149cc96e2263749a6668"
+      },
+      {
+       "id": "family-24@english",
+       "family": "family-24",
+       "arm": "english",
+       "scoring_key_sha256": "ee6819dd35c69c25a8ade1f8289c5d49166b5fb100db7513ac1d604bb059a24e"
+      },
+      {
+       "id": "family-24@ainglish",
+       "family": "family-24",
+       "arm": "ainglish",
+       "scoring_key_sha256": "8edc52bffa1d82ac5c0bec783aa2b9c7b410707dc150df1c1e9e2347799c11ea"
+      },
+      {
+       "id": "family-25@english",
+       "family": "family-25",
+       "arm": "english",
+       "scoring_key_sha256": "d5aa4cbab96e1502cc55599cfcc41623bda3a1daf222313f433b37890dd1cfcf"
+      },
+      {
+       "id": "family-25@ainglish",
+       "family": "family-25",
+       "arm": "ainglish",
+       "scoring_key_sha256": "daca21213e5d85c0268c10a578ce9431fc398d84584baf5209f8741518632d59"
+      },
+      {
+       "id": "family-26@english",
+       "family": "family-26",
+       "arm": "english",
+       "scoring_key_sha256": "8a319e8058efe9030c7a50586bc8c360e369699bf80d676d54792b588e8e0795"
+      },
+      {
+       "id": "family-26@ainglish",
+       "family": "family-26",
+       "arm": "ainglish",
+       "scoring_key_sha256": "333906204bc0a36dab7d3abc660e306bd9b13ca4b63dcb81ac0951729400d466"
+      },
+      {
+       "id": "family-27@english",
+       "family": "family-27",
+       "arm": "english",
+       "scoring_key_sha256": "a8272ff23791fef9ec3f9d38852ec828bd7bfaae6151c72517a863483ada6038"
+      },
+      {
+       "id": "family-27@ainglish",
+       "family": "family-27",
+       "arm": "ainglish",
+       "scoring_key_sha256": "86e4ecc133d4fc74d554343fa18ba577bcd095e040c8719d124fe22fa2f9bccd"
+      },
+      {
+       "id": "family-28@english",
+       "family": "family-28",
+       "arm": "english",
+       "scoring_key_sha256": "7731c87805223d866b350c26cf495301351da68a528a0578c7dacd65925f9211"
+      },
+      {
+       "id": "family-28@ainglish",
+       "family": "family-28",
+       "arm": "ainglish",
+       "scoring_key_sha256": "9792fe4c1aa6726fad43288d01c58a8f9f1e835df72dd794c05b9508fefbc451"
+      },
+      {
+       "id": "family-29@english",
+       "family": "family-29",
+       "arm": "english",
+       "scoring_key_sha256": "a76c47825181f9eaa4699adad518491956bf00708edc79095bc3cbe2c035f808"
+      },
+      {
+       "id": "family-29@ainglish",
+       "family": "family-29",
+       "arm": "ainglish",
+       "scoring_key_sha256": "51459ff05a11ec21a1bc584cc321c948da08bc9655df0d6f4205c8bea3093bfd"
+      },
+      {
+       "id": "family-30@english",
+       "family": "family-30",
+       "arm": "english",
+       "scoring_key_sha256": "aefdd8d0627b20dba4f3bedccf9ab172cc2959af32a45826233c2be0e69732c4"
+      },
+      {
+       "id": "family-30@ainglish",
+       "family": "family-30",
+       "arm": "ainglish",
+       "scoring_key_sha256": "e52fe120d7cf899e56157e10a9c585e370d8833f7d1385643c227ad1184b5aae"
+      },
+      {
+       "id": "family-31@english",
+       "family": "family-31",
+       "arm": "english",
+       "scoring_key_sha256": "03fdfbd76f6290dbbb249e02fdd7aa6c565a24fae75095830c042e9749b028b7"
+      },
+      {
+       "id": "family-31@ainglish",
+       "family": "family-31",
+       "arm": "ainglish",
+       "scoring_key_sha256": "e7f7b98ab988b583dfcf13146d9cc9b2b447409358f6a52f879fc20e155cda43"
+      },
+      {
+       "id": "family-32@english",
+       "family": "family-32",
+       "arm": "english",
+       "scoring_key_sha256": "97b976ed5b30c8bb4d8e4821fe02e70e355b033b0c27af79f683c9fcb90b2ec2"
+      },
+      {
+       "id": "family-32@ainglish",
+       "family": "family-32",
+       "arm": "ainglish",
+       "scoring_key_sha256": "3075b6a52047d21817140db4a9df7a9a6914a9084e8cbb85c7951b560a3212f3"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoints_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "sixty_four_error_endpoints",
+   "why": "32 families on both arms, the most the inventory admits: M = 2 x 2 x (2 + 64) = 264",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "family-00@english",
+       "family": "family-00",
+       "arm": "english",
+       "scoring_key_sha256": "8a7d75dcb7ddba46a41025754c1ca1838dbc9bab591675a952bc3eb523835715"
+      },
+      {
+       "id": "family-00@ainglish",
+       "family": "family-00",
+       "arm": "ainglish",
+       "scoring_key_sha256": "4fccf8b46246dc86f7e6ce8c77d9109d7af6c4748781ef5738de40a516dfbaf7"
+      },
+      {
+       "id": "family-01@english",
+       "family": "family-01",
+       "arm": "english",
+       "scoring_key_sha256": "ced555eb120f44b3998f5807dd3e964b928e95a555f9024bd34da1887adeb841"
+      },
+      {
+       "id": "family-01@ainglish",
+       "family": "family-01",
+       "arm": "ainglish",
+       "scoring_key_sha256": "87c5791ac267f1f34c9958354d6b7c1220fb4a4e7a4727a9607fd07decd866bc"
+      },
+      {
+       "id": "family-02@english",
+       "family": "family-02",
+       "arm": "english",
+       "scoring_key_sha256": "ecb19273a5a71c48c85d14b0df2425c588102b0c545c1ef140c74b57d57d7f6f"
+      },
+      {
+       "id": "family-02@ainglish",
+       "family": "family-02",
+       "arm": "ainglish",
+       "scoring_key_sha256": "499e6aa57a24f003006056c7b66a732d1ca853f221a12a0b9870e708cb11f545"
+      },
+      {
+       "id": "family-03@english",
+       "family": "family-03",
+       "arm": "english",
+       "scoring_key_sha256": "edb54e799714778d751841078e130f86cd0913ac0a449c61f5e19dc10e0b5274"
+      },
+      {
+       "id": "family-03@ainglish",
+       "family": "family-03",
+       "arm": "ainglish",
+       "scoring_key_sha256": "459924b546e6e55c78de58d3daab00465abba2fd1c4718db4b6c6b770349eb41"
+      },
+      {
+       "id": "family-04@english",
+       "family": "family-04",
+       "arm": "english",
+       "scoring_key_sha256": "d5bda0792de87d189b5f89fb2d857d596dedaa68ad53df1560fc9fc720212055"
+      },
+      {
+       "id": "family-04@ainglish",
+       "family": "family-04",
+       "arm": "ainglish",
+       "scoring_key_sha256": "d5d544a45dbc26b0e3b8abeb1a789fac38017b36006bec39acb580a26ac72b80"
+      },
+      {
+       "id": "family-05@english",
+       "family": "family-05",
+       "arm": "english",
+       "scoring_key_sha256": "cbee73dd5ef6d63c71d23cd1f8b2d6a39fd991c45c71908e08227c3d5ce35356"
+      },
+      {
+       "id": "family-05@ainglish",
+       "family": "family-05",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f3a553beb65955d3887d9376e8f95934f19f759bbddee8a0acb36382dc85eee9"
+      },
+      {
+       "id": "family-06@english",
+       "family": "family-06",
+       "arm": "english",
+       "scoring_key_sha256": "82a3c1b97f3dbab165e8d7a2a606445eb27fb3c617e0dd99a80263fd8f2300e6"
+      },
+      {
+       "id": "family-06@ainglish",
+       "family": "family-06",
+       "arm": "ainglish",
+       "scoring_key_sha256": "016738abee982fb934380f43cd4b5a9499d23a2f1e252c84410b1009b9ff3e20"
+      },
+      {
+       "id": "family-07@english",
+       "family": "family-07",
+       "arm": "english",
+       "scoring_key_sha256": "dbad839d835354bae68b1bc081fa5444cfb544a346a9064d95039199d735b7ab"
+      },
+      {
+       "id": "family-07@ainglish",
+       "family": "family-07",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f963c68889c9f9850009f964f16d0336a9f16731f3623f64253b65af694ba8de"
+      },
+      {
+       "id": "family-08@english",
+       "family": "family-08",
+       "arm": "english",
+       "scoring_key_sha256": "8ac936134a653ce4a2b45b2efdd553789ee31e1de07ef67a9d80db36d184a838"
+      },
+      {
+       "id": "family-08@ainglish",
+       "family": "family-08",
+       "arm": "ainglish",
+       "scoring_key_sha256": "b21feaa8b90de34b32748e07d3a112fe5274421ef59fc8698aecb346e660e694"
+      },
+      {
+       "id": "family-09@english",
+       "family": "family-09",
+       "arm": "english",
+       "scoring_key_sha256": "ad3461da97411637164ad6a25b101f4fe85ab6f04dbeaa1497eb25de768ed2cf"
+      },
+      {
+       "id": "family-09@ainglish",
+       "family": "family-09",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f3ed4086a120229ecd084d311eb30561ca0b7b784d49e8c17c4fea96515ea305"
+      },
+      {
+       "id": "family-10@english",
+       "family": "family-10",
+       "arm": "english",
+       "scoring_key_sha256": "89725ea8266b80fdd4cde0d23bcbd29fc8e06a60dc083e061cd3d37ba3c6f857"
+      },
+      {
+       "id": "family-10@ainglish",
+       "family": "family-10",
+       "arm": "ainglish",
+       "scoring_key_sha256": "b42c0abedfff5c7ae5e875bae47265c11b8ec4644e379fa4b9d7147fabf2fe92"
+      },
+      {
+       "id": "family-11@english",
+       "family": "family-11",
+       "arm": "english",
+       "scoring_key_sha256": "eba4f52cd501ecd4bff8a4b0eaa5f9d7d8a6b9e28d924e3ff07b681269ed03d5"
+      },
+      {
+       "id": "family-11@ainglish",
+       "family": "family-11",
+       "arm": "ainglish",
+       "scoring_key_sha256": "d8a72c3347f8eb161c47a522a0884afe2a8fb16911f9fd8c81771fad42a33e1a"
+      },
+      {
+       "id": "family-12@english",
+       "family": "family-12",
+       "arm": "english",
+       "scoring_key_sha256": "3a80516c32e5a488401904f55778346dd364e7b0423e967514592088dfa36a8e"
+      },
+      {
+       "id": "family-12@ainglish",
+       "family": "family-12",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fb7f53b1c3c50f9881b93aa1dd3317105fe58e1434e8b1942939dcbd2b211016"
+      },
+      {
+       "id": "family-13@english",
+       "family": "family-13",
+       "arm": "english",
+       "scoring_key_sha256": "2ed0b3771b408e78aa86e07166ee535376e6c1e336d04f5e33d713f30ca97e87"
+      },
+      {
+       "id": "family-13@ainglish",
+       "family": "family-13",
+       "arm": "ainglish",
+       "scoring_key_sha256": "83c3ed624f52dc9067c0c060f357fa09bfb2ff11f8fcb69ae6827a6576790e2e"
+      },
+      {
+       "id": "family-14@english",
+       "family": "family-14",
+       "arm": "english",
+       "scoring_key_sha256": "2bb2a19358944e65abaf376ab04cbc7c9d995d183e89731ba8b467e9d0df5699"
+      },
+      {
+       "id": "family-14@ainglish",
+       "family": "family-14",
+       "arm": "ainglish",
+       "scoring_key_sha256": "8624a367ade23ad9810683168147efbfabaa7669a4459a9e50bfa5f8947e62e8"
+      },
+      {
+       "id": "family-15@english",
+       "family": "family-15",
+       "arm": "english",
+       "scoring_key_sha256": "0a9cbe085752736cef10ab85cf0bc0321169adbc81439383eee5599b0d7f7895"
+      },
+      {
+       "id": "family-15@ainglish",
+       "family": "family-15",
+       "arm": "ainglish",
+       "scoring_key_sha256": "ea4150d2ed55439337b2eca246bf5adbfc0b1fcbed72ed9a8e461184fbc5eae0"
+      },
+      {
+       "id": "family-16@english",
+       "family": "family-16",
+       "arm": "english",
+       "scoring_key_sha256": "b626e2db2b0658a59623ca3b9e5ca9f997c7c99c3efef533defc73524c132695"
+      },
+      {
+       "id": "family-16@ainglish",
+       "family": "family-16",
+       "arm": "ainglish",
+       "scoring_key_sha256": "2f2bf6f721a5ae9c95e1309bcec77ef58442048356e7bf78ac7c14bf70c742b0"
+      },
+      {
+       "id": "family-17@english",
+       "family": "family-17",
+       "arm": "english",
+       "scoring_key_sha256": "01944520b1e982df8a73c68d984109ecdc37b4a228eecc7211f194d9032789cd"
+      },
+      {
+       "id": "family-17@ainglish",
+       "family": "family-17",
+       "arm": "ainglish",
+       "scoring_key_sha256": "937f170739b97d52575e0881bb41c51a7d4df07773855d889113d447ea2125a2"
+      },
+      {
+       "id": "family-18@english",
+       "family": "family-18",
+       "arm": "english",
+       "scoring_key_sha256": "a13ecb33e2dc38249e1bfc94457f76dc596f159efcaa5c94e720cdfa0153fa6e"
+      },
+      {
+       "id": "family-18@ainglish",
+       "family": "family-18",
+       "arm": "ainglish",
+       "scoring_key_sha256": "3a119bbf579732fe275431bc2d687cada96e44910a82e94bec09fddc917b2f4a"
+      },
+      {
+       "id": "family-19@english",
+       "family": "family-19",
+       "arm": "english",
+       "scoring_key_sha256": "97fe70f76aab897059dda2bc832cfc9bd549d4b13fe1e1988d21e9a0ba9f7658"
+      },
+      {
+       "id": "family-19@ainglish",
+       "family": "family-19",
+       "arm": "ainglish",
+       "scoring_key_sha256": "be4dc323560aaf8336f9ebd2572ae74944728c526498c7b542408535d7e5e1d9"
+      },
+      {
+       "id": "family-20@english",
+       "family": "family-20",
+       "arm": "english",
+       "scoring_key_sha256": "cebcd6e4680426e5b6cdf8e85fd2ed40b1cf9f0171e8470a0daf8a835abd4662"
+      },
+      {
+       "id": "family-20@ainglish",
+       "family": "family-20",
+       "arm": "ainglish",
+       "scoring_key_sha256": "7a3d67ebc3674b25a7df678f8c32d3ff66b5ef3ee8b0255e8ead3b6e4dfe7d2b"
+      },
+      {
+       "id": "family-21@english",
+       "family": "family-21",
+       "arm": "english",
+       "scoring_key_sha256": "fde6010cc1a9107cab4d0d7381f0d23b429fb1ed90734240d8dfc848b7103348"
+      },
+      {
+       "id": "family-21@ainglish",
+       "family": "family-21",
+       "arm": "ainglish",
+       "scoring_key_sha256": "34ceb9f487a87ed74c9fff7d53430cb1be4bad76d4c077b885770ac25a135283"
+      },
+      {
+       "id": "family-22@english",
+       "family": "family-22",
+       "arm": "english",
+       "scoring_key_sha256": "6889a1b1b82102c55961e9cafa891f843c2839ec4c40a372a62e73b29dabead6"
+      },
+      {
+       "id": "family-22@ainglish",
+       "family": "family-22",
+       "arm": "ainglish",
+       "scoring_key_sha256": "3deca392cd430d230ec9f9d45728c03c0e2db558c2b01efaf4d1a50148621af5"
+      },
+      {
+       "id": "family-23@english",
+       "family": "family-23",
+       "arm": "english",
+       "scoring_key_sha256": "ee56bb1634053371ad57cc0c149bbacce9b8be0ac89d35500f80974ebf21ea6e"
+      },
+      {
+       "id": "family-23@ainglish",
+       "family": "family-23",
+       "arm": "ainglish",
+       "scoring_key_sha256": "b0b7514e497a72262279505fc4197eaa5cb0fef165d4149cc96e2263749a6668"
+      },
+      {
+       "id": "family-24@english",
+       "family": "family-24",
+       "arm": "english",
+       "scoring_key_sha256": "ee6819dd35c69c25a8ade1f8289c5d49166b5fb100db7513ac1d604bb059a24e"
+      },
+      {
+       "id": "family-24@ainglish",
+       "family": "family-24",
+       "arm": "ainglish",
+       "scoring_key_sha256": "8edc52bffa1d82ac5c0bec783aa2b9c7b410707dc150df1c1e9e2347799c11ea"
+      },
+      {
+       "id": "family-25@english",
+       "family": "family-25",
+       "arm": "english",
+       "scoring_key_sha256": "d5aa4cbab96e1502cc55599cfcc41623bda3a1daf222313f433b37890dd1cfcf"
+      },
+      {
+       "id": "family-25@ainglish",
+       "family": "family-25",
+       "arm": "ainglish",
+       "scoring_key_sha256": "daca21213e5d85c0268c10a578ce9431fc398d84584baf5209f8741518632d59"
+      },
+      {
+       "id": "family-26@english",
+       "family": "family-26",
+       "arm": "english",
+       "scoring_key_sha256": "8a319e8058efe9030c7a50586bc8c360e369699bf80d676d54792b588e8e0795"
+      },
+      {
+       "id": "family-26@ainglish",
+       "family": "family-26",
+       "arm": "ainglish",
+       "scoring_key_sha256": "333906204bc0a36dab7d3abc660e306bd9b13ca4b63dcb81ac0951729400d466"
+      },
+      {
+       "id": "family-27@english",
+       "family": "family-27",
+       "arm": "english",
+       "scoring_key_sha256": "a8272ff23791fef9ec3f9d38852ec828bd7bfaae6151c72517a863483ada6038"
+      },
+      {
+       "id": "family-27@ainglish",
+       "family": "family-27",
+       "arm": "ainglish",
+       "scoring_key_sha256": "86e4ecc133d4fc74d554343fa18ba577bcd095e040c8719d124fe22fa2f9bccd"
+      },
+      {
+       "id": "family-28@english",
+       "family": "family-28",
+       "arm": "english",
+       "scoring_key_sha256": "7731c87805223d866b350c26cf495301351da68a528a0578c7dacd65925f9211"
+      },
+      {
+       "id": "family-28@ainglish",
+       "family": "family-28",
+       "arm": "ainglish",
+       "scoring_key_sha256": "9792fe4c1aa6726fad43288d01c58a8f9f1e835df72dd794c05b9508fefbc451"
+      },
+      {
+       "id": "family-29@english",
+       "family": "family-29",
+       "arm": "english",
+       "scoring_key_sha256": "a76c47825181f9eaa4699adad518491956bf00708edc79095bc3cbe2c035f808"
+      },
+      {
+       "id": "family-29@ainglish",
+       "family": "family-29",
+       "arm": "ainglish",
+       "scoring_key_sha256": "51459ff05a11ec21a1bc584cc321c948da08bc9655df0d6f4205c8bea3093bfd"
+      },
+      {
+       "id": "family-30@english",
+       "family": "family-30",
+       "arm": "english",
+       "scoring_key_sha256": "aefdd8d0627b20dba4f3bedccf9ab172cc2959af32a45826233c2be0e69732c4"
+      },
+      {
+       "id": "family-30@ainglish",
+       "family": "family-30",
+       "arm": "ainglish",
+       "scoring_key_sha256": "e52fe120d7cf899e56157e10a9c585e370d8833f7d1385643c227ad1184b5aae"
+      },
+      {
+       "id": "family-31@english",
+       "family": "family-31",
+       "arm": "english",
+       "scoring_key_sha256": "03fdfbd76f6290dbbb249e02fdd7aa6c565a24fae75095830c042e9749b028b7"
+      },
+      {
+       "id": "family-31@ainglish",
+       "family": "family-31",
+       "arm": "ainglish",
+       "scoring_key_sha256": "e7f7b98ab988b583dfcf13146d9cc9b2b447409358f6a52f879fc20e155cda43"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 264,
+    "tail_fraction": "1/10560",
+    "minimum_per_cell": 181,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "unit_is_case_ids",
+   "why": "version one admits independent worlds only",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "case",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "sampling_unit"
+   ],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "cluster_field_empty",
+   "why": "the cluster field must be named",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "sampling_cluster_field"
+   ],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "sampling_with_an_extra_key",
+   "why": "independence is reviewed, not flagged",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512,
+      "independent": true
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "sampling_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "sampling_a_number",
+   "why": "per_cell alone is not a sampling rule",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": 512
+    }
+   },
+   "valid": false,
+   "codes": [
+    "sampling_shape"
+   ],
+   "family": null
+  },
+  {
+   "name": "stratum_weight_a_401_digit_integer",
+   "why": "valid JSON, and no finite weight: refused, never a crash",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "stratum_weight_a_309_digit_integer",
+   "why": "a long integer that is still a finite float is a weight like any other",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": true,
+   "codes": [],
+   "family": {
+    "family_size": 24,
+    "tail_fraction": "1/960",
+    "minimum_per_cell": 134,
+    "per_cell": 512
+   }
+  },
+  {
+   "name": "stratum_weights_whose_sum_is_not_finite",
+   "why": "each weight is finite and their sum is not",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1e+308
+     },
+     {
+      "id": "form-b",
+      "weight": 1e+308
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "stratum_weight_a_negative_401_digit_integer",
+   "why": "no finite positive weight either way",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "manifest_strata"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_largest_portable_integer",
+   "why": "9007199254740991 is still an integer everywhere, and far above the ceiling",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9007199254740991
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_above_ceiling"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_one_past_the_portable_integers",
+   "why": "past 2^53 - 1 a JSON reader may round it: not an integer for this check",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9007199254740992
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_largest_64_bit_integer",
+   "why": "an integer in PHP and in Python, and still past the portable range",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9223372036854775807
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_one_past_64_bits",
+   "why": "PHP decodes this to a float; Python must not call it merely too large",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 9223372036854775808
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_a_401_digit_integer",
+   "why": "the case that crashed nothing and still disagreed: one code on both sides",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": 10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "per_cell_a_negative_401_digit_integer",
+   "why": "negative and unbounded",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "ainglish.preservation-inventory.v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-y"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "ainglish",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "world",
+      "cluster_field": "template_cluster",
+      "per_cell": -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "per_cell_type"
+   ],
+   "family": null
+  },
+  {
+   "name": "four_problems_at_once",
+   "why": "a design is told everything that is wrong with it in one answer",
+   "manifest": {
+    "metric": "comprehension_accuracy_delta",
+    "preservation_analysis": "exact-binomial-preservation-v1",
+    "readers": [
+     {
+      "name": "reader-a"
+     },
+     {
+      "name": "reader-b"
+     }
+    ],
+    "settlement_strata": [
+     {
+      "id": "form-a",
+      "weight": 1
+     },
+     {
+      "id": "form-b",
+      "weight": 1
+     }
+    ],
+    "preservation_inventory": {
+     "kind": "v1",
+     "readers": [
+      {
+       "name": "reader-a",
+       "lineage": "lineage-x"
+      },
+      {
+       "name": "reader-b",
+       "lineage": "lineage-x"
+      }
+     ],
+     "forms": [
+      "form-a",
+      "form-b"
+     ],
+     "error_endpoints": [
+      {
+       "id": "false-authority@english",
+       "family": "false-authority",
+       "arm": "english",
+       "scoring_key_sha256": "27b82eb795fde0d27386117556f94b4396825c35b6ba32e09a4252d46b1b656b"
+      },
+      {
+       "id": "false-authority@ainglish",
+       "family": "false-authority",
+       "arm": "marked",
+       "scoring_key_sha256": "fdcaa7bd6a8c09cb7b8496a31dc5d44246bf7cca65417b5ac932dec7ffc10af0"
+      },
+      {
+       "id": "false-polarity@english",
+       "family": "false-polarity",
+       "arm": "english",
+       "scoring_key_sha256": "0ea420046ac1585cd0e5d9ff93784e2c1e37aabaab53594accd6d411a1a46cbd"
+      },
+      {
+       "id": "false-polarity@ainglish",
+       "family": "false-polarity",
+       "arm": "ainglish",
+       "scoring_key_sha256": "f0805f5c33a394f2b432dc8d5b65a3ad5098416e91ba1403c8c1a89ba7742ebf"
+      }
+     ],
+     "sampling": {
+      "unit": "item",
+      "cluster_field": "template_cluster",
+      "per_cell": 512
+     }
+    }
+   },
+   "valid": false,
+   "codes": [
+    "endpoint_arm",
+    "kind",
+    "lineages_fewer_than_two",
+    "sampling_unit"
+   ],
+   "family": null
+  }
+ ]
+}

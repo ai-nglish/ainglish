@@ -33,6 +33,21 @@
   endpoint and form names that are one number and several names. This module judged all 19
   correctly as written; they were added because the register's twin did not, and the two must
   read one file.
+- Add `ainglish.preservation_inventory`, the mint-time inventory check of the same proposed
+  profile: `check(manifest)` reads `preservation_analysis` and the frozen `preservation_inventory`
+  (readers with lineages, forms, error endpoints with family, arm and key, the sampling rule) and
+  reports every problem at once, each with a stable code. It is the register's
+  `PreservationInventory::check` in Python, and both read one file,
+  `tests/fixtures/exact-binomial-preservation-inventory-v1.json`: 77 manifests with hand-written
+  expectations. It refuses an error family that is not on both arms, readers that are not the
+  manifest's, forms that are not its settlement strata, and a `per_cell` that is not an integer,
+  is above 4,096 or is below the arithmetic floor for the family (134 for a family of 24). The
+  floor is not a recommended sample size. JSON integers of any length are answered and never
+  raised: one too long to be a finite float is not a stratum weight, and a `per_cell` past
+  2^53 - 1 is refused as not an integer, the code the register gives it. The check cannot know whether two lineages are two base
+  models or whether the sampled worlds are independent, and a flag that asserts either is refused
+  as an unknown key. Nothing calls the module, and the register does not yet admit a mint against
+  a manifest that passes it.
 
 ## 0.2.68 — 2026-11-09
 
