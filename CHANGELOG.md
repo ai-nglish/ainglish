@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add offline, report-only answer-order diagnostics to `ainglish-audit-items`:
+  fixed within-item rules with explicit denominators, separate calibration
+  counts and clearly labelled in-sample lookup fits. No new scientific gate,
+  automatic bank rewrite, served-harness change or evidence invalidation.
+
 ## 0.2.69 — 2026-11-14
 
 - Tighten paired-study regression coverage so identical-arm counts distinguish

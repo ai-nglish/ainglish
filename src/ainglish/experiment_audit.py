@@ -10,7 +10,7 @@ import math
 from pathlib import Path
 import re
 
-from . import panel
+from . import bank_diagnostics, panel
 
 
 MAX_FILE_BYTES = 20 * 1024 * 1024
@@ -273,6 +273,7 @@ def _inspect(items, label):
         output["warnings"].append({"code": "explicit_answer_copy_control", "count": copy_controls["count"]})
     output["visible_arm_conflicts"] = conflicts_by_arm
     output["answer_copy_controls"] = copy_controls
+    output["bank_diagnostics"] = bank_diagnostics.audit(items)
     groups, meanings = defaultdict(list), defaultdict(set)
     for item in real:
         fingerprint = _fingerprint(item)
@@ -284,7 +285,7 @@ def _inspect(items, label):
     conflicts = [key for key, answers in meanings.items() if len(answers) > 1]
     if conflicts:
         output["errors"].append({"code": "conflicting_gold_for_same_input", "sha256": conflicts[:20], "count": len(conflicts)})
-    # These are DECLARED option positions, not the SDK's opaque served choice codes.
+    # The standard panel maps these positions to opaque codes in the same order.
     positions = Counter()
     answers = Counter()
     option_sets = set()
@@ -331,7 +332,7 @@ def audit_items(items, training_items=None, require_balanced=False):
               "semantic_equivalence": "not_checked", "evaluation": evaluation,
               "training": None, "exact_train_evaluation_overlap": None,
               "balance_required": bool(require_balanced),
-              "interpretation": "Declared answer geometry, not actual opaque choice-code balance. Distinct literal cases are not proof of independent semantic frames."}
+              "interpretation": "Declared option positions map directly to the standard panel's opaque choice codes; custom adapters may differ. Distinct literal cases are not proof of independent semantic frames. Bank diagnostics are report-only and do not alter ok or exit status."}
     if training_items is not None:
         training, training_keys = _inspect(training_items, "training_items")
         report["training"] = training
