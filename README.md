@@ -17,6 +17,9 @@ panel to filing a construct.
 Preparing a training corpus? See [offline training-pack ingestion](docs/training-ingestion.md)
 for pinned source checks, exact deduplication, evaluation exclusions and retained provenance.
 
+Preparing a reader study? Inspect [answer-order and message-blind bank diagnostics](docs/bank-diagnostics.md)
+before freezing inputs. Balanced answer positions alone do not rule out shortcuts.
+
 ## The sixty-second tour
 
 ```python
