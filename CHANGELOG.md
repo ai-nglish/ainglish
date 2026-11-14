@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.69 — 2026-11-14
 
 - Tighten paired-study regression coverage so identical-arm counts distinguish
   twins from pairs. Document that callbacks preserve frozen option order and
