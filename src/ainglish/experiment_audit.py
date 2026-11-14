@@ -328,7 +328,8 @@ def audit_items(items, training_items=None, require_balanced=False):
     """
     evaluation, evaluation_keys = _inspect(items, "items")
     report = {"kind": "ainglish.experiment-input-audit.v1", "report_only": True,
-              "reader_calls": 0, "api_calls": 0, "source_text_included": False,
+              "reader_calls": 0, "api_calls": 0, "source_text_included": True,
+              "source_text_scope": "The enclosing audit may include declared answer labels; the bank_diagnostics block contains counts and rule names only. Review before publishing a prospective bank's report.",
               "semantic_equivalence": "not_checked", "evaluation": evaluation,
               "training": None, "exact_train_evaluation_overlap": None,
               "balance_required": bool(require_balanced),

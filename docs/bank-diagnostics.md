@@ -39,7 +39,10 @@ The two `posthoc_lookup_fits` group question/options with and without order and
 fit the majority key on those very same rows. Unique questions can trivially
 give a perfect fit. These are descriptive training-set fits, not held-out
 predictors or universal message-blind bounds. They never create a warning or a
-gate by themselves. No source strings, keys or IDs are included in this report.
+gate by themselves. No source strings, keys or IDs are included in the
+`bank_diagnostics` block. The enclosing audit's existing answer-count fields
+include answer labels: do not publish the whole audit of a private prospective
+bank without reviewing its contents. Its source-text flag now reflects this.
 
 ## What to do with a warning
 

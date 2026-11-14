@@ -114,6 +114,9 @@ class BankDiagnosticsTest(unittest.TestCase):
     def test_existing_audit_warning_does_not_set_failure(self):
         report = audit_items(rotation_bank())
         self.assertTrue(report["ok"])
+        self.assertTrue(report["source_text_included"])
+        self.assertIn("reference-one", report["evaluation"]["declared_answer_counts"])
+        self.assertFalse(report["evaluation"]["bank_diagnostics"]["source_text_included"])
         self.assertTrue(report["evaluation"]["bank_diagnostics"]["targets"]["warnings"])
 
 
