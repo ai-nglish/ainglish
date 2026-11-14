@@ -42,6 +42,9 @@ question and option list. The callback must start a fresh conversation each time
 the library cannot inspect a remote provider's hidden state. It receives no gold,
 second twin, previous response or joint prompt. Calls are ordered by a seed/key
 hash independent of the gold labels. A wrong answer does not skip the other twin.
+`ask_fn` must present the supplied option labels, text and order unchanged.
+Reordering options inside the callback is outside this evidence contract: the
+position diagnostic describes the frozen options, not an unrecorded permutation.
 Twins with the same gold are admitted but listed in the report's
 `constant_response_compatible_pairs`: a constant response can get both right,
 so their pair accuracy alone does not demonstrate distinguishing the worlds.
@@ -85,7 +88,8 @@ retry, submission or abort write is made against Ainglish.
 Transport exception messages are excluded from the receipt, and ordinary
 abort/journal-failure tracebacks suppress the transport exception chain using
 `raise ... from None`. This is **suppression, not erasure**: Python retains
-`__context__` in memory. Custom exception reporters must respect
+`__context__` in memory in the current implementation; retaining it is not a
+required API behavior. Custom exception reporters must respect
 `__suppress_context__`, avoid indiscriminately serializing exception objects or
 local variables, and keep credentials out of callback exceptions. Operator
 interrupts propagate as the original exception; the instrument is not a general

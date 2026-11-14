@@ -276,12 +276,14 @@ class PairedStudyTest(unittest.TestCase):
     def test_identical_arms_are_admitted_but_reported_per_twin(self):
         p = plan()
         for pair, twin in ((p["pairs"][0], p["pairs"][0]["twins"][0]),
+                           (p["pairs"][0], p["pairs"][0]["twins"][1]),
                            (p["pairs"][2], p["pairs"][2]["twins"][1])):
             twin["ainglish"] = twin["english"]
         result, _ = run(p)
         self.assertEqual(result["report"]["identical_arm_twins"],
-                         [{"pair": "pair-0", "twin": "twin-0"}, {"pair": "pair-2", "twin": "twin-1"}])
-        self.assertEqual(result["report"]["identical_arm_twin_count"], 2)
+                         [{"pair": "pair-0", "twin": "twin-0"}, {"pair": "pair-0", "twin": "twin-1"},
+                          {"pair": "pair-2", "twin": "twin-1"}])
+        self.assertEqual(result["report"]["identical_arm_twin_count"], 3)
         self.assertEqual(len(result["rows"]), 32, "identical arms still require fresh calls")
         clean, _ = run()
         self.assertEqual(clean["report"]["identical_arm_twins"], [])
@@ -368,9 +370,9 @@ class PairedStudyTest(unittest.TestCase):
             self.assertNotIn("SECRET-TRANSPORT-TEXT", traceback.format_exc())
             self.assertNotIn("SECRET-TRANSPORT-TEXT", str(exc.receipt))
             self.assertTrue(exc.__suppress_context__)
-            # Suppression is not erasure: custom exception serializers must not
-            # walk this private context unconditionally.
-            self.assertIsInstance(exc.__context__, RuntimeError)
+            # Suppression is not necessarily erasure: custom exception
+            # serializers must not walk private context unconditionally. Do not
+            # require retention; a future implementation may safely clear it.
         else: self.fail("transport fault did not abort")
 
 

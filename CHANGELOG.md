@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Tighten paired-study regression coverage so identical-arm counts distinguish
+  twins from pairs. Document that callbacks preserve frozen option order and
+  avoid requiring transport exception context to remain in memory. No scoring,
+  abort-policy or scientific-admission change.
+
 - Extend report-only paired-study diagnostics with constant-option-position pairs
   and identical-arm twins. Add regression coverage for input fingerprints,
   bootstrap unit ordering, strict replay keys/options and suppressed transport
