@@ -9,6 +9,15 @@
   Correct the enclosing audit's source-text flag: existing answer-count fields
   include labels, unlike the new counts-only diagnostics block.
 
+- Add `ainglish.allocation`: the balanced arm allocation `balanced-world-hash-v1`
+  as pure functions (`allocate`, `allocate_roster`, `commitment`, `arm_of`). Each
+  reader and form gets exactly `per_cell` worlds per arm, ranked by a hash of the
+  seed, the reader, the form and the world, with no search. The vectors in
+  `tests/fixtures/balanced-world-hash-v1.json` come from
+  `tools/gen_allocation_vectors.py`, written apart from the module; the register
+  reads a byte copy. Nothing calls the module: no panel run, manifest, mint or
+  filing changes, `panel.arm_for` is untouched, and no reading is activated.
+
 ## 0.2.69 — 2026-11-14
 
 - Tighten paired-study regression coverage so identical-arm counts distinguish
