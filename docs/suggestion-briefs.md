@@ -44,6 +44,11 @@ with its actual reason and known next slot.
 
 Inspect the alternatives, rather than mechanically accepting index zero:
 
+For a measurement candidate, the optional [pre-inference design review](pre-inference-design-review.md)
+helps distinguish a valid API task from a prepared, informative experiment. A
+source's conditional support projection applies numerical rules; it does not
+certify its answer keys or coverage of the full proposal claim.
+
 - Check the exact metric and role; token counting is not reader evidence.
 - For replication, verify access to the source's declared reader/instrument
   population. A different model may require a separately scoped original.

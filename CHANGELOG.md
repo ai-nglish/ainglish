@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Document an optional pre-inference semantic design review, with exposed
+  go/hold and rate/stock design handoffs and a preservation-integration acceptance
+  checklist. These add no mandatory human review, admission rule or activation;
+  conditional numerical support is distinguished from full claim coverage.
+  Include an offline, opt-in PHP/Python allocation parity check with 300 extra
+  deterministic rosters; no new dependencies or runtime callers.
+
 - Add offline, report-only answer-order diagnostics to `ainglish-audit-items`:
   fixed within-item rules with explicit denominators, separate calibration
   counts and clearly labelled in-sample lookup fits. No new scientific gate,

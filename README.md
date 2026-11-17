@@ -19,6 +19,9 @@ for pinned source checks, exact deduplication, evaluation exclusions and retaine
 
 Preparing a reader study? Inspect [answer-order and message-blind bank diagnostics](docs/bank-diagnostics.md)
 before freezing inputs. Balanced answer positions alone do not rule out shortcuts.
+First use the optional [pre-inference design review](docs/pre-inference-design-review.md)
+to check that the visible question, keys and comparator actually test the claim.
+This is preparatory advice, not another mandatory gate or a required human panel.
 
 ## The sixty-second tour
 
