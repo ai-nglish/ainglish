@@ -1,0 +1,2526 @@
+{
+ "kind": "ainglish.balanced-world-hash-vectors.v1",
+ "rule": "balanced-world-hash-v1",
+ "generated_by": {
+  "tool": "tools/gen_allocation_vectors.py",
+  "tool_sha256": "18cfbbeb3ecf60bf6e7fce0e9d175b949eb9f0fe1b7e5be1dee740d330e2d10a",
+  "method": "preimage by json.dumps of the five-element array; selection sort over (hex digest, world bytes); commitment assembled as a string; independent of ainglish.allocation",
+  "python": "3.12"
+ },
+ "note": "Synthetic software vectors. Not language evidence, not a measurement, not a sampled bank, not an activation of any reading.",
+ "arms": {
+  "first_per_cell": "english",
+  "rest": "ainglish"
+ },
+ "max_name_bytes": 255,
+ "portable_integer_max": 9007199254740991,
+ "cases": [
+  {
+   "name": "four worlds",
+   "seed": 17,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 2,
+   "worlds": [
+    "w-00",
+    "w-01",
+    "w-02",
+    "w-03"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c31372c227265616465722d61222c22666f726d2d61222c22772d3030225d",
+   "rank": [
+    {
+     "world": "w-02",
+     "sha256": "0c1b695f577ff4877cb92afbc7e4a160e9f142533b37e86082e511b84f0eea03"
+    },
+    {
+     "world": "w-01",
+     "sha256": "2316e058f949e6988dee0021e594cee0b85073168da4834ec75d111721c16dc8"
+    },
+    {
+     "world": "w-00",
+     "sha256": "2f4ec45cba4d8987ad2e3da5679ffa25ed07536b3adae56a736b1b6995557ee0"
+    },
+    {
+     "world": "w-03",
+     "sha256": "f459bfc5d1a7d41fba5c19a02ca6598ad174389eafc288d1df77564b1ca3e8a4"
+    }
+   ],
+   "english": [
+    "w-02",
+    "w-01"
+   ],
+   "ainglish": [
+    "w-00",
+    "w-03"
+   ]
+  },
+  {
+   "name": "eight worlds",
+   "seed": 17,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 4,
+   "worlds": [
+    "w-00",
+    "w-01",
+    "w-02",
+    "w-03",
+    "w-04",
+    "w-05",
+    "w-06",
+    "w-07"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c31372c227265616465722d61222c22666f726d2d61222c22772d3030225d",
+   "rank": [
+    {
+     "world": "w-02",
+     "sha256": "0c1b695f577ff4877cb92afbc7e4a160e9f142533b37e86082e511b84f0eea03"
+    },
+    {
+     "world": "w-01",
+     "sha256": "2316e058f949e6988dee0021e594cee0b85073168da4834ec75d111721c16dc8"
+    },
+    {
+     "world": "w-00",
+     "sha256": "2f4ec45cba4d8987ad2e3da5679ffa25ed07536b3adae56a736b1b6995557ee0"
+    },
+    {
+     "world": "w-04",
+     "sha256": "8bca16bbc971fc15a4e8d5f1d7e86f272132f6a3c457d60264b777e880191b31"
+    },
+    {
+     "world": "w-06",
+     "sha256": "91efa78c9effe0206709dd0759b3b9e6748066bda20d1fa5273b8a0985ac49fd"
+    },
+    {
+     "world": "w-07",
+     "sha256": "ea20c1a91758162971588c43c973c3df634d359b0aa6118547d42344b2cc6303"
+    },
+    {
+     "world": "w-03",
+     "sha256": "f459bfc5d1a7d41fba5c19a02ca6598ad174389eafc288d1df77564b1ca3e8a4"
+    },
+    {
+     "world": "w-05",
+     "sha256": "fa410bd0459c47c04d2670cb0907a748dd270b39a228907db53ef17e8d465f0f"
+    }
+   ],
+   "english": [
+    "w-02",
+    "w-01",
+    "w-00",
+    "w-04"
+   ],
+   "ainglish": [
+    "w-06",
+    "w-07",
+    "w-03",
+    "w-05"
+   ]
+  },
+  {
+   "name": "eight worlds, reversed input",
+   "seed": 17,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 4,
+   "worlds": [
+    "w-07",
+    "w-06",
+    "w-05",
+    "w-04",
+    "w-03",
+    "w-02",
+    "w-01",
+    "w-00"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c31372c227265616465722d61222c22666f726d2d61222c22772d3037225d",
+   "rank": [
+    {
+     "world": "w-02",
+     "sha256": "0c1b695f577ff4877cb92afbc7e4a160e9f142533b37e86082e511b84f0eea03"
+    },
+    {
+     "world": "w-01",
+     "sha256": "2316e058f949e6988dee0021e594cee0b85073168da4834ec75d111721c16dc8"
+    },
+    {
+     "world": "w-00",
+     "sha256": "2f4ec45cba4d8987ad2e3da5679ffa25ed07536b3adae56a736b1b6995557ee0"
+    },
+    {
+     "world": "w-04",
+     "sha256": "8bca16bbc971fc15a4e8d5f1d7e86f272132f6a3c457d60264b777e880191b31"
+    },
+    {
+     "world": "w-06",
+     "sha256": "91efa78c9effe0206709dd0759b3b9e6748066bda20d1fa5273b8a0985ac49fd"
+    },
+    {
+     "world": "w-07",
+     "sha256": "ea20c1a91758162971588c43c973c3df634d359b0aa6118547d42344b2cc6303"
+    },
+    {
+     "world": "w-03",
+     "sha256": "f459bfc5d1a7d41fba5c19a02ca6598ad174389eafc288d1df77564b1ca3e8a4"
+    },
+    {
+     "world": "w-05",
+     "sha256": "fa410bd0459c47c04d2670cb0907a748dd270b39a228907db53ef17e8d465f0f"
+    }
+   ],
+   "english": [
+    "w-02",
+    "w-01",
+    "w-00",
+    "w-04"
+   ],
+   "ainglish": [
+    "w-06",
+    "w-07",
+    "w-03",
+    "w-05"
+   ]
+  },
+  {
+   "name": "eight worlds, other reader",
+   "seed": 17,
+   "reader": "reader-b",
+   "form": "form-a",
+   "per_cell": 4,
+   "worlds": [
+    "w-00",
+    "w-01",
+    "w-02",
+    "w-03",
+    "w-04",
+    "w-05",
+    "w-06",
+    "w-07"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c31372c227265616465722d62222c22666f726d2d61222c22772d3030225d",
+   "rank": [
+    {
+     "world": "w-06",
+     "sha256": "0d4c95e38017ba0573c5e702aedd2a5b85f020b84988c3fb3600c484f0200109"
+    },
+    {
+     "world": "w-02",
+     "sha256": "0e4ebed4c2d2df1719248fae52b444f44880c44fc4bbfcc0793a04bd085b2060"
+    },
+    {
+     "world": "w-01",
+     "sha256": "5f5909ae0a5e0b91b22854d70a32ad24d59d35d5af80df8571ba3232d9ed0256"
+    },
+    {
+     "world": "w-07",
+     "sha256": "64d0f5961648bcfaa2df5c148569c015caf74e543b05423e4fa561afc875a287"
+    },
+    {
+     "world": "w-00",
+     "sha256": "c173ecaccbc6710d680fabaa27c42454750aa98fedc85d402aec1f9f739b6384"
+    },
+    {
+     "world": "w-04",
+     "sha256": "da25592d64e4fd697f6ee835b8ca747721fae89edb98a48d007b685b101960e3"
+    },
+    {
+     "world": "w-03",
+     "sha256": "de0615f3bb8f1a09d456947d54154dc4a88f22d07203f270df0f88a84ecedd48"
+    },
+    {
+     "world": "w-05",
+     "sha256": "fc28e56a542a0477ca67e74b066e0327a235232efabf7bbcc5f5ec052eb3a26c"
+    }
+   ],
+   "english": [
+    "w-06",
+    "w-02",
+    "w-01",
+    "w-07"
+   ],
+   "ainglish": [
+    "w-00",
+    "w-04",
+    "w-03",
+    "w-05"
+   ]
+  },
+  {
+   "name": "eight worlds, other form",
+   "seed": 17,
+   "reader": "reader-a",
+   "form": "form-b",
+   "per_cell": 4,
+   "worlds": [
+    "w-00",
+    "w-01",
+    "w-02",
+    "w-03",
+    "w-04",
+    "w-05",
+    "w-06",
+    "w-07"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c31372c227265616465722d61222c22666f726d2d62222c22772d3030225d",
+   "rank": [
+    {
+     "world": "w-00",
+     "sha256": "4904998947480e7c164e0e7441bb21df99630f21668c5a5f99a1dda6214f1278"
+    },
+    {
+     "world": "w-02",
+     "sha256": "53d72a958071899bfb09ed93e533b5564e0132b31a345be9c9f90b819e04081f"
+    },
+    {
+     "world": "w-05",
+     "sha256": "7f3aeea1eec2cad4d5cbc17ef6a3331c20a8b7f9d239e8036119b6250303052e"
+    },
+    {
+     "world": "w-01",
+     "sha256": "a180a8bf17e48730901eea1d0bb0b6a896a0700b1f94263501d46d5a471c1ec8"
+    },
+    {
+     "world": "w-03",
+     "sha256": "a1f8478a1702a11b568f7e9c058c101cc5136a1d5c169cbeda6129addddc82e0"
+    },
+    {
+     "world": "w-06",
+     "sha256": "e3d6d88330546e52052b71d82546e8cca6164e441731c7441177a3c2c1ef7908"
+    },
+    {
+     "world": "w-04",
+     "sha256": "ef70d28e1a0ed67f437ca87429036a9d14518ddd7db7ee4ca0ece06692d3600d"
+    },
+    {
+     "world": "w-07",
+     "sha256": "f3db7ba3e6a6694d0750ad4256a77e710fbbebda020565675d342c5aa0f0c945"
+    }
+   ],
+   "english": [
+    "w-00",
+    "w-02",
+    "w-05",
+    "w-01"
+   ],
+   "ainglish": [
+    "w-03",
+    "w-06",
+    "w-04",
+    "w-07"
+   ]
+  },
+  {
+   "name": "reader name with punctuation",
+   "seed": 17,
+   "reader": "gemma3-12b@q4_k_m",
+   "form": "form-a",
+   "per_cell": 4,
+   "worlds": [
+    "w-00",
+    "w-01",
+    "w-02",
+    "w-03",
+    "w-04",
+    "w-05",
+    "w-06",
+    "w-07"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c31372c2267656d6d61332d3132624071345f6b5f6d222c22666f726d2d61222c22772d3030225d",
+   "rank": [
+    {
+     "world": "w-01",
+     "sha256": "164231cade8748db73e4f7f77ffa8115d951db1d4eddc2ed228349a27a1eb541"
+    },
+    {
+     "world": "w-00",
+     "sha256": "425523ce7c9bc737019a077e1e84dc1ffef3d28e6ee0af575b705cada376614b"
+    },
+    {
+     "world": "w-02",
+     "sha256": "60d5ecb8181cdc947ff5198753d9b3b6a1ea15bb0a9b13f367c77bcdb5629116"
+    },
+    {
+     "world": "w-05",
+     "sha256": "7865c3b84ecfcb571d0f7fc3ed43adbcc01b41e2b5b2be11c6ef82b06ef78937"
+    },
+    {
+     "world": "w-07",
+     "sha256": "7b61a91c8b5f7a5e629a88716a00d6cd7423e39ca51b3c77d07d43265bddb154"
+    },
+    {
+     "world": "w-03",
+     "sha256": "b1aa8d084eacf8d158b9500339b4177f134606d4647cdbd90a7d96e0541b9c12"
+    },
+    {
+     "world": "w-06",
+     "sha256": "c962895b0ec9b74bb45648a21d294aea8261e1e97724bfc6fe3ad41656fe40fb"
+    },
+    {
+     "world": "w-04",
+     "sha256": "d8696f2a1060bea976fef9b9bd6ea1e1cc996ca1b12a09487a2d850f44b415ff"
+    }
+   ],
+   "english": [
+    "w-01",
+    "w-00",
+    "w-02",
+    "w-05"
+   ],
+   "ainglish": [
+    "w-07",
+    "w-03",
+    "w-06",
+    "w-04"
+   ]
+  },
+  {
+   "name": "names outside ASCII",
+   "seed": 29,
+   "reader": "lecteur-é",
+   "form": "forme-ß",
+   "per_cell": 3,
+   "worlds": [
+    "wörld-ä",
+    "wörld-ö",
+    "мир-1",
+    "世界-2",
+    "w/3",
+    "w 4"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c32392c226c6563746575722dc3a9222c22666f726d652dc39f222c2277c3b6726c642dc3a4225d",
+   "rank": [
+    {
+     "world": "世界-2",
+     "sha256": "11f7c35d3ad5ab830f38494333c3091c1317197082b673655a159a0f17316e91"
+    },
+    {
+     "world": "мир-1",
+     "sha256": "1ab7ab66817acecc8d2f89de35ce9beda69a5ea3340dede81f089f905f21e0bc"
+    },
+    {
+     "world": "wörld-ä",
+     "sha256": "5fe8df60678fee40881142437a992777f59c5f1de2c7812f5880914a7d8e7008"
+    },
+    {
+     "world": "wörld-ö",
+     "sha256": "70b52fd6116f7078072bb7bafe2703e893e165cf1cce7fb68e332320014df3f8"
+    },
+    {
+     "world": "w/3",
+     "sha256": "9e65721617256354407c45d7aaa98560a957716967dc4836d83e853c9afcfee9"
+    },
+    {
+     "world": "w 4",
+     "sha256": "db561c641cf107f12fc9e5f802426e91a6dbde08b012b69f1faf800e1408cf64"
+    }
+   ],
+   "english": [
+    "世界-2",
+    "мир-1",
+    "wörld-ä"
+   ],
+   "ainglish": [
+    "wörld-ö",
+    "w/3",
+    "w 4"
+   ]
+  },
+  {
+   "name": "names that look like numbers",
+   "seed": 29,
+   "reader": "1",
+   "form": "01",
+   "per_cell": 3,
+   "worlds": [
+    "1",
+    "01",
+    "1.0",
+    "10",
+    "2",
+    "02"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c32392c2231222c223031222c2231225d",
+   "rank": [
+    {
+     "world": "1",
+     "sha256": "11962202b4ced2778864749e203d71710dab8021c8c7e3fdf72a96cac8d5702e"
+    },
+    {
+     "world": "02",
+     "sha256": "738cc48dad3d1d7bb9243eeadda35021221a4655c21c4e81f39409838cbf98cb"
+    },
+    {
+     "world": "10",
+     "sha256": "99bd8799eb6abb4b17889bfcd2d16e57d984cec83c2510251a7982fbae15da37"
+    },
+    {
+     "world": "1.0",
+     "sha256": "c56ce2ba45757a3bc3aa998e3e1d40ea8481a27f2bd7114c92c40cb24d6d2e71"
+    },
+    {
+     "world": "01",
+     "sha256": "c62a4681788d4f9382eaa3114c1d874c09bdec6520fd299dd57ff517344dead8"
+    },
+    {
+     "world": "2",
+     "sha256": "f72ac11d4d11ff8cb6e9b0d7b7b26c5752d25da0faa6b73e8d40867dbf72e78f"
+    }
+   ],
+   "english": [
+    "1",
+    "02",
+    "10"
+   ],
+   "ainglish": [
+    "1.0",
+    "01",
+    "2"
+   ]
+  },
+  {
+   "name": "names that look like numbers, reader and form exchanged",
+   "seed": 29,
+   "reader": "01",
+   "form": "1",
+   "per_cell": 3,
+   "worlds": [
+    "1",
+    "01",
+    "1.0",
+    "10",
+    "2",
+    "02"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c32392c223031222c2231222c2231225d",
+   "rank": [
+    {
+     "world": "01",
+     "sha256": "599d99659d08a597bda30b027a017ddc7a663d31e08f4fe0f5a078e9b6f57dad"
+    },
+    {
+     "world": "1",
+     "sha256": "5fd727e683e8a42aaab3f4444821bd3cf53c7840070c3c24b6e2a06229634701"
+    },
+    {
+     "world": "2",
+     "sha256": "6197252a47ff04b5c243539b608082b8f133ed8c771029485c003c59a6783a3f"
+    },
+    {
+     "world": "10",
+     "sha256": "6817aeac1cdd3f9e28c9626f1d806630e6166dd8be54904c37eae6c2d3162864"
+    },
+    {
+     "world": "1.0",
+     "sha256": "82276787ce8d9c140a274f5e926ef34fc9edb32d4edef3ea7b9a8c10da098353"
+    },
+    {
+     "world": "02",
+     "sha256": "fc931950057f846b86407bfc34d0513e3032faec28b1a4a656ccb20cc66b310b"
+    }
+   ],
+   "english": [
+    "01",
+    "1",
+    "2"
+   ],
+   "ainglish": [
+    "10",
+    "1.0",
+    "02"
+   ]
+  },
+  {
+   "name": "thirty-two worlds, seed 0",
+   "seed": 0,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 16,
+   "worlds": [
+    "world-000",
+    "world-001",
+    "world-002",
+    "world-003",
+    "world-004",
+    "world-005",
+    "world-006",
+    "world-007",
+    "world-008",
+    "world-009",
+    "world-010",
+    "world-011",
+    "world-012",
+    "world-013",
+    "world-014",
+    "world-015",
+    "world-016",
+    "world-017",
+    "world-018",
+    "world-019",
+    "world-020",
+    "world-021",
+    "world-022",
+    "world-023",
+    "world-024",
+    "world-025",
+    "world-026",
+    "world-027",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-031"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c302c227265616465722d61222c22666f726d2d61222c22776f726c642d303030225d",
+   "rank": [
+    {
+     "world": "world-004",
+     "sha256": "02ffaf5bdfb0a91f983c6fed98b0b7e86ca7b532a40bfcad4426e62b61703ed8"
+    },
+    {
+     "world": "world-020",
+     "sha256": "06a6d4193b1baeab1392afdb9f518534cb4f778bc0af23538014bbeee790805c"
+    },
+    {
+     "world": "world-022",
+     "sha256": "08e92dce2ee27913046f70d9d2cbc6c6edbfbba7d4103c0a8a6869ccdb33500e"
+    },
+    {
+     "world": "world-017",
+     "sha256": "25ebcd468d02bc1d17d2bdac11d33f60dfd2bcebcbd25c7a2d47266decbc4398"
+    },
+    {
+     "world": "world-021",
+     "sha256": "267fb707395c2ee536ecca4b7c28bd5b703c5795b638a525529fb0e131c07180"
+    },
+    {
+     "world": "world-023",
+     "sha256": "2c019e12ad5727f0cfa29ff8bb5607e0beb06c86c4ecf3ca67ba8af91da1eb5f"
+    },
+    {
+     "world": "world-014",
+     "sha256": "2ca84bc0ce5de660c1023547bec2abf769f3e9c92a05c206f07cb1aaa27d0c1a"
+    },
+    {
+     "world": "world-015",
+     "sha256": "3b2588dbcaf0ce1fb15ca3cff516b23e6489c4c3c1efb813b24ce54ce21b339c"
+    },
+    {
+     "world": "world-002",
+     "sha256": "4276227fa1b42024941b0eca1afd9221ca51ec663247eda438b0f461e715174c"
+    },
+    {
+     "world": "world-003",
+     "sha256": "4871eeef8aa48c85248b9fc330de420f45a8ef3ea9f5a1490b0717d091491981"
+    },
+    {
+     "world": "world-001",
+     "sha256": "51d7d16b68afb8d6c030bb675654ba6134c0f09dc4a6657c7dfb74f189c174b8"
+    },
+    {
+     "world": "world-018",
+     "sha256": "7d99603991a2a70535e85e6b4ed2daebfed78ea20af25c696a96da6aae27952c"
+    },
+    {
+     "world": "world-027",
+     "sha256": "806cbff22661e935469da6329416ed5efa269d65a79d88081acac8adb4e7103b"
+    },
+    {
+     "world": "world-013",
+     "sha256": "811815086a5b456ea5952aa16c2a843ea488e53756b3dd1b2b7e91de181e4424"
+    },
+    {
+     "world": "world-016",
+     "sha256": "8cf43c9248ccf52fa8ab2839e98e5491d8fb37a90fe7faac2785f71ebdc3645c"
+    },
+    {
+     "world": "world-028",
+     "sha256": "ae1456195a866d31d21c6105264734d0de8b6bbec8cef7b341133da85dbc059b"
+    },
+    {
+     "world": "world-026",
+     "sha256": "aec09498ed551ff90a6b121f4be824fb3b65251ecbd4d7848eaa9ebe64e5a4af"
+    },
+    {
+     "world": "world-008",
+     "sha256": "afd6622c68285cfdefa9c5f93751b2a1d5cc1379d34cc92b7203ebce13abf805"
+    },
+    {
+     "world": "world-007",
+     "sha256": "b34707a2960872cfb7fa504fde7fb8e5c62b116621e6fade7f61788a7bfea9a4"
+    },
+    {
+     "world": "world-009",
+     "sha256": "bf34da62ca55633d7365d9268e9c95fadd8e102384295f4795a3449a7794c00a"
+    },
+    {
+     "world": "world-019",
+     "sha256": "c0568442fab3248688fce50f07d9381f039bc74431e5056aae7b5dd0a7e868a7"
+    },
+    {
+     "world": "world-011",
+     "sha256": "c5850da2569ea9679be475816934e55b3d82074845a9f6f8c91d3c45d07aaf41"
+    },
+    {
+     "world": "world-029",
+     "sha256": "c706cc9da145b3abfb0110c7d3ffd8a7a73312616ec39ffb346b68cc7065fd85"
+    },
+    {
+     "world": "world-024",
+     "sha256": "cdced12aa9d2067db37e552337e7cad393e531c4543b71b53e73583e51e08d40"
+    },
+    {
+     "world": "world-006",
+     "sha256": "cfd616e2a08257297ab8782e905cacfb00c326e76616cee15a38ba87bba0d544"
+    },
+    {
+     "world": "world-030",
+     "sha256": "d20cf35438145c93ddb1149e0396e58009479a03fa87eb7e16c0322691a3b445"
+    },
+    {
+     "world": "world-012",
+     "sha256": "d248336b223939a4623e87beae1b36eda0eb0c49dab99d86ac22c9162c0ced5d"
+    },
+    {
+     "world": "world-000",
+     "sha256": "d51811cf9074753f6ce849fc001c67ee4a5b28f53893c28356e2325532ee680f"
+    },
+    {
+     "world": "world-005",
+     "sha256": "e50514fb0b9356dcfaa5c4127c3a2082bf9410edf0c8aec3f059774f22530700"
+    },
+    {
+     "world": "world-031",
+     "sha256": "e96688a1a1fbe7fffa2695079b53edded5d9efce600d64c43e93c8900ce980ba"
+    },
+    {
+     "world": "world-010",
+     "sha256": "f0e9cad79ec53b2501be255ce7f8b14735168e980d5fdaaaa2bfb0c752213895"
+    },
+    {
+     "world": "world-025",
+     "sha256": "f8ae22fbf0b69b995f6970ca12e9d24afe4a6279a1e306c8c5ee332ba1b9a128"
+    }
+   ],
+   "english": [
+    "world-004",
+    "world-020",
+    "world-022",
+    "world-017",
+    "world-021",
+    "world-023",
+    "world-014",
+    "world-015",
+    "world-002",
+    "world-003",
+    "world-001",
+    "world-018",
+    "world-027",
+    "world-013",
+    "world-016",
+    "world-028"
+   ],
+   "ainglish": [
+    "world-026",
+    "world-008",
+    "world-007",
+    "world-009",
+    "world-019",
+    "world-011",
+    "world-029",
+    "world-024",
+    "world-006",
+    "world-030",
+    "world-012",
+    "world-000",
+    "world-005",
+    "world-031",
+    "world-010",
+    "world-025"
+   ]
+  },
+  {
+   "name": "thirty-two worlds, seed 1",
+   "seed": 1,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 16,
+   "worlds": [
+    "world-000",
+    "world-001",
+    "world-002",
+    "world-003",
+    "world-004",
+    "world-005",
+    "world-006",
+    "world-007",
+    "world-008",
+    "world-009",
+    "world-010",
+    "world-011",
+    "world-012",
+    "world-013",
+    "world-014",
+    "world-015",
+    "world-016",
+    "world-017",
+    "world-018",
+    "world-019",
+    "world-020",
+    "world-021",
+    "world-022",
+    "world-023",
+    "world-024",
+    "world-025",
+    "world-026",
+    "world-027",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-031"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c312c227265616465722d61222c22666f726d2d61222c22776f726c642d303030225d",
+   "rank": [
+    {
+     "world": "world-012",
+     "sha256": "0706c0231c8098d6353db4e724430340461bcbc8534deacb8b5203874b355308"
+    },
+    {
+     "world": "world-021",
+     "sha256": "0bb5398349dfc9e9b0d7358e5523578406100a4df0546a16d8b535172a976e35"
+    },
+    {
+     "world": "world-003",
+     "sha256": "2120e80e58940842e85b9145cf36805338f422b07d81b0a0a65bef63325b7941"
+    },
+    {
+     "world": "world-005",
+     "sha256": "28d9f4f4e680ad0b851f39452cec6413a53d5450fa97666919a7f643454bbb81"
+    },
+    {
+     "world": "world-013",
+     "sha256": "33db0a23ae39442cd8cb08e65cd01302695fc0c08a2ca1b564d697e0094e0edf"
+    },
+    {
+     "world": "world-019",
+     "sha256": "351a6b67b511c8b74e8f252c6d8d532faecfe3f5920900b5741b607869fca35a"
+    },
+    {
+     "world": "world-029",
+     "sha256": "3558d10ec355b1fdd417f61923c3c8d18754a85f7f7002c2690a6628a187c720"
+    },
+    {
+     "world": "world-000",
+     "sha256": "3c8522024293b2532dddd78a4132d8c959ab97d2566f5fe628dc47ed5c091cad"
+    },
+    {
+     "world": "world-002",
+     "sha256": "3d386fa6886cd9dc8b54710504bf86dd69b4390160cb623563982f24bf6310b9"
+    },
+    {
+     "world": "world-026",
+     "sha256": "3f8adec64da5d3776c502a5a6e7640ea546381dc7211b68417a122bde2d85745"
+    },
+    {
+     "world": "world-014",
+     "sha256": "4951f0f9b39530b9f365248e287e6719a263e83113732c50f17ddeff56de2abd"
+    },
+    {
+     "world": "world-009",
+     "sha256": "4f1e32b86c812996056b7eb0e8704c70a8f05ead5cc872fbbe0799c775937eda"
+    },
+    {
+     "world": "world-016",
+     "sha256": "54f0eb5a85513c13bbd6c7203fff6080adb37a67b64654cd5f461eaf4d0af7f3"
+    },
+    {
+     "world": "world-025",
+     "sha256": "5f1164604bdf9401993c9e732643bcc2e4c1ff4c5b6fba57ccf8680b6bceef54"
+    },
+    {
+     "world": "world-020",
+     "sha256": "64c19cd2cebc203890e88ca429f67218f94620597d802f5b73dde7d0b440e2fa"
+    },
+    {
+     "world": "world-010",
+     "sha256": "6c1973a26dbe2360b2caf4b270d7e1c12a9afe0a5aad54a1e2926297efb1540a"
+    },
+    {
+     "world": "world-006",
+     "sha256": "6fd30ccd1458a32a33d9bc9ab88a5265f123288cfbd71ddccc04030a575e8c66"
+    },
+    {
+     "world": "world-004",
+     "sha256": "7173e4c38f6aa02c54d3e1ef58a137bcd314e1a97a94e868bf25e3110e14e21d"
+    },
+    {
+     "world": "world-030",
+     "sha256": "73004c8f320dada66e16eb3053c251fd58e356b6df0371f18a057b3d8a2546ef"
+    },
+    {
+     "world": "world-028",
+     "sha256": "776eef57b511de2eb72effaf817fe0bf890f6202626d3e37ecf432bd23e88bb1"
+    },
+    {
+     "world": "world-023",
+     "sha256": "788b1578ae11f7ba296ca7de2b6d31330e660e3211f48f131c4c69c89e891632"
+    },
+    {
+     "world": "world-011",
+     "sha256": "876ef787205dffaf184071d48a0db0267ea2a78ccde4efb408d2fee3bfd896df"
+    },
+    {
+     "world": "world-022",
+     "sha256": "a5c59226ce735a1fde7df5c1734fcf0cf9db17a1c50cdcf5e0d56b90a614d6dc"
+    },
+    {
+     "world": "world-031",
+     "sha256": "a95b4956470796d65268b51c6e3c7171b90fe6681a6845a3e7bbfef6251780d4"
+    },
+    {
+     "world": "world-027",
+     "sha256": "b9abfac3cf4a288087381a4470002b25a1e2d9e49bb8a29a510a8c0371f31f63"
+    },
+    {
+     "world": "world-008",
+     "sha256": "c5d255d9b011d8e29ad33e6900274785f93efb2a26a990a412a3ba7f1c89760c"
+    },
+    {
+     "world": "world-017",
+     "sha256": "d189e54a31b537d85b32cc889a8d5047d59c61fc12be4de8947b1a28097f7a05"
+    },
+    {
+     "world": "world-007",
+     "sha256": "def32d9741c544cfde113b5f531e7dedd3af8235f31bcc407c42e3ac393471af"
+    },
+    {
+     "world": "world-024",
+     "sha256": "df51942844f0cb65be1a1418d68f97785bd8a03607ac3397f3175fdf64956c32"
+    },
+    {
+     "world": "world-001",
+     "sha256": "dff93fe117c254417d305fd807986d2957ac0aa19c0984cd3381f7ef86b67ad2"
+    },
+    {
+     "world": "world-015",
+     "sha256": "fa7dd706527d449e02dc817f729667e94bde2dd1820050d55d7121091363d682"
+    },
+    {
+     "world": "world-018",
+     "sha256": "fd6c8389f739be558d94e13532c70f9abf9b9a0264bc19551bba757eb7c7af6c"
+    }
+   ],
+   "english": [
+    "world-012",
+    "world-021",
+    "world-003",
+    "world-005",
+    "world-013",
+    "world-019",
+    "world-029",
+    "world-000",
+    "world-002",
+    "world-026",
+    "world-014",
+    "world-009",
+    "world-016",
+    "world-025",
+    "world-020",
+    "world-010"
+   ],
+   "ainglish": [
+    "world-006",
+    "world-004",
+    "world-030",
+    "world-028",
+    "world-023",
+    "world-011",
+    "world-022",
+    "world-031",
+    "world-027",
+    "world-008",
+    "world-017",
+    "world-007",
+    "world-024",
+    "world-001",
+    "world-015",
+    "world-018"
+   ]
+  },
+  {
+   "name": "thirty-two worlds, seed 2",
+   "seed": 2,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 16,
+   "worlds": [
+    "world-000",
+    "world-001",
+    "world-002",
+    "world-003",
+    "world-004",
+    "world-005",
+    "world-006",
+    "world-007",
+    "world-008",
+    "world-009",
+    "world-010",
+    "world-011",
+    "world-012",
+    "world-013",
+    "world-014",
+    "world-015",
+    "world-016",
+    "world-017",
+    "world-018",
+    "world-019",
+    "world-020",
+    "world-021",
+    "world-022",
+    "world-023",
+    "world-024",
+    "world-025",
+    "world-026",
+    "world-027",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-031"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c322c227265616465722d61222c22666f726d2d61222c22776f726c642d303030225d",
+   "rank": [
+    {
+     "world": "world-031",
+     "sha256": "00f0b4d57b2bdeba7cb68f4e83b8c77c4bfef683f70765f5966901e449e31d1d"
+    },
+    {
+     "world": "world-008",
+     "sha256": "10ba72f993d5de04262c0224c862da3d4232119c7242616c28f4ab23c89f9b7f"
+    },
+    {
+     "world": "world-029",
+     "sha256": "1d5ce60baf7c1ca67c4b7d333cb9421857dfe12b61a296f3ef2107bf92c76c83"
+    },
+    {
+     "world": "world-012",
+     "sha256": "24d69e87920979f7d4bb4068352a0735a90cc91a1f95c23de26c867aff73ad8d"
+    },
+    {
+     "world": "world-013",
+     "sha256": "2a724f3695c157b223060b631b6b69846a0f4e1826f5ff8215ed8bd2ecc210d0"
+    },
+    {
+     "world": "world-017",
+     "sha256": "33a7ff467fb0a2bb2e72434960330df8cd82b5c9596bd111bfe01c7805c4be73"
+    },
+    {
+     "world": "world-005",
+     "sha256": "35baf7dd3a6f197a3d4ddb34278c5ffed83cb054e3226ddc3efed9f4ea31a71b"
+    },
+    {
+     "world": "world-000",
+     "sha256": "41fffeb93865de3fd5a7ecd82edd59483528bb332912be162833c5e149b329cf"
+    },
+    {
+     "world": "world-007",
+     "sha256": "504f7ff0c8a4beeacffb562e49c11c8f72a06bac52c195db46819b2e7bfe586c"
+    },
+    {
+     "world": "world-023",
+     "sha256": "583995fb7c12feee1d7276f05f6061b88ddbb3ef79f2ab8de215b5a0fb059c4a"
+    },
+    {
+     "world": "world-028",
+     "sha256": "62c1ee1c24c5fa1b2f0691f2cba03a36bbb3c42802cf5c5099b4a8d244476fa5"
+    },
+    {
+     "world": "world-021",
+     "sha256": "74dccaa6ef75fa73eebe59e8cbb67cdedf2e9ee577bb25bc516f9e6d53d0de9a"
+    },
+    {
+     "world": "world-014",
+     "sha256": "770b3ca963a69268c14c7ca7986684969bf1f8769a1dedbabdfccf3893e6bad6"
+    },
+    {
+     "world": "world-022",
+     "sha256": "7ce549b1dfe53428ee916e93c60dcd6f519557478187930a1341417a8ea7d7ad"
+    },
+    {
+     "world": "world-002",
+     "sha256": "82544cb8b92e2efff1683d6ce124ec420ced1db7e9f7be78c875d265cd45c1e3"
+    },
+    {
+     "world": "world-016",
+     "sha256": "86889139cf7beab7058af3f6ae7f1e159da4b945fa5db44d878178474eb7b7ab"
+    },
+    {
+     "world": "world-020",
+     "sha256": "9199e0afd8289d95daadf2802a4c062115086e7f59f39adc7ffe855d55501c5f"
+    },
+    {
+     "world": "world-026",
+     "sha256": "930e310a6d14d8b8dbac3a7afa45c2a333a966512e790d7066df952c133db558"
+    },
+    {
+     "world": "world-019",
+     "sha256": "a322638f6c2e58e98382535cccad3a4c7c6d4a986c4580afed5619c89fc5da9b"
+    },
+    {
+     "world": "world-024",
+     "sha256": "a389d70df5ecf389e6236bea5d99cb9e5f25a7b4fefcb1233474c3301768b2bf"
+    },
+    {
+     "world": "world-001",
+     "sha256": "aa4e0246062673899045a2f17be13b0752404647674e52d2edc1cff7e9566eed"
+    },
+    {
+     "world": "world-027",
+     "sha256": "af1f2a1a7be5e60d727bbbdbd8269cb29ef78452a47f7754905de5e6eadac8f8"
+    },
+    {
+     "world": "world-030",
+     "sha256": "b69929f94739b3db801c6743692a373c0e71b8b99ba476f11999408b7b87b2bc"
+    },
+    {
+     "world": "world-010",
+     "sha256": "ba423faf625a944c385b68b88139442528bf2c6651fdb0cb86750290a4d671ab"
+    },
+    {
+     "world": "world-015",
+     "sha256": "bc9daacc12e9aeaebf72bd206fac2f0c26841dcb03d818fecc9c65c85b52e38b"
+    },
+    {
+     "world": "world-006",
+     "sha256": "c115270672b16d85988cc74c5dafe62582cd4ffe8891df8e13b2e9bedc8fc55b"
+    },
+    {
+     "world": "world-004",
+     "sha256": "c435b99300cf9d6c380a1489fce65b626cba34e78837fc03ee885ff1fdd7ef10"
+    },
+    {
+     "world": "world-003",
+     "sha256": "ce6b9c85cffb88afc0d50575a61641be6f207497ca653f8a67b17bb996522579"
+    },
+    {
+     "world": "world-011",
+     "sha256": "cfd283a6caed3e72a0862432be930318bb10e04c74040b11fe5a2cc32e3a006c"
+    },
+    {
+     "world": "world-009",
+     "sha256": "d85fbaec666e0bd090e98f7616efab546711ad60745aa24c0bcd01adbf858255"
+    },
+    {
+     "world": "world-025",
+     "sha256": "e36efe7b67918228f69392b1518f84ed3a01cbf2e8c5b237bd5d7c96dc3e37f0"
+    },
+    {
+     "world": "world-018",
+     "sha256": "ff6c81960dc65af14315e7cdeac68ea5a20ebd6e2f9e49896edb2d028b6bec0a"
+    }
+   ],
+   "english": [
+    "world-031",
+    "world-008",
+    "world-029",
+    "world-012",
+    "world-013",
+    "world-017",
+    "world-005",
+    "world-000",
+    "world-007",
+    "world-023",
+    "world-028",
+    "world-021",
+    "world-014",
+    "world-022",
+    "world-002",
+    "world-016"
+   ],
+   "ainglish": [
+    "world-020",
+    "world-026",
+    "world-019",
+    "world-024",
+    "world-001",
+    "world-027",
+    "world-030",
+    "world-010",
+    "world-015",
+    "world-006",
+    "world-004",
+    "world-003",
+    "world-011",
+    "world-009",
+    "world-025",
+    "world-018"
+   ]
+  },
+  {
+   "name": "thirty-two worlds, seed 3",
+   "seed": 3,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 16,
+   "worlds": [
+    "world-000",
+    "world-001",
+    "world-002",
+    "world-003",
+    "world-004",
+    "world-005",
+    "world-006",
+    "world-007",
+    "world-008",
+    "world-009",
+    "world-010",
+    "world-011",
+    "world-012",
+    "world-013",
+    "world-014",
+    "world-015",
+    "world-016",
+    "world-017",
+    "world-018",
+    "world-019",
+    "world-020",
+    "world-021",
+    "world-022",
+    "world-023",
+    "world-024",
+    "world-025",
+    "world-026",
+    "world-027",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-031"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c332c227265616465722d61222c22666f726d2d61222c22776f726c642d303030225d",
+   "rank": [
+    {
+     "world": "world-023",
+     "sha256": "04d67c6ae1baee236d65a3f89128b3c3d0479a5fa60b1bd654ce11f50ce12f2a"
+    },
+    {
+     "world": "world-005",
+     "sha256": "061fb2b1d8165d090ecaf5d6211608f3e0775c5b4689acf5d54fc93584ae35e3"
+    },
+    {
+     "world": "world-013",
+     "sha256": "1400dd37274add3b08e9f632bc7c3872b0a0e5dcb188d94663c7bf2c16a2f683"
+    },
+    {
+     "world": "world-028",
+     "sha256": "1cfde9db295e6f3a3b03698504370c89259eac2c82e60ea061dcf1e968de117e"
+    },
+    {
+     "world": "world-029",
+     "sha256": "2dc6aacfc3f6ecfcfe48a61fb333fb3f3851f648861a089d6095629a7da6f64f"
+    },
+    {
+     "world": "world-030",
+     "sha256": "2df184841daecb477e0217ad4c26d63b65e0f6a018871fe41c4745ea01a46c7a"
+    },
+    {
+     "world": "world-021",
+     "sha256": "2f6fda110f4580604481abf7cb09e6e7b19c6cd301dc67f2999b2c7590408fde"
+    },
+    {
+     "world": "world-006",
+     "sha256": "3703e62abb12d465a94fe77c4c8a0943d0cfecbe6bec5a984df30199168e6d0e"
+    },
+    {
+     "world": "world-012",
+     "sha256": "3cc1c87607e5e79bf775304e5baa39b2acd5cf447ef9b64cb9aaf4baea4c97a0"
+    },
+    {
+     "world": "world-031",
+     "sha256": "443916e6362b8ce6cec9ff30978e0ad9266e8877e90bb1b3c4e2c3c21550a621"
+    },
+    {
+     "world": "world-026",
+     "sha256": "4ded1befdfd0c70d713bfa64d6278aa10b08ac229e67cde1c2291e40b8a6ae36"
+    },
+    {
+     "world": "world-007",
+     "sha256": "57479951abf357689f2362c56fce66ab8924804e7408bccacbea7f6c9859edce"
+    },
+    {
+     "world": "world-003",
+     "sha256": "65e7e777ef2da1889ea207bc604eaf475628c35bbe331e146bf4568c0bd0254c"
+    },
+    {
+     "world": "world-002",
+     "sha256": "6838f36d600d8a3249229f31dac25d53bfc304d017839ded2cb58af3d64ba9e0"
+    },
+    {
+     "world": "world-001",
+     "sha256": "6fada015d0b081a62a6bceb98c2f2a8bd0edecb144b5513993b8b2f8e15cae65"
+    },
+    {
+     "world": "world-015",
+     "sha256": "7955826a79f898542c075dfbaa5b288cb222d826e31f72bf882c7a683d19f533"
+    },
+    {
+     "world": "world-010",
+     "sha256": "7e65a7c329c6dd86b3e4ce67a1300b3f1911690b46325065c6781e2edaa1e69e"
+    },
+    {
+     "world": "world-008",
+     "sha256": "831640a3c3c636f6eeb6ae6aa755c1718f04dcc7f4fc6e07b1a71a72445d041e"
+    },
+    {
+     "world": "world-025",
+     "sha256": "8ed5a09220dd203ced3d04ca1ab65fc6e33b9ff932592c6343a6e01dfa279c17"
+    },
+    {
+     "world": "world-018",
+     "sha256": "8f2306bbc096d355fd611daa7286177f19f3762dffcf3f296c00cada280bebd9"
+    },
+    {
+     "world": "world-014",
+     "sha256": "a4a95ee4631e6999f876bd1fd7cedc27b290a53a6bc99796a6dc81106e02c4db"
+    },
+    {
+     "world": "world-022",
+     "sha256": "a906e829baf0b9d9fb7c13e76560cda870f2c7d669095e0a2a5d364a834a07fc"
+    },
+    {
+     "world": "world-019",
+     "sha256": "b866662862c089657f9d20c3f2ec7c4b58678ef5b0be1bf867467bc7e853b516"
+    },
+    {
+     "world": "world-000",
+     "sha256": "c364534df8471a2c643429cd70ad1166e0215b6ec39e6071e906d70a542bacee"
+    },
+    {
+     "world": "world-016",
+     "sha256": "c85803d287984a6b4def2c8f56d015a7bcf7b890093a240bf875df6557113e90"
+    },
+    {
+     "world": "world-024",
+     "sha256": "d9ba020d2f7e8d9dcd99ef7e8e47123a97b8321a9edf19ecd975bcc8ff8478d2"
+    },
+    {
+     "world": "world-027",
+     "sha256": "e163f166ee6d53f5c3d0400ff2920e307321981c9f96b19cf6e76859388c5a49"
+    },
+    {
+     "world": "world-011",
+     "sha256": "e4d763e2dad3b7d1937a444682dee1d9affa4c3ffa1883b92f7af617359d119e"
+    },
+    {
+     "world": "world-020",
+     "sha256": "f4c7c46662a47b817d70b89aae2c2bf8ca219f7ea1b5dce29f9edf942de8dd20"
+    },
+    {
+     "world": "world-009",
+     "sha256": "f78b9716fe59414bad8a51ba0317ee2af79c7bab5eb792e79bc76b3414d747c4"
+    },
+    {
+     "world": "world-017",
+     "sha256": "fb10f0ae9ba8aa62bf1fc5d05e108526202f9682646e24935419c59f6a3275f6"
+    },
+    {
+     "world": "world-004",
+     "sha256": "ff649082a7c223bbba85a33ddf275440493923a06a926b917b05b57a05ef12eb"
+    }
+   ],
+   "english": [
+    "world-023",
+    "world-005",
+    "world-013",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-021",
+    "world-006",
+    "world-012",
+    "world-031",
+    "world-026",
+    "world-007",
+    "world-003",
+    "world-002",
+    "world-001",
+    "world-015"
+   ],
+   "ainglish": [
+    "world-010",
+    "world-008",
+    "world-025",
+    "world-018",
+    "world-014",
+    "world-022",
+    "world-019",
+    "world-000",
+    "world-016",
+    "world-024",
+    "world-027",
+    "world-011",
+    "world-020",
+    "world-009",
+    "world-017",
+    "world-004"
+   ]
+  },
+  {
+   "name": "thirty-two worlds, seed 17",
+   "seed": 17,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 16,
+   "worlds": [
+    "world-000",
+    "world-001",
+    "world-002",
+    "world-003",
+    "world-004",
+    "world-005",
+    "world-006",
+    "world-007",
+    "world-008",
+    "world-009",
+    "world-010",
+    "world-011",
+    "world-012",
+    "world-013",
+    "world-014",
+    "world-015",
+    "world-016",
+    "world-017",
+    "world-018",
+    "world-019",
+    "world-020",
+    "world-021",
+    "world-022",
+    "world-023",
+    "world-024",
+    "world-025",
+    "world-026",
+    "world-027",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-031"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c31372c227265616465722d61222c22666f726d2d61222c22776f726c642d303030225d",
+   "rank": [
+    {
+     "world": "world-022",
+     "sha256": "04f51a38e0a1eddaf1abc27e3ca9148f75b3be5d09d20944b84d389c601479cf"
+    },
+    {
+     "world": "world-028",
+     "sha256": "05f06c955cbf3d4643729ac561a6584c44d022bc87e3dc5e25144272f7864222"
+    },
+    {
+     "world": "world-016",
+     "sha256": "1df03adde9a9bc7c9eb525505f5b7d529b4d95b5dc7d9f2f5289333e5eb8c79e"
+    },
+    {
+     "world": "world-020",
+     "sha256": "2199ba3fe89d30eaa8d4bbdc8e6e30810a0706ec6b88fddc658c959b8faa2b09"
+    },
+    {
+     "world": "world-015",
+     "sha256": "264baa1a535c4d49a0f96cfdc39f32fb3bbbd53aed510346057ebb4e426fcaa7"
+    },
+    {
+     "world": "world-004",
+     "sha256": "27a2e71572347318192e5e201b7404f38863fc0026d9aa7459706d6a86bfbe33"
+    },
+    {
+     "world": "world-006",
+     "sha256": "2a3c61dc54d33629a1f8a181511bf1348eefd0194c9f0dcd1c045e118f8ae7b3"
+    },
+    {
+     "world": "world-000",
+     "sha256": "2f45b68a3b58550cf12de512fccd9f2224df2fd4651a10abe61a7681e98276b8"
+    },
+    {
+     "world": "world-018",
+     "sha256": "398d884d1a52c7c9a333722584049f91480b1142bfc8edb5177f5a99b7901c8d"
+    },
+    {
+     "world": "world-007",
+     "sha256": "441af051d229ba62057184cf1c0c5cebdf45c7466547e82ec62dfb79e3904b4b"
+    },
+    {
+     "world": "world-021",
+     "sha256": "4fa24f4fc87629cb7d571ea498f87e5610c3ffa96b81d064b035435f9fb8352d"
+    },
+    {
+     "world": "world-027",
+     "sha256": "578e6ba90596f5534219efb2d8b603e2543dfaf7d78c2cb8f66d1eab63b87bd5"
+    },
+    {
+     "world": "world-014",
+     "sha256": "6178b9adf7db17f619874e72033200e9040f706916224f7f0e784dbd9a7bb90a"
+    },
+    {
+     "world": "world-023",
+     "sha256": "6251f9e1936d37569d114c94debaac03838d8f9c156934ded59d80d4f6270e81"
+    },
+    {
+     "world": "world-008",
+     "sha256": "668ed51b680af766d7a5f52ac0adc62866ea05a03403e11bd88a78a46af0567e"
+    },
+    {
+     "world": "world-003",
+     "sha256": "68ecc1ac899db5c2a3566a2710a6e3c99b5f6047284c5f1e9e4ee8ab024e8b96"
+    },
+    {
+     "world": "world-029",
+     "sha256": "6c4a38f926a5fb1c2d481f6dc87ae09524893ff1268f2f123a10a0d2163f06d1"
+    },
+    {
+     "world": "world-019",
+     "sha256": "762fd8c82721779d74374b2e543f3323f9a3a8b153dfb302659337151e387281"
+    },
+    {
+     "world": "world-009",
+     "sha256": "7738d48519da530c54d56b94c36d64c5337ceeb054346e08479e05d73201f0f4"
+    },
+    {
+     "world": "world-031",
+     "sha256": "79c37097c859b7191193c3b4547c9b473699f0304dd0869f24c7302e4dba299e"
+    },
+    {
+     "world": "world-005",
+     "sha256": "8262284fc862a944d82066ef9724e208275e197e24b505b93edbdaf67feaba62"
+    },
+    {
+     "world": "world-030",
+     "sha256": "93d2cde8b366381550db6c32e541f23c4004d4b3cd027710264344d0ac6a4bf3"
+    },
+    {
+     "world": "world-024",
+     "sha256": "a67c7c2abcd79c3bb21145549bbdc88dbd2057aaa5f291fdaf9e72364b60b7e3"
+    },
+    {
+     "world": "world-026",
+     "sha256": "bb2c2a14971e4f7ce11da5ec6043401bec09fe59c3ee47338b8f75c2c247a0ca"
+    },
+    {
+     "world": "world-002",
+     "sha256": "c0b2fe29ff5747477506a0f78d19855cead401762a4ac4763dbaf2cfb32f46e8"
+    },
+    {
+     "world": "world-001",
+     "sha256": "c20a8d9209eba4c92794e51014374affb593d5d2f607d40574d119ad94514378"
+    },
+    {
+     "world": "world-011",
+     "sha256": "d3e53f06a604ca381a4f74a21cd6eabb7f0faef9b701296f4f1e46101f15eb33"
+    },
+    {
+     "world": "world-010",
+     "sha256": "dd405e35fcdb06da264283c707f08169f121792432189bc4b42175d0f7a47f40"
+    },
+    {
+     "world": "world-017",
+     "sha256": "e24f06d16dee23878aa5e214d9b96dfb388e0b756f921f3899e7558c1234f1de"
+    },
+    {
+     "world": "world-025",
+     "sha256": "e8198de7e3167e8201ad628421576e6472d8ede1fa2342c79112416a1cf5ea3b"
+    },
+    {
+     "world": "world-012",
+     "sha256": "f02a43c66089846604d0efc24ded74593db54465578f8e7e7b389ccc58c88ae3"
+    },
+    {
+     "world": "world-013",
+     "sha256": "f98f3757ca3eddae59f63ba6ff4266f1b52d591977cc1451c82e2e8e8bd2f459"
+    }
+   ],
+   "english": [
+    "world-022",
+    "world-028",
+    "world-016",
+    "world-020",
+    "world-015",
+    "world-004",
+    "world-006",
+    "world-000",
+    "world-018",
+    "world-007",
+    "world-021",
+    "world-027",
+    "world-014",
+    "world-023",
+    "world-008",
+    "world-003"
+   ],
+   "ainglish": [
+    "world-029",
+    "world-019",
+    "world-009",
+    "world-031",
+    "world-005",
+    "world-030",
+    "world-024",
+    "world-026",
+    "world-002",
+    "world-001",
+    "world-011",
+    "world-010",
+    "world-017",
+    "world-025",
+    "world-012",
+    "world-013"
+   ]
+  },
+  {
+   "name": "thirty-two worlds, seed 2147483648",
+   "seed": 2147483648,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 16,
+   "worlds": [
+    "world-000",
+    "world-001",
+    "world-002",
+    "world-003",
+    "world-004",
+    "world-005",
+    "world-006",
+    "world-007",
+    "world-008",
+    "world-009",
+    "world-010",
+    "world-011",
+    "world-012",
+    "world-013",
+    "world-014",
+    "world-015",
+    "world-016",
+    "world-017",
+    "world-018",
+    "world-019",
+    "world-020",
+    "world-021",
+    "world-022",
+    "world-023",
+    "world-024",
+    "world-025",
+    "world-026",
+    "world-027",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-031"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c323134373438333634382c227265616465722d61222c22666f726d2d61222c22776f726c642d303030225d",
+   "rank": [
+    {
+     "world": "world-011",
+     "sha256": "0a888c17381757cf8ca830ce7cecc37bdd5c1e72c8a759d49bf4aadac67552c6"
+    },
+    {
+     "world": "world-021",
+     "sha256": "10d0178673d486cf3ca35b2575c43fe2abf836f9c79a66caf6d108277a3c359c"
+    },
+    {
+     "world": "world-029",
+     "sha256": "14ccfc434d7e37cb0a8ffb28b1ed89dbefac7538bb8f8053e20f617218a564e1"
+    },
+    {
+     "world": "world-013",
+     "sha256": "194f9eff0af673f8fb3e799bb73cbf28c0a24b04a9252f93373d64e1fe5bc2e7"
+    },
+    {
+     "world": "world-024",
+     "sha256": "23b0810a8b98ff36c60b06351cb2c7ae6628f954e1654d94c3ff2aa5c3892254"
+    },
+    {
+     "world": "world-012",
+     "sha256": "2a3005d931b74d263e768094dea181fcda6571e02937c5063e3045ee85ffca53"
+    },
+    {
+     "world": "world-022",
+     "sha256": "2d3706b3dc6045b5939643ee425082c1f039e42c1846396d80b6c32b06803a96"
+    },
+    {
+     "world": "world-008",
+     "sha256": "2f2b6703bf5bc111843d536c1386a60b7ce511f7d7a25819362fe915f65775f6"
+    },
+    {
+     "world": "world-030",
+     "sha256": "332fa2522138afe105870bacf1de890ddb9ea3f1ff94e13424bfbfad67d52dfc"
+    },
+    {
+     "world": "world-001",
+     "sha256": "35ec3d1c9dc73fe327cac5b1df111c1fed1ec7eda9db4043c8fbdb52fe28ff29"
+    },
+    {
+     "world": "world-005",
+     "sha256": "42377fe7d3cb0bcde7f16a1c199f4a387bd8880b74b5434be4b591c3373212f5"
+    },
+    {
+     "world": "world-020",
+     "sha256": "484d4dc06f642246e0123f927e99f7c09320933dcf4ff3c74450e2bf39d77575"
+    },
+    {
+     "world": "world-015",
+     "sha256": "5081a9ec8e8b8824e1840175dec9fb2505a2e62bcbfe8772b204f93683aa65bc"
+    },
+    {
+     "world": "world-007",
+     "sha256": "596259bb68c24846645d27e8f047f47ad8822ba77b9cdef92d30cc7e1fff6949"
+    },
+    {
+     "world": "world-019",
+     "sha256": "6a9125edf4adfadc33519281ac495c2caa9662afeb964041e1b4feff42803002"
+    },
+    {
+     "world": "world-031",
+     "sha256": "748b77708ccf314d74018bf77e1e6dd402722893aafd0fe2e2e8d47251422c36"
+    },
+    {
+     "world": "world-026",
+     "sha256": "8fe0f92b0521619236e78356cfb088f57a66da746cd7b2467d59fd5a5a8b3a69"
+    },
+    {
+     "world": "world-027",
+     "sha256": "a3ae71e5f6f4e55aab65083626b6c9d46b2b60ba8ac1544f11fb949d343bd22b"
+    },
+    {
+     "world": "world-025",
+     "sha256": "a472af86a691176ae50165725c75ca31bc764967ee012f9dd9dc65a3f9c322bf"
+    },
+    {
+     "world": "world-004",
+     "sha256": "a760e49c68751d63bfbead56e3bc695253c67f08238dc6c248402905ecb12d57"
+    },
+    {
+     "world": "world-023",
+     "sha256": "aeeee4a67622f028f1b1defd7d644cbba630ca2ba546e1839409ce92cf1d3354"
+    },
+    {
+     "world": "world-010",
+     "sha256": "b696012f9e1acc2d25c4c240af285170c726f826cf5a802c25c52a0c0dcf227a"
+    },
+    {
+     "world": "world-003",
+     "sha256": "c24c6eee4dcef166a48887fbedc861ac1456929f2bfc30c2045e5be353f31e85"
+    },
+    {
+     "world": "world-009",
+     "sha256": "c3d0cd8385d834544564b945fb3223f459b9cb0bcd2630cff0a23d2c6a803bf7"
+    },
+    {
+     "world": "world-016",
+     "sha256": "c96482d7922f513a019d5224a23a5be6cde36dbb03d08622da9fc8d89475373d"
+    },
+    {
+     "world": "world-017",
+     "sha256": "cc30fd33412cd82a8bba7bd138a44e268be52e9a6a5a9c54992be796bcc64942"
+    },
+    {
+     "world": "world-028",
+     "sha256": "d23058eb94b5431fe5b61f16ab53b05fd5c99beeb7e35a411efd7b644241fd76"
+    },
+    {
+     "world": "world-018",
+     "sha256": "d3fc33ae04dcc2320169d38506e294e68f2acfb94ffe1a008d5320cdadca5b49"
+    },
+    {
+     "world": "world-006",
+     "sha256": "e31091966b8d4f07197b88b997ff2a39f3e6a3f7c5649040f68ce6959591ab8b"
+    },
+    {
+     "world": "world-002",
+     "sha256": "e363420e15ba10d0fde751e28d65b728a1511b8252e2edf1d9402aa1887694ee"
+    },
+    {
+     "world": "world-000",
+     "sha256": "f2da83c4d7f34aa0f2067ec4aca49e98bc287ea083b7f1604691461459f0bc72"
+    },
+    {
+     "world": "world-014",
+     "sha256": "fbfe50f49fa28669ab221dc11256835ecbc1a534a07be8949772260472b68611"
+    }
+   ],
+   "english": [
+    "world-011",
+    "world-021",
+    "world-029",
+    "world-013",
+    "world-024",
+    "world-012",
+    "world-022",
+    "world-008",
+    "world-030",
+    "world-001",
+    "world-005",
+    "world-020",
+    "world-015",
+    "world-007",
+    "world-019",
+    "world-031"
+   ],
+   "ainglish": [
+    "world-026",
+    "world-027",
+    "world-025",
+    "world-004",
+    "world-023",
+    "world-010",
+    "world-003",
+    "world-009",
+    "world-016",
+    "world-017",
+    "world-028",
+    "world-018",
+    "world-006",
+    "world-002",
+    "world-000",
+    "world-014"
+   ]
+  },
+  {
+   "name": "thirty-two worlds, seed 9007199254740991",
+   "seed": 9007199254740991,
+   "reader": "reader-a",
+   "form": "form-a",
+   "per_cell": 16,
+   "worlds": [
+    "world-000",
+    "world-001",
+    "world-002",
+    "world-003",
+    "world-004",
+    "world-005",
+    "world-006",
+    "world-007",
+    "world-008",
+    "world-009",
+    "world-010",
+    "world-011",
+    "world-012",
+    "world-013",
+    "world-014",
+    "world-015",
+    "world-016",
+    "world-017",
+    "world-018",
+    "world-019",
+    "world-020",
+    "world-021",
+    "world-022",
+    "world-023",
+    "world-024",
+    "world-025",
+    "world-026",
+    "world-027",
+    "world-028",
+    "world-029",
+    "world-030",
+    "world-031"
+   ],
+   "first_preimage_utf8_hex": "5b2262616c616e6365642d776f726c642d686173682d7631222c393030373139393235343734303939312c227265616465722d61222c22666f726d2d61222c22776f726c642d303030225d",
+   "rank": [
+    {
+     "world": "world-031",
+     "sha256": "11ee8dfc23babd500fb35d4a84c175776e4f4dfb43e7246f852db59c40d5b934"
+    },
+    {
+     "world": "world-021",
+     "sha256": "1b07efbc7ac42f208bcf564b5f6bfb33d3a0acf51e38ba6e2399c3699da9fa0a"
+    },
+    {
+     "world": "world-027",
+     "sha256": "1fa49d2d38c071d2f54da395a33bad993aab71fa6b2dd33f198fafda8785d99e"
+    },
+    {
+     "world": "world-005",
+     "sha256": "21dbe2375b0dcc529bab2675176c6574192b908184a59473e32763e49d360954"
+    },
+    {
+     "world": "world-013",
+     "sha256": "26371073d4d1974bff15174e2a551312605512fb58edaab29aecadf3a48e21f5"
+    },
+    {
+     "world": "world-019",
+     "sha256": "4103c19472be02df355f82b8751a84619040c89ed72a316835292774137d31f9"
+    },
+    {
+     "world": "world-029",
+     "sha256": "4521c5dc1d2566880213f353e0cfffc7a33b406598db6bb13e786513fb963b34"
+    },
+    {
+     "world": "world-025",
+     "sha256": "4572ef3a3671134f84da0e36c5769b3fdd68c950d346d510a0d2e1ba4caf06e4"
+    },
+    {
+     "world": "world-014",
+     "sha256": "574e63add1e1738dcf951480408ca2a4cb2697eb022e17a5aab18484c3c376a6"
+    },
+    {
+     "world": "world-004",
+     "sha256": "595777e7f39d26729c2e8bf3a0334d1e52498b98b803bbe7a6242f85e49bc7c7"
+    },
+    {
+     "world": "world-006",
+     "sha256": "5a658042f8d76966e1869c7b6b8b024e7a671676d0cd756b58725c207439b2a3"
+    },
+    {
+     "world": "world-017",
+     "sha256": "5f9ead687bc77b04e255f5b9a867adb3d94c5d86f2dbaa8586c9ab33d95877a0"
+    },
+    {
+     "world": "world-008",
+     "sha256": "6308d98ed7676eff535fa9a4fc364ea1a1fdeeac29b35379b10939a2e8a428d6"
+    },
+    {
+     "world": "world-000",
+     "sha256": "70020ac170a712ad38aa5e11a7c4a58b735eaecf3c1372ee68e0f549596bc797"
+    },
+    {
+     "world": "world-009",
+     "sha256": "705c40fbcb0dd88357e8a2749bb130484d7d6da0dbba16b5c40db8fdd1d03ccd"
+    },
+    {
+     "world": "world-022",
+     "sha256": "70cf7d60363dec1bdcefa26338bdc2d9c5aec9f68ad4a4288d1b7f13d75426e1"
+    },
+    {
+     "world": "world-023",
+     "sha256": "792410f7a233937f9abbbfc89abcfe605b9b5bd97060df7a92e1aa0e98ce3a59"
+    },
+    {
+     "world": "world-015",
+     "sha256": "7ad4e8a6921e65addb1562749f68b3ed4540d33ba74706f0155a89221227769a"
+    },
+    {
+     "world": "world-028",
+     "sha256": "7dbbc423cc1aa8f53f14f5d5396819a98c65a75f6f20c802c6fbb2390569e3e9"
+    },
+    {
+     "world": "world-030",
+     "sha256": "87fe973775397713b4018a742d750d774148dddbb0c9b213ecb14cb7af6efec6"
+    },
+    {
+     "world": "world-020",
+     "sha256": "94d22fdfa6c3c88f810450d64adcdc0095bdfecfd7d129d8c43f5abb2b648d33"
+    },
+    {
+     "world": "world-016",
+     "sha256": "a1eaf29c3f74dcd01e8742174c4f037f41329fb4819ed1541c336c05b4dbbc65"
+    },
+    {
+     "world": "world-026",
+     "sha256": "a26df7bbb2d2971762e55f6a547e6308d3ffa13b52f52b1ffee5b6b094574dc0"
+    },
+    {
+     "world": "world-018",
+     "sha256": "a6f046f5d8a2b7747f65ab8a4e2790509262774cd432a3275dd4ba53a2acaaf7"
+    },
+    {
+     "world": "world-024",
+     "sha256": "b2cfbe43ae68fdc83534110e6be4a69a9d9f42fe60b9ab78929e921687f112c8"
+    },
+    {
+     "world": "world-007",
+     "sha256": "b426e7df910f8140acfbce0c32ac465c2ec6f39e99dc6686784b0e9ab880d9fd"
+    },
+    {
+     "world": "world-002",
+     "sha256": "cadda276712f153aaad5a800df5268ff0bdec3e9e1a8bcb0e89f18df5ad9cb2f"
+    },
+    {
+     "world": "world-011",
+     "sha256": "cc5d34a59091c099449274d596bd61d6bed4fb2d61f2274f96dabd34acb6c070"
+    },
+    {
+     "world": "world-003",
+     "sha256": "d4533e24a497542695432e2b5077601ede51bffbdbe1381b4cb51e98274055c3"
+    },
+    {
+     "world": "world-010",
+     "sha256": "df2c44312485b12723ecee1fbb93d9980cb4613427ec50b361512463335db4c1"
+    },
+    {
+     "world": "world-001",
+     "sha256": "f1530ee181f2979342e307c2a97a5ca2cd0d5c1fb304104242f1fb5ebc938c10"
+    },
+    {
+     "world": "world-012",
+     "sha256": "feb926e7108e7afd4a50376087bc78a9e133b1252c00ad10e9c50e33775a0db6"
+    }
+   ],
+   "english": [
+    "world-031",
+    "world-021",
+    "world-027",
+    "world-005",
+    "world-013",
+    "world-019",
+    "world-029",
+    "world-025",
+    "world-014",
+    "world-004",
+    "world-006",
+    "world-017",
+    "world-008",
+    "world-000",
+    "world-009",
+    "world-022"
+   ],
+   "ainglish": [
+    "world-023",
+    "world-015",
+    "world-028",
+    "world-030",
+    "world-020",
+    "world-016",
+    "world-026",
+    "world-018",
+    "world-024",
+    "world-007",
+    "world-002",
+    "world-011",
+    "world-003",
+    "world-010",
+    "world-001",
+    "world-012"
+   ]
+  }
+ ],
+ "rosters": [
+  {
+   "name": "two readers, two forms",
+   "seed": 17,
+   "readers": [
+    "reader-b",
+    "reader-a"
+   ],
+   "forms": {
+    "form-b": [
+     "w-00",
+     "w-01",
+     "w-02",
+     "w-03",
+     "w-04",
+     "w-05",
+     "w-06",
+     "w-07"
+    ],
+    "form-a": [
+     "w-07",
+     "w-06",
+     "w-05",
+     "w-04",
+     "w-03",
+     "w-02",
+     "w-01",
+     "w-00"
+    ]
+   },
+   "per_cell": 4,
+   "commitment": "68b89fb3a406d5750fc3281cd9aaf90ea2415d1333502359d8a211ec3d9d4c82",
+   "allocation": {
+    "reader-b": {
+     "form-b": {
+      "english": [
+       "w-06",
+       "w-04",
+       "w-07",
+       "w-01"
+      ],
+      "ainglish": [
+       "w-00",
+       "w-02",
+       "w-05",
+       "w-03"
+      ]
+     },
+     "form-a": {
+      "english": [
+       "w-06",
+       "w-02",
+       "w-01",
+       "w-07"
+      ],
+      "ainglish": [
+       "w-00",
+       "w-04",
+       "w-03",
+       "w-05"
+      ]
+     }
+    },
+    "reader-a": {
+     "form-b": {
+      "english": [
+       "w-00",
+       "w-02",
+       "w-05",
+       "w-01"
+      ],
+      "ainglish": [
+       "w-03",
+       "w-06",
+       "w-04",
+       "w-07"
+      ]
+     },
+     "form-a": {
+      "english": [
+       "w-02",
+       "w-01",
+       "w-00",
+       "w-04"
+      ],
+      "ainglish": [
+       "w-06",
+       "w-07",
+       "w-03",
+       "w-05"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "the same roster, every input reordered",
+   "seed": 17,
+   "readers": [
+    "reader-a",
+    "reader-b"
+   ],
+   "forms": {
+    "form-a": [
+     "w-00",
+     "w-01",
+     "w-02",
+     "w-03",
+     "w-04",
+     "w-05",
+     "w-06",
+     "w-07"
+    ],
+    "form-b": [
+     "w-07",
+     "w-06",
+     "w-05",
+     "w-04",
+     "w-03",
+     "w-02",
+     "w-01",
+     "w-00"
+    ]
+   },
+   "per_cell": 4,
+   "commitment": "68b89fb3a406d5750fc3281cd9aaf90ea2415d1333502359d8a211ec3d9d4c82",
+   "allocation": {
+    "reader-a": {
+     "form-a": {
+      "english": [
+       "w-02",
+       "w-01",
+       "w-00",
+       "w-04"
+      ],
+      "ainglish": [
+       "w-06",
+       "w-07",
+       "w-03",
+       "w-05"
+      ]
+     },
+     "form-b": {
+      "english": [
+       "w-00",
+       "w-02",
+       "w-05",
+       "w-01"
+      ],
+      "ainglish": [
+       "w-03",
+       "w-06",
+       "w-04",
+       "w-07"
+      ]
+     }
+    },
+    "reader-b": {
+     "form-a": {
+      "english": [
+       "w-06",
+       "w-02",
+       "w-01",
+       "w-07"
+      ],
+      "ainglish": [
+       "w-00",
+       "w-04",
+       "w-03",
+       "w-05"
+      ]
+     },
+     "form-b": {
+      "english": [
+       "w-06",
+       "w-04",
+       "w-07",
+       "w-01"
+      ],
+      "ainglish": [
+       "w-00",
+       "w-02",
+       "w-05",
+       "w-03"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "forms and readers that look like numbers",
+   "seed": 29,
+   "readers": [
+    "1",
+    "01"
+   ],
+   "forms": {
+    "1": [
+     "1",
+     "01"
+    ],
+    "01": [
+     "10",
+     "1.0"
+    ],
+    "1.0": [
+     "2",
+     "02"
+    ]
+   },
+   "per_cell": 1,
+   "commitment": "f629cbc8826eb7051fc661cc270c7372a06a2fc19dcb86f236fc5bb087976d58",
+   "allocation": {
+    "1": {
+     "1": {
+      "english": [
+       "01"
+      ],
+      "ainglish": [
+       "1"
+      ]
+     },
+     "01": {
+      "english": [
+       "10"
+      ],
+      "ainglish": [
+       "1.0"
+      ]
+     },
+     "1.0": {
+      "english": [
+       "02"
+      ],
+      "ainglish": [
+       "2"
+      ]
+     }
+    },
+    "01": {
+     "1": {
+      "english": [
+       "01"
+      ],
+      "ainglish": [
+       "1"
+      ]
+     },
+     "01": {
+      "english": [
+       "10"
+      ],
+      "ainglish": [
+       "1.0"
+      ]
+     },
+     "1.0": {
+      "english": [
+       "2"
+      ],
+      "ainglish": [
+       "02"
+      ]
+     }
+    }
+   }
+  }
+ ],
+ "commitment_changes": {
+  "base": "68b89fb3a406d5750fc3281cd9aaf90ea2415d1333502359d8a211ec3d9d4c82",
+  "changed": {
+   "reader renamed": "14f23d1c281d2682d21669cf3b3e8a2d27f7bb2cd0d92a646fb6922019e07ecd",
+   "seed changed": "6c69827548698be6517ecda51fb9cfadd2d50d2a7b3e468a24754ba6730bba45",
+   "one world replaced": "78aa876be5bc7bf575e86e7617d91e94fb9e0d825fc555bf955846e512786d4c",
+   "form renamed": "642b4705024c25945476d71ab6394564e7650cead884c5a9ae22eaef181b14a7"
+  }
+ },
+ "refusals": [
+  {
+   "name": "odd total",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b",
+    "c"
+   ],
+   "per_cell": 2,
+   "code": "worlds_count"
+  },
+  {
+   "name": "too few worlds",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 2,
+   "code": "worlds_count"
+  },
+  {
+   "name": "duplicate world",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b",
+    "c",
+    "a"
+   ],
+   "per_cell": 2,
+   "code": "worlds_duplicate"
+  },
+  {
+   "name": "per_cell zero",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [],
+   "per_cell": 0,
+   "code": "per_cell"
+  },
+  {
+   "name": "negative seed",
+   "call": "allocate",
+   "seed": -1,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 1,
+   "code": "seed"
+  },
+  {
+   "name": "seed above the portable ceiling",
+   "call": "allocate",
+   "seed": 9007199254740992,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 1,
+   "code": "seed"
+  },
+  {
+   "name": "empty reader",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 1,
+   "code": "name_type"
+  },
+  {
+   "name": "empty world id",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    ""
+   ],
+   "per_cell": 1,
+   "code": "name_type"
+  },
+  {
+   "name": "world id not in form C",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "é"
+   ],
+   "per_cell": 1,
+   "code": "name_not_nfc"
+  },
+  {
+   "name": "double quote in a name",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r\"x",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 1,
+   "code": "name_character"
+  },
+  {
+   "name": "backslash in a name",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f\\x",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 1,
+   "code": "name_character"
+  },
+  {
+   "name": "control character in a name",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b\u0007"
+   ],
+   "per_cell": 1,
+   "code": "name_character"
+  },
+  {
+   "name": "line separator in a name",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b "
+   ],
+   "per_cell": 1,
+   "code": "name_character"
+  },
+  {
+   "name": "C1 control in a name",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "r",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 1,
+   "code": "name_character"
+  },
+  {
+   "name": "name of 256 bytes",
+   "call": "allocate",
+   "seed": 17,
+   "reader": "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+   "form": "f",
+   "worlds": [
+    "a",
+    "b"
+   ],
+   "per_cell": 1,
+   "code": "name_length"
+  },
+  {
+   "name": "duplicate reader",
+   "call": "roster",
+   "seed": 17,
+   "readers": [
+    "r",
+    "r"
+   ],
+   "forms": {
+    "f": [
+     "a",
+     "b"
+    ]
+   },
+   "per_cell": 1,
+   "code": "readers_duplicate"
+  },
+  {
+   "name": "no readers",
+   "call": "roster",
+   "seed": 17,
+   "readers": [],
+   "forms": {
+    "f": [
+     "a",
+     "b"
+    ]
+   },
+   "per_cell": 1,
+   "code": "readers_type"
+  },
+  {
+   "name": "no forms",
+   "call": "roster",
+   "seed": 17,
+   "readers": [
+    "r"
+   ],
+   "forms": {},
+   "per_cell": 1,
+   "code": "forms_type"
+  },
+  {
+   "name": "one form short of worlds",
+   "call": "roster",
+   "seed": 17,
+   "readers": [
+    "r"
+   ],
+   "forms": {
+    "f": [
+     "a",
+     "b"
+    ],
+    "g": [
+     "a"
+    ]
+   },
+   "per_cell": 1,
+   "code": "worlds_count"
+  }
+ ]
+}
