@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Add `ainglish.strict_json`: the rule `strict-json-v1` as one pure function,
+  `scan(raw, max_bytes=, max_depth=)`. It reads the raw bytes of a JSON text and
+  refuses, with a code and a byte offset, a text that is too long, is not
+  well-formed UTF-8, is not one RFC 8259 value, holds a lone surrogate escape,
+  nests too deep, or holds two members of one object whose names are equal after
+  escape decoding (`"a"` and `"\u0061"` are one name). Python's `json.loads` and
+  PHP's `json_decode` both keep the last of two such members in silence, so a
+  digest of the decoded value cannot see the duplicate. The 124 vectors in
+  `tests/fixtures/strict-json-v1.json` are written by hand in
+  `tools/gen_strict_json_vectors.py`, apart from the module; the register reads
+  a byte copy. Nothing calls the module: no client call, manifest, mint or
+  filing changes, and no reading is activated.
+
 - Document an optional pre-inference semantic design review, with exposed
   go/hold and rate/stock design handoffs and a preservation-integration acceptance
   checklist. These add no mandatory human review, admission rule or activation;
