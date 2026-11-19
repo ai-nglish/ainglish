@@ -1,0 +1,1676 @@
+{
+ "kind": "ainglish.strict-json-vectors.v1",
+ "rule": "strict-json-v1",
+ "generated_by": {
+  "tool": "tools/gen_strict_json_vectors.py",
+  "tool_sha256": "397c0a42f98aabac69cfdf92fc93661c55c957f583c76dbc3350accecc187e30",
+  "method": "every expectation is written by hand; a refusal's offset is the length of the text placed before the fault; independent of ainglish.strict_json"
+ },
+ "note": "Synthetic software vectors. Not language evidence, not a measurement, not an activation of any reading.",
+ "codes": [
+  "size",
+  "utf8",
+  "syntax",
+  "surrogate",
+  "depth",
+  "duplicate_key"
+ ],
+ "tops": [
+  "object",
+  "array",
+  "string",
+  "number",
+  "literal"
+ ],
+ "counts": {
+  "accepted": 28,
+  "size": 3,
+  "utf8": 12,
+  "syntax": 43,
+  "surrogate": 7,
+  "depth": 5,
+  "duplicate_key": 26
+ },
+ "cases": [
+  {
+   "name": "empty object",
+   "raw_b64": "e30=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "empty array",
+   "raw_b64": "W10=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "array",
+    "depth": 1,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "bare string",
+   "raw_b64": "Ingi",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "string",
+    "depth": 0,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "bare zero",
+   "raw_b64": "MA==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "number",
+    "depth": 0,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "bare number with fraction and exponent",
+   "raw_b64": "LTAuNWUrMTA=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "number",
+    "depth": 0,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "bare true",
+   "raw_b64": "dHJ1ZQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "literal",
+    "depth": 0,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "bare false",
+   "raw_b64": "ZmFsc2U=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "literal",
+    "depth": 0,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "bare null",
+   "raw_b64": "bnVsbA==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "literal",
+    "depth": 0,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "the four whitespace bytes around every token",
+   "raw_b64": "IAkKDXsgImEiIDogWyAxICwgMiBdICwgImIiIDogeyB9IH0gCg==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 2,
+    "objects": 2,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "the same name at three nesting levels",
+   "raw_b64": "eyJhIjp7ImEiOnsiYSI6MX19fQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 3,
+    "objects": 3,
+    "members": 3
+   },
+   "acceptance": null
+  },
+  {
+   "name": "the same name in two sibling objects",
+   "raw_b64": "W3siYSI6MX0seyJhIjoyfV0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "array",
+    "depth": 2,
+    "objects": 2,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "the same string twice in an array",
+   "raw_b64": "WyJhIiwiYSJd",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "array",
+    "depth": 1,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "names that differ only by case",
+   "raw_b64": "eyJhIjoxLCJBIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "names that look like numbers",
+   "raw_b64": "eyIxIjoxLCIwMSI6MiwiMS4wIjozLCIxMCI6NCwiLTEiOjUsIjFlMCI6Nn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 6
+   },
+   "acceptance": null
+  },
+  {
+   "name": "precomposed and decomposed e-acute are two names",
+   "raw_b64": "eyLDqSI6MSwiZcyBIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "the empty name once",
+   "raw_b64": "eyIiOjEsImEiOjJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "a name that is one NUL escape",
+   "raw_b64": "eyJcdTAwMDAiOjEsIlx1MDAwMSI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "every simple escape in a value",
+   "raw_b64": "WyJcIlxcXC9cYlxmXG5cclx0Il0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "array",
+    "depth": 1,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "a surrogate pair escape in a value",
+   "raw_b64": "WyJcdWQ4M2RcdWRlMDAiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "array",
+    "depth": 1,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "a name outside the basic plane beside another",
+   "raw_b64": "eyLwn5iAIjoxLCLwn5iBIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "number forms",
+   "raw_b64": "WzAsLTAsMS41LDFlNSwxRS01LDAuMGUwLDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MF0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "array",
+    "depth": 1,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "neighbouring code points at each encoded length are different names",
+   "raw_b64": "eyLfvyI6MSwiXHUwODAwIjoyLCLvv78iOjMsIlx1ZDgwMFx1ZGMwMCI6NCwiXHUyMGFjIjo1LCLigq0iOjZ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 6
+   },
+   "acceptance": null
+  },
+  {
+   "name": "a name that differs from another only inside an escape",
+   "raw_b64": "eyJhXHUwMDYyIjoxLCJhXHUwMDYzIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 2
+   },
+   "acceptance": null
+  },
+  {
+   "name": "nesting exactly at the bound",
+   "raw_b64": "W1tbMV1dXQ==",
+   "max_bytes": 4096,
+   "max_depth": 3,
+   "expect": {
+    "ok": true,
+    "top": "array",
+    "depth": 3,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": "RAW-4"
+  },
+  {
+   "name": "a bare scalar with a depth bound of zero",
+   "raw_b64": "Nw==",
+   "max_bytes": 4096,
+   "max_depth": 0,
+   "expect": {
+    "ok": true,
+    "top": "number",
+    "depth": 0,
+    "objects": 0,
+    "members": 0
+   },
+   "acceptance": null
+  },
+  {
+   "name": "length exactly at the bound",
+   "raw_b64": "eyJhIjoxfQ==",
+   "max_bytes": 7,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 1
+   },
+   "acceptance": "RAW-4"
+  },
+  {
+   "name": "a duplicate-free text of the kind a plan record is",
+   "raw_b64": "eyJraW5kIjoiYWluZ2xpc2guY29tcGFyaXNvbi1wbGFuLnYxIiwiZm9ybXMiOlt7ImlkIjoiZm9ybS1hIiwid2VpZ2h0IjoxfSx7ImlkIjoiZm9ybS1iIiwid2VpZ2h0IjoxfV0sIm1lYW5pbmciOiJtIn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 3,
+    "objects": 3,
+    "members": 7
+   },
+   "acceptance": null
+  },
+  {
+   "name": "the object a last-key-wins decoder makes of the two duplicate cases below",
+   "raw_b64": "eyJhIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": true,
+    "top": "object",
+    "depth": 1,
+    "objects": 1,
+    "members": 1
+   },
+   "acceptance": "RAW-2"
+  },
+  {
+   "name": "one byte over the bound",
+   "raw_b64": "eyJhIjoxMH0=",
+   "max_bytes": 7,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "size",
+    "offset": 7
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "over the bound and also a duplicate",
+   "raw_b64": "eyJhIjoxLCJhIjoyfQ==",
+   "max_bytes": 8,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "size",
+    "offset": 8
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "over the bound and also ill-formed UTF-8",
+   "raw_b64": "Iv////8i",
+   "max_bytes": 3,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "size",
+    "offset": 3
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "a lone continuation byte",
+   "raw_b64": "WyKAIl0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an overlong two-byte form",
+   "raw_b64": "WyLAgCJd",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an overlong three-byte form",
+   "raw_b64": "WyLggIAiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an overlong four-byte form",
+   "raw_b64": "WyLwgICAIl0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an encoded surrogate",
+   "raw_b64": "WyLtoIAiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a value above U+10FFFF",
+   "raw_b64": "WyL0kICAIl0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a lead byte that never occurs",
+   "raw_b64": "WyL1gICAIl0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a sequence cut off by the end",
+   "raw_b64": "WyLigg==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a sequence cut off by an ASCII byte",
+   "raw_b64": "WyLiKKEiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "the second continuation byte wrong",
+   "raw_b64": "WyJhw6nigigiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 5
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "ill-formed UTF-8 after an earlier duplicate name",
+   "raw_b64": "eyJhIjoxLCJhIjoi/yJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 12
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "ill-formed UTF-8 outside any string",
+   "raw_b64": "WzEs/10=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "utf8",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "empty input",
+   "raw_b64": "",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "whitespace only",
+   "raw_b64": "IAoJIA==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 4
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a byte-order mark",
+   "raw_b64": "77u/e30=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "data after the value",
+   "raw_b64": "e30geA==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "two values",
+   "raw_b64": "MSAy",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a second object",
+   "raw_b64": "e317fQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a trailing comma in an object",
+   "raw_b64": "eyJhIjoxLH0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 7
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a trailing comma in an array",
+   "raw_b64": "WzEsXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an empty slot in an array",
+   "raw_b64": "WzEsLDJd",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a missing colon",
+   "raw_b64": "eyJhIiAxfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 5
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a missing value",
+   "raw_b64": "eyJhIjp9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 5
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an unquoted name",
+   "raw_b64": "e2E6MX0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 1
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a number as a name",
+   "raw_b64": "ezE6MX0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 1
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a single-quoted string",
+   "raw_b64": "WydhJ10=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 1
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a raw newline inside a string",
+   "raw_b64": "WyJhCmIiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a raw NUL inside a string",
+   "raw_b64": "WyJhAGIiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an escape JSON does not define",
+   "raw_b64": "WyJhXHg0MSJd",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a \\u escape with a letter that is not hexadecimal",
+   "raw_b64": "WyJhXHUxMkc0Il0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a \\u escape cut off by the closing quote",
+   "raw_b64": "WyJhXHUxMiJd",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a \\u escape cut off by the end",
+   "raw_b64": "WyJhXHUxMg==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a backslash at the very end",
+   "raw_b64": "WyJhXA==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a string that is never closed",
+   "raw_b64": "WyJhYmM=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 5
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a leading zero",
+   "raw_b64": "MDE=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 1
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a leading zero inside an array",
+   "raw_b64": "WzAxXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a plus sign",
+   "raw_b64": "KzE=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a fraction with no integer part",
+   "raw_b64": "LjU=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a fraction with no digits",
+   "raw_b64": "MS4=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an exponent with no digits",
+   "raw_b64": "MWU=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an exponent sign with no digits",
+   "raw_b64": "WzFlK10=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 4
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a lone minus",
+   "raw_b64": "LQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 1
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "NaN",
+   "raw_b64": "TmFO",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "Infinity",
+   "raw_b64": "SW5maW5pdHk=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "minus Infinity",
+   "raw_b64": "LUluZmluaXR5",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 1
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a truncated literal",
+   "raw_b64": "dHJ1",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a literal in capitals",
+   "raw_b64": "VHJ1ZQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a comment",
+   "raw_b64": "LyogYyAqLyB7fQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 0
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an array that is never closed",
+   "raw_b64": "WzE=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "an object that is never closed",
+   "raw_b64": "eyJhIjox",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 6
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "the wrong closing bracket",
+   "raw_b64": "WzF9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a syntax fault before a later duplicate name",
+   "raw_b64": "eyJhIjoxLCwiYSI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 7
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a vertical tab used as whitespace",
+   "raw_b64": "WzEsCzJd",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a no-break space used as whitespace",
+   "raw_b64": "WzEswqAyXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "a lone high surrogate escape in a value",
+   "raw_b64": "WyJcdWQ4M2QiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "surrogate",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a lone low surrogate escape in a value",
+   "raw_b64": "WyJcdWRlMDAiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "surrogate",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a high surrogate followed by a letter",
+   "raw_b64": "WyJcdWQ4M2R4Il0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "surrogate",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a high surrogate followed by an ordinary escape",
+   "raw_b64": "WyJcdWQ4M2RcdTAwNDEiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "surrogate",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "two high surrogates",
+   "raw_b64": "WyJcdWQ4M2RcdWQ4M2QiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "surrogate",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a lone high surrogate escape in a name",
+   "raw_b64": "eyJcdWQ4M2QiOjF9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "surrogate",
+    "offset": 2
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a high surrogate at the end of a string",
+   "raw_b64": "WyJhXHVkYmZmIl0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "surrogate",
+    "offset": 3
+   },
+   "acceptance": null,
+   "python_json_accepts": true
+  },
+  {
+   "name": "a high surrogate followed by a malformed escape",
+   "raw_b64": "WyJcdWQ4M2RcdVpaWloiXQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "syntax",
+    "offset": 8
+   },
+   "acceptance": null,
+   "python_json_accepts": false
+  },
+  {
+   "name": "one level over the bound, arrays",
+   "raw_b64": "W1tbWzFdXV1d",
+   "max_bytes": 4096,
+   "max_depth": 3,
+   "expect": {
+    "ok": false,
+    "code": "depth",
+    "offset": 3
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "one level over the bound, objects",
+   "raw_b64": "eyJhIjp7ImIiOnsiYyI6MX19fQ==",
+   "max_bytes": 4096,
+   "max_depth": 2,
+   "expect": {
+    "ok": false,
+    "code": "depth",
+    "offset": 10
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "any container with a bound of zero",
+   "raw_b64": "W10=",
+   "max_bytes": 4096,
+   "max_depth": 0,
+   "expect": {
+    "ok": false,
+    "code": "depth",
+    "offset": 0
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "too deep before a later duplicate name",
+   "raw_b64": "eyJhIjpbWzFdXSwiYSI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 2,
+   "expect": {
+    "ok": false,
+    "code": "depth",
+    "offset": 6
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "too deep in the second element",
+   "raw_b64": "W1sxXSxbWzJdXV0=",
+   "max_bytes": 4096,
+   "max_depth": 2,
+   "expect": {
+    "ok": false,
+    "code": "depth",
+    "offset": 6
+   },
+   "acceptance": "RAW-4",
+   "python_json_accepts": false
+  },
+  {
+   "name": "the same name twice with equal values",
+   "raw_b64": "eyJhIjoxLCJhIjoxfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 7
+   },
+   "acceptance": "RAW-1",
+   "python_json_accepts": true
+  },
+  {
+   "name": "the same name twice with different values",
+   "raw_b64": "eyJhIjoxLCJhIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 7
+   },
+   "acceptance": "RAW-2",
+   "python_json_accepts": true
+  },
+  {
+   "name": "an escaped alias of a plain name",
+   "raw_b64": "eyJhIjoyLCJcdTAwNjEiOjJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 7
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a plain name after its escaped alias",
+   "raw_b64": "eyJcdTAwNjEiOjEsImEiOjJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "two escapes of one character that differ in letter case",
+   "raw_b64": "eyJcdTAwRTkiOjEsIlx1MDBlOSI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "an escape and the character itself, outside ASCII",
+   "raw_b64": "eyJcdTAwZTkiOjEsIsOpIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a surrogate pair escape and the character it spells",
+   "raw_b64": "eyJcdWQ4M2RcdWRlMDAiOjEsIvCfmIAiOjJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 18
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "an escape and the character itself, three bytes long",
+   "raw_b64": "eyJcdTIwYWMiOjEsIuKCrCI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "the last two-byte character and its escape",
+   "raw_b64": "eyLfvyI6MSwiXHUwN0ZGIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 8
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "the first three-byte character and its escape",
+   "raw_b64": "eyJcdTA4MDAiOjEsIuCggCI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "the last three-byte character and its escape",
+   "raw_b64": "eyLvv78iOjEsIlx1ZmZmZiI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 9
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "the first character outside the basic plane and its pair",
+   "raw_b64": "eyJcdWQ4MDBcdWRjMDAiOjEsIvCQgIAiOjJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 18
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "the last code point and its pair",
+   "raw_b64": "eyL0j7+/IjoxLCJcdURCRkZcdURGRkYiOjJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 10
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "an escaped slash and a slash",
+   "raw_b64": "eyJcLyI6MSwiLyI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 8
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a \\u002f escape and an escaped slash",
+   "raw_b64": "eyJcdTAwMmYiOjEsIlwvIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a \\n escape and its \\u form",
+   "raw_b64": "eyJhXG5iIjoxLCJhXHUwMDBhYiI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 10
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a name that looks like a number and its escaped alias",
+   "raw_b64": "eyIxIjoxLCJcdTAwMzEiOjJ9",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 7
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "the empty name twice",
+   "raw_b64": "eyIiOjEsIiI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 6
+   },
+   "acceptance": "RAW-1",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a duplicate that is not adjacent",
+   "raw_b64": "eyJhIjoxLCJiIjoyLCJhIjozfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 13
+   },
+   "acceptance": "RAW-2",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a duplicate one level down",
+   "raw_b64": "eyJhIjp7ImIiOjEsImIiOjJ9fQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a duplicate inside an array element",
+   "raw_b64": "W3siYSI6MX0seyJhIjoxLCJhIjoyfV0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 16
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a duplicate four levels down",
+   "raw_b64": "eyJwIjpbeyJxIjp7InIiOjEsIlx1MDA3MiI6Mn19XX0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 18
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a duplicate before a later syntax fault",
+   "raw_b64": "eyJhIjoxLCJhIjo=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 7
+   },
+   "acceptance": "RAW-2",
+   "python_json_accepts": false
+  },
+  {
+   "name": "a duplicate whose value would be too deep",
+   "raw_b64": "eyJhIjoxLCJhIjpbW1sxXV1dfQ==",
+   "max_bytes": 4096,
+   "max_depth": 2,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 7
+   },
+   "acceptance": "RAW-2",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a duplicate with whitespace before the second name",
+   "raw_b64": "eyJhIjoxLAogICJhIjoyfQ==",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 10
+   },
+   "acceptance": "RAW-2",
+   "python_json_accepts": true
+  },
+  {
+   "name": "a NUL name and its lower-case escape twin",
+   "raw_b64": "eyJcdTAwMDAiOjEsIlx1MDAwMCI6Mn0=",
+   "max_bytes": 4096,
+   "max_depth": 16,
+   "expect": {
+    "ok": false,
+    "code": "duplicate_key",
+    "offset": 12
+   },
+   "acceptance": "RAW-3",
+   "python_json_accepts": true
+  }
+ ]
+}
